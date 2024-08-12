@@ -1,0 +1,48 @@
+#! /usr/local/bin/ansible-playbook
+
+---
+  - hosts: all
+    become: yes
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+
+    - name: Clone a Chroma Github repository
+      git:
+        repo: https://github.com/willylohws/chroma.git
+        dest: /var/lib/chroma
+        clone: yes
+        update: yes
+        version: PW
+     
+    # Create the Docker Container for Application
+    - name: Configure {{ PW_container_name }}_CHROMA Container
+      docker_container:
+        name: "{{ PW_container_name }}_CHROMA"
+        image: "chromadb/chroma:latest"
+        state: started
+        pull: True
+        restart: yes
+        restart_policy: always
+        privileged: yes
+        command: 'uvicorn chromadb.app:app --reload --workers {{ CHROMA_worker }} --host 0.0.0.0 --port 8000 --log-config chromadb/log_config.yml'
+        volumes:
+            - "/var/lib/chroma:/chroma"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/chroma:/chroma/chroma/"
+        networks:
+            - name: '{{ docker_PW_network}}'
+        networks_cli_compatible: yes
+        ports:
+            - "{{ CHROMA_port }}:8000"
+        env:
+              IS_PERSISTENT: 'TRUE'
+              ANONYMIZED_TELEMETRY: 'FALSE'
+        labels:
+            traefik.enable={{ traefik_enable }}
+            traefik.http.routers.{{ PW_container_name }}_CHROMA.rule=Host(`{{ CHROMA_server }}`)
+            traefik.http.routers.{{ PW_container_name }}_CHROMA.tls=true
+            traefik.http.routers.{{ PW_container_name }}_CHROMA.tls.certresolver=le_resolver
+            traefik.http.routers.{{ PW_container_name }}_CHROMA.service={{ PW_container_name }}_CHROMA  
+            traefik.http.services.{{ PW_container_name }}_CHROMA.loadbalancer.server.port=9000
+            traefik.http.middlewares.{{ PW_container_name }}_CHROMA.compress=true
+           

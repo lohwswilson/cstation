@@ -1,0 +1,16 @@
+http:
+  # Add the router
+  routers:
+    {{ PW_domain_name }}_websocket:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ PW_domain_name }}_websocket_service
+      rule: Path(`/websocket`) && Host(`{{ PW_domain_name }}`) 
+      tls:
+        certResolver: le_resolver
+  services:
+    {{ PW_domain_name }}_websocket_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{PW_domain_name}}:{{ PW_websocket_port }}"

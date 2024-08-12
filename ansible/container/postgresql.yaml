@@ -1,0 +1,36 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+    - name: Configure {{ docker_PW_network }} Network for Docker Container
+      docker_network:
+        name: "{{ docker_PW_network }}"
+
+    - name: Configure {{inventory_hostname}} Postgresql Database Container
+      docker_container:
+        name: "{{ inventory_hostname|upper }}_DB"
+        image: "synercatalyst/postgresql:{{ postgresql_version }}" # From hosts/main.yaml
+        state: started
+        pull: true
+        restart_policy: always
+        restart: yes
+        volumes:
+          - /var/lib/perfectwork/{{ inventory_hostname|upper }}/DB:/var/lib/postgresql/data
+        networks:
+          - name: PW_NET
+        networks_cli_compatible: yes
+        ports:
+          - "{{postgresql_port}}:5432" # From hosts/main.yaml
+        env:
+          POSTGRES_USER: "{{postgresql_db_admin}}" # From hosts/main.yaml
+          POSTGRES_PASSWORD: "{{postgresql_db_password}}" # From hosts/main.yaml
+
+    - name: Prepare POSTGRESQL Configuration File
+
+      template:
+        src: /opt/SysOps/config_file/templates/{{ postgresql_config_file }} # From hosts/main.yaml
+        dest: /var/lib/perfectwork/{{ inventory_hostname|upper }}/DB/postgresql.auto.conf
+        owner: "101"
+        group: "102"
+        mode: "0755"

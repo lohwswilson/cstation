@@ -1,0 +1,31 @@
+#! /usr/local/bin/ansible-playbook
+
+---
+  - hosts: all
+    become: yes
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+
+      - name: Create a network
+        docker_network:
+          name: PW_NET
+
+      # Create Portainer Container with the latest image
+      - name: Create Portainer Container 
+        docker_container:
+          name: "{{ portainer_container }}_CE"
+          image: portainer/portainer-ce:latest
+          state: started
+          pull: true
+          restart: yes
+          restart_policy: always
+          networks:
+            - name: '{{ docker_PW_network }}'
+          networks_cli_compatible: yes
+          ports:
+            - "8000:8000"
+            - "9000:9000"
+          volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - "/var/lib/portainer/{{ inventory_hostname|upper }}_PORTAINER_CE:/data"

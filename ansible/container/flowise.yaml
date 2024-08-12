@@ -1,0 +1,57 @@
+#! /usr/local/bin/ansible-playbook
+
+---
+  - hosts: all
+    become: yes
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+
+    - name: Yarn Install Flowise at /var/lib/Flowise
+      shell: yarn install
+      args:
+        chdir: /var/lib/Flowise
+
+    - name: Yarn Build Flowise at /var/lib/Flowise
+      shell: yarn build
+      args:
+        chdir: /var/lib/Flowise
+     
+    # Create the Docker Container for Application
+    - name: Configure {{ PW_container_name }}_FLOWISE Container
+      docker_container:
+        name: "{{ PW_container_name }}_FLOWISE"
+        image: "synercatalyst/flowise:latest"
+        state: started
+        pull: True
+        restart: yes
+        restart_policy: always
+        privileged: yes
+        volumes:
+            - "/var/lib/Flowise:/usr/src/packages"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/flowise:/data"
+        networks:
+            - name: '{{ docker_PW_network}}'
+        networks_cli_compatible: yes
+        ports:
+            - "{{ FLOWISE_port }}:3000"
+        env:
+              OPENAI_API_KEY: '{{OPENAI_API_KEY}}'
+              DATABASE_TYPE: "postgres"
+              DATABASE_PORT: "5432"
+              DATABASE_HOST: "SG01_DB"
+              DATABASE_NAME: "flowise"
+              DATABASE_USER: "{{ PW_db_user }}"
+              DATABASE_PASSWORD: "{{ PW_db_password }}"
+              # DATABASE_PATH: /data
+              # FLOWISE_USERNAME: '{{ FLOWISE_username }}'
+              # FLOWISE_PASSWORD: '{{ FLOWISE_password }}'
+        labels:
+            traefik.enable={{ traefik_enable }}
+            traefik.http.routers.{{ PW_container_name }}_FLOWISE.rule=Host(`{{ FLOWISE_server }}`)
+            traefik.http.routers.{{ PW_container_name }}_FLOWISE.tls=true
+            traefik.http.routers.{{ PW_container_name }}_FLOWISE.tls.certresolver=le_resolver
+            traefik.http.routers.{{ PW_container_name }}_FLOWISE.service={{ PW_container_name }}_FLOWISE  
+            traefik.http.services.{{ PW_container_name }}_FLOWISE.loadbalancer.server.port=3000
+            traefik.http.middlewares.{{ PW_container_name }}_FLOWISE.compress=true
+           

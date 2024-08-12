@@ -1,0 +1,53 @@
+#! /usr/local/bin/ansible-playbook
+
+---
+  - hosts: all
+    become: yes
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+
+    # Create the Docker Container for Application
+    - name: Configure {{ PW_container_name }}_STREAMLIT Container
+      docker_container:
+        name: "{{ PW_container_name }}_STREAMLIT"
+        image: "synercatalyst/streamlit:latest"
+        state: started
+        pull: True
+        restart: yes
+        restart_policy: always
+        privileged: yes
+        volumes:
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/streamlit/app:/app"
+        networks:
+            - name: '{{ docker_PW_network}}'
+        networks_cli_compatible: yes
+        ports:
+            - "{{ STREAMLIT_port }}:8501"
+        env:
+              OPENAI_API_KEY: '{{OPENAI_API_KEY}}'
+              # DATABASE_TYPE: "postgres"
+              # DATABASE_PORT: "5432"
+              # DATABASE_HOST: "SG01_DB"
+              # DATABASE_NAME: "flowise"
+              # DATABASE_USER: "{{ PW_db_user }}"
+              # DATABASE_PASSWORD: "{{ PW_db_password }}"
+              # DATABASE_PATH: /data
+              # FLOWISE_USERNAME: '{{ FLOWISE_username }}'
+              # FLOWISE_PASSWORD: '{{ FLOWISE_password }}'
+        labels:
+            traefik.enable={{ traefik_enable }}
+            traefik.http.routers.{{ PW_container_name }}_STREAMLIT.rule=Host(`{{ STREAMLIT_server }}`)
+            traefik.http.routers.{{ PW_container_name }}_STREAMLIT.tls=true
+            traefik.http.routers.{{ PW_container_name }}_STREAMLIT.tls.certresolver=le_resolver
+            traefik.http.routers.{{ PW_container_name }}_STREAMLIT.service={{ PW_container_name }}_STREAMLIT  
+            traefik.http.services.{{ PW_container_name }}_STREAMLIT.loadbalancer.server.port=8501
+            traefik.http.middlewares.{{ PW_container_name }}_STREAMLIT.compress=true
+          
+    - name: Prepare Sample App File - /opt/LLM/streamlit/app/
+      copy:
+        src: /opt/LLM/streamlit/
+        dest: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/streamlit
+        owner: '101'
+        group: '102'
+        mode: '0766'

@@ -1,0 +1,12 @@
+if [ -z "$1" ];
+then
+    echo "Please provide tag name for the PW 5.0 Docker Image"
+    echo "./docker_build_container version:tag "
+    echo "./docker_build_container 6.0:latest"
+    echo ""
+else
+    echo "Building PW $1 Docker Image (x86-64)"
+    docker image build -t synercatalyst/perfectwork$1  --platform linux/amd64 .
+    docker push synercatalyst/perfectwork$1
+    echo ""
+fi
