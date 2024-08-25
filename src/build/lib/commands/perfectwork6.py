@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import sys
 import click
 import os
 
@@ -43,12 +42,15 @@ def server(ctx, host, version, ssh_port, only_addons):
     Setting PerfectWORK for Remote Server Operations
 
     \b
-    <host>: Hostname in the Inventory List or local
+    <host>: Full host name of the server
     \b
-    <version>: PerfectWORK version => 6.0
+    sg01.synercatalyst.com
+    sg01.ansis.com.sg
     \b
-        6.0   : Version 6.0
-        7.0   : Version 7.0
+    <version>: Odoo version => 16.0
+    \b
+        16.0   : Version 16.0
+        17.0   : Version 17.0
     \b
     """
 
@@ -61,20 +63,46 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.{version}'
+            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}:/var/lib/perfectwork/PW_ADDONS.{version}'
         )
     else:
         # No Need to prepare directory for sending the files to Remote Host
         click.echo(
-            f"Deploy PerfectWORK Core Modules {version} To -> {host} using Port {ssh_port}"
+            f"Preparing PerfectWORK Core Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW.{version}'
+            f"rm -rf ./PW.{version}"
+        )
+        os.system(
+            f"rsync -avzhe --delete --exclude  '.*' /opt/PW/PW.{version}/  ./PW.{version}"
+        )
+        os.system(
+            f"mv ./PW.{version}/odoo/addons/* ./PW.{version}/addons/"
+        )
+        os.system(
+            f"rm -rf ./PW.{version}/odoo/addons"
+        )
+        os.system(
+            f"mv ./PW.{version}/addons ./PW.{version}/odoo/"
+        )
+        os.system(
+            "find ./ -name __pycache__ -type d -exec rm -rf {} + "
         )
         click.echo(
             f"Deploy PerfectWORK Version {version} To -> {host} using Port {ssh_port}"
         )
-
+        os.system(
+            f"rsync -avzhe 'ssh -p{ssh_port}'  --delete --exclude  '.*'  ./PW.{version}/odoo/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW.{version}"
+        )
+        os.system(
+            f"rm -rf ./PW.{version}"
+        )
+        click.echo(
+            f"Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}"
+        )
+        os.system(
+            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.{version}'
+        )
 
 @perfectwork6.command(
     "local", short_help="Configure PerfectWORK for Local Development Operations"
@@ -91,19 +119,19 @@ def server(ctx, host, version, ssh_port, only_addons):
 @click.pass_context
 def local(ctx, version, with_addons):
     """
-    Setting PerfectWORK for Remote Server Operations
+    Setting Odoo for Localhost Operations
 
     \b
-    <version>: PerfectWORK version => 6.0
+    <version>: Odoo version => 6.0
     \b
-        6.0   : Version 6.0
-        7.0   : Version 7.0
+        16.0   : Version 16.0
+        17.0   : Version 17.0
 
     """
 
     click.echo(f"Preparing PerfectWORK Version {version} for Local Development")
-    os.chdir("/opt/PW/source_code")
-    os.system(f"git switch PW.{version}")
+    os.chdir("/opt/PW/odoo")
+    os.system(f"git switch {version}")
     os.system(
-        f"rsync -avzhe --delete --exclude '.*' --exclude '__pycache__' /opt/PW/source_code/* /opt/PW/PW.{version}"
+        f"rsync -avzhe --delete --exclude '.*' --exclude '__pycache__' /opt/PW/odoo/* /opt/PW/Odoo.{version}"
     )

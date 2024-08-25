@@ -1,0 +1,29 @@
+git@github.com:ansis-ai/account-financial-reporting.git -b 16.0
+git@github.com:ansis-ai/account-financial-reporting.git -b 17.0
+
+git@github.com:ansis-ai/knowledge.git -b 16.0
+git@github.com:ansis-ai/knowledge.git -b 17.0
+
+git@github.com:ansis-ai/mukit-odoo-modules.git -b 17.0
+
+ansis-ai/odoo -b 13.0
+ansis-ai/odoo -b 14.0
+ansis-ai/odoo -b 15.0
+ansis-ai/odoo -b 16.0
+ansis-ai/odoo -b 17.0
+
+git@github.com:ansis-ai/OpenUpgrade.git -b 14.0
+git@github.com:ansis-ai/OpenUpgrade.git -b 15.0
+git@github.com:ansis-ai/OpenUpgrade.git -b 16.0
+git@github.com:ansis-ai/OpenUpgrade.git -b 17.0
+
+git@github.com:lohwswilson/reporting-engine.git -b 16.0
+git@github.com:lohwswilson/reporting-engine.git -b 17.0
+
+git@github.com:ansis-ai/server-tools.git -b 16.0
+git@github.com:ansis-ai/server-tools.git -b 17.0
+
+git@github.com:ansis-ai/social.git -b 16.0
+
+git@github.com:ansis-ai/web.git -b 16.0
+git@github.com:ansis-ai/web.git -b 17.0

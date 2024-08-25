@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import sys
 import click
 import os
 
@@ -40,7 +39,7 @@ def server(ctx, host, version, ssh_port, only_addons):
     # Sync the addon directory
     if only_addons:
         click.echo(f'Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}')
-        os.system(f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.{version}')
+        os.system(f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}:/var/lib/perfectwork/PW_ADDONS.{version}')
     else:
         # Need to prepare directory for sending the files to Remote Host
         click.echo(f'Deploy PerfectWORK Core Modules {version} To -> {host} using Port {ssh_port}')
@@ -50,7 +49,7 @@ def server(ctx, host, version, ssh_port, only_addons):
         os.system(f'rm -rf /opt/SysOps/tmp/PW.{version}/odoo/addons')
         os.system(f'mv /opt/SysOps/tmp/PW.{version}/addons /opt/SysOps/tmp/PW.{version}/odoo/')
         click.echo(f'Deploy PerfectWORK Version {version} To -> {host} using Port {ssh_port}')
-        os.system(f'rsync -avzhe "ssh -p{ssh_port}"  --delete --exclude  ".*" --exclude "__pycache__"  /opt/SysOps/tmp/PW.{version}/odoo/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW.{version}')
+        os.system(f'rsync -avzhe "ssh -p{ssh_port}"  --delete --exclude  ".*" --exclude "__pycache__"  /opt/SysOps/tmp/PW.{version}/odoo/ root@{host}:/var/lib/perfectwork/PW.{version}')
         # Clear the directory
         os.system(f'rm -rf /opt/SysOps/tmp/PW.{version}')
   
@@ -72,7 +71,7 @@ def server(ctx, version, with_addons):
     """
 
     click.echo(f'Preparing PerfectWORK Version {version} for Local Development')
-    os.chdir("/opt/PW/source_code")
-    os.system(f"git switch PW.{version}") 
-    os.system(f"rsync -avzhe --delete --exclude '.*' --exclude '__pycache__' /opt/PW/source_code/* /opt/PW/PW.{version}")
+    os.chdir("/opt/PW/odoo")
+    os.system(f"git switch 1{version}") 
+    os.system(f"rsync -avzhe --delete --exclude '.*' --exclude '__pycache__' /opt/PW/odoo/* /opt/PW/PW.{version}")
     
