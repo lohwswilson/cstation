@@ -1,4 +1,4 @@
-# These are the SYC Ops Scripts/Tools for Servers Operations
+# These are the CLI Scripts/Tools for Servers Operations
 
 To start using these scripts, you need to clone this repository, got to directory cstation and run the `pip install -e .` script.
 
@@ -7,10 +7,45 @@ To start using these scripts, you need to clone this repository, got to director
 
 Commands Structure for ControlStation (cstation)
 ----------------
-| Commands | Arguments | Options | Summary |
-| -------- | --------- | --------| --------|
-| odoo     |  local |  --version __{Odoo version}__ | Build Odoo._version_ folder in local development server <br><br> _XX_ {Odoo version} : 16.0, 17.0  <br><br>  ```cstation odoo local --version 16.0 ``` |
+- *container*
+  - deploy
 
+- *github*
+  - oca_rebuild
+    - Rebuild OCA modules from github
+  
+  - repo_sync
+    - Syncing repositories with upstream
+
+- *odoo*
+    Setting Up Odoo 16 or above Repositories
+  - *_local_*: Configure Odoo for Local Host Development Operations
+  - _*server*_:  Configure Odoo version => 16.0 for Remote Server
+
+- *perfectwork*
+  - *_local_*: Configure PerfectWORK for Local Development Operations
+  - _*server*_: Configure PerfectWORK for Remote Server
+
+- *perfectwork6*
+  - *_local_*: Configure PerfectWORK for Local Development Operations
+  - _*server*_:  Configure PerfectWORK => 6.0 for Remote Server
+
+
+Usage: cstation [OPTIONS] COMMAND [ARGS]...
+
+  Control Station
+  A wrapper around ansible for Deployment
+
+Options:
+  --version  Show the version and exit.
+  --help     Show this message and exit.
+
+Commands:
+  container     Control Station Docker Container Operations and Deployments
+  github        Control Station - Managing GITHUB Account
+  odoo          Control Station Setting Up Odoo 16 or above Repositories
+  perfectwork   Control Station Setting Up PerfectWORK Repositories
+  perfectwork6  Control Station Setting Up PerfectWORK => 6.0 Repositories
 
 
 [//]: # (end addons)
