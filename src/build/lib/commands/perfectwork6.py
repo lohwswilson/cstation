@@ -49,8 +49,8 @@ def server(ctx, host, version, ssh_port, only_addons):
     \b
     <version>: Odoo version => 16.0
     \b
-        16.0   : Version 16.0
-        17.0   : Version 17.0
+        6.0   : Version 16.0
+        7.0   : Version 17.0
     \b
     """
 
@@ -92,7 +92,7 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Deploy PerfectWORK Version {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f"rsync -avzhe 'ssh -p{ssh_port}'  --delete --exclude  '.*'  ./PW.{version}/odoo/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW.{version}"
+            f"rsync -avzhe 'ssh -p{ssh_port}'  --delete --exclude  '.*'  ./PW.{version}/odoo/ root@{host}:/var/lib/perfectwork/PW.{version}"
         )
         os.system(
             f"rm -rf ./PW.{version}"
@@ -101,7 +101,7 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.{version}'
+            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}:/var/lib/perfectwork/PW_ADDONS.{version}'
         )
 
 @perfectwork6.command(

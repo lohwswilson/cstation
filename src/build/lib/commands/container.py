@@ -26,7 +26,7 @@ def deploy(ctx, host, application, container_config):
         Deploy Docker Container to Server
         
         \b
-        <host>: Hostname in the Inventory List
+        <host>: sg01.synercatalyst.com
         \b
         <application>: Application for Container
         \b
@@ -39,6 +39,6 @@ def deploy(ctx, host, application, container_config):
     """
 
     if container_config is None:
-        os.system(f"ansible-playbook -l {host} /opt/SysOps/ansible/container/{application}.yaml")
+        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible/container/{application}.yaml")
     else:
-        os.system(f"ansible-playbook -l {host} /opt/SysOps/ansible/container/{application}.yaml --extra-vars @/opt/SysOps/config_file/{host}/{container_config}.yaml")
+        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible/container/{application}.yaml --extra-vars @/opt/cstation/config_file/{host}/{container_config}.yaml")

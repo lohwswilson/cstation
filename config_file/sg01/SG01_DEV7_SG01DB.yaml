@@ -10,6 +10,7 @@ PW_3_domain_name: dev7.perfectwork.app
 PW_version: 7.0 # Perfectwork Version
 PW_port: 3338 # Port linked to 8086
 PW_polling_port: 3337 # PW container port used to map with 8072
+PW_websocket_port: 3337 # PW container port used to map with 8072
 
 
 
@@ -28,6 +29,7 @@ FLOWISE_database_password: wai39kua
 FLOWISE_database_name: "flowise"
 
 # OpenAI API Key
+OPENAI_API_KEY: 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
 
 # Chroma Container Information ( Unique for each Container )
 # CHROMA_domain_name: chroma.{{ PW_domain_name }}
@@ -47,7 +49,7 @@ LANGFLOW_port: 3321
 # Database Connection Information ( No need to change if on same host )
 PW_db_hostname: sg01.synercatalyst.com
 PW_db_host: SG01_DB # Local Host --> PW_DB, external same as PW_db_hostname
-PW_db_port: 5432 # Default 5432 for Postgresql, external then 1488
+PW_db_port: "5432" # Default 5432 for Postgresql, external then 1488
 PW_db_user: "{{PW_container_name|lower}}"
 PW_db_password: wai39kua
 

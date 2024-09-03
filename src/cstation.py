@@ -8,7 +8,7 @@ from commands import perfectwork6
 
 @click.group()
 @click.pass_context
-@click.version_option("0.1.12", prog_name="cstation Control Station")
+@click.version_option("0.1.13", prog_name="cstation Control Station")
 
 # @click.pass_context
 def cli(ctx):
