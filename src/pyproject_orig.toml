@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cstation"
-version = "0.1.3"
+version = "0.1.12"
 authors = [
   { name="Willy", email="wilson@ansis.com.sg" },
 ]
