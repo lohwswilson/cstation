@@ -12,49 +12,6 @@ PW_port: 3328 # Port linked to 8086
 PW_polling_port: 3327 # PW container port used to map with 8072
 
 
-# Chainlit Container Information ( Unique for each Container )
-# CHAINLIT_domain_name: streamlit.{{ PW_domain_name }}
-# For PerfectWORK multiple database. Need to set different Name
-CHAINLIT_server: chainlit.sg01.perfectwork.app
-CHAINLIT_port: 3323
-
-# Streamlit Container Information ( Unique for each Container )
-# STREAMLIT_domain_name: streamlit.{{ PW_domain_name }}
-# For PerfectWORK multiple database. Need to set different Name
-STREAMLIT_server: streamlit.sg01.perfectwork.app
-STREAMLIT_port: 3324
-
-# Flowise Container Information ( Unique for each Container )
-# FLOWISE_domain_name: flowise.{{ PW_domain_name }}
-# For PerfectWORK multiple database. Need to set different Name
-FLOWISE_server: flowise.sg01.perfectwork.app
-FLOWISE_port: 3326
-FLOWISE_username: flowise
-FLOWISE_password: flowise
-FLOWISE_database_type: postgres
-FLOWISE_database_host: sg01.synercatalyst.com
-FLOWISE_database_port: 1488
-FLOWISE_database_user: "{{PW_container_name|lower}}"
-FLOWISE_database_password: wai39kua
-FLOWISE_database_name: "flowise"
-
-# OpenAI API Key
-
-
-# Chroma Container Information ( Unique for each Container )
-# CHROMA_domain_name: chroma.{{ PW_domain_name }}
-# For PerfectWORK multiple database. Need to set different Name
-CHROMA_server: chroma.sg01.perfectwork.app
-CHROMA_port: 3329
-CHROMA_worker: 1
-CHROMA_username: chroma
-CHROMA_password: chroma
-
-# Langflow Container Information ( Unique for each Container )
-# For PerfectWORK multiple database. Need to set different Name
-LANGFLOW_server: langflow.sg01.perfectwork.app
-LANGFLOW_port: 3321
-
 
 # Database Connection Information ( No need to change if on same host )
 PW_db_hostname: sg01.synercatalyst.com
