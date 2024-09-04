@@ -1,0 +1,110 @@
+# This is the default ansible 'hosts' file.
+#
+# It should live in /etc/ansible/hosts
+#
+#   - Comments begin with the '#' character
+#   - Blank lines are ignored
+#   - Top level entries are assumed to be groups, start with 'all' to have a full hierarchy
+#   - Hosts must be specified in a group's hosts:
+#     and they must be a key (: terminated)
+#   - groups can have children, hosts and vars keys
+#   - groups are unique and global - if you define a group in multiple locations, Ansible aggregates all the data to the global name.
+#   - If you define a group as a child of 2 different groups, it will be the child of both, any hosts and variables assigned will not be dependent on the parents, they will all be associated with the group.
+#   - Anything defined under a host is assumed to be a var
+#   - You can enter hostnames or IP addresses
+#   - A hostname/IP can be a member of multiple groups
+all:
+    hosts:
+    vars:
+        ansible_user: root
+        postgresql_db_admin: postgres
+        postgresql_db_password: wai39kua  # Password suffix
+        docker_PW_network: PW_NET
+        postgresql_port: 1488
+
+SYC_USA:
+    hosts:
+        us01:
+            ansible_host: 209.182.236.52
+            ansible_user: root
+            ansible_port: 8288
+            nginx_container: US01_NGINX
+            portainer_container: US01_PORTAINER
+            postgresql_container: US01_DB
+            postgresql_docker_image : postgres:12
+            ansible_python_interpreter: /usr/bin/python3
+
+SYC_SGP:
+    hosts:
+        sg01:
+            ansible_host: sg01.synercatalyst.com
+            ansible_user: root
+            ansible_port: 8288
+            traefik_container: SG01_TRAEFIK
+            traefik_pilot_token: ec8dee08-94be-4ce1-a8a6-2a2d2f0b8af8
+            portainer_container: SG01_PORTAINER
+            postgresql_container: SG01_DB
+            postgresql_docker_image : postgres:14
+            postgresql_version: 14
+            postgresql_config_file : postgresql.auto.conf_16GB.j2
+            ansible_python_interpreter: /usr/bin/python3
+        sg02:
+            ansible_host: sg02.synercatalyst.com
+            ansible_user: root
+            ansible_port: 8288
+            traefik_container: SG02_TRAEFIK
+            traefik_pilot_token: 8d827ff5-2182-42a6-86cf-e449e61fd6c1
+            portainer_container: SG02_PORTAINER
+            postgresql_container: SG02_DB
+            postgresql_docker_image : postgres:12
+            ansible_python_interpreter: /usr/bin/python3
+        sg04:
+            ansible_host: sg04.synercatalyst.com
+            ansible_user: root
+            ansible_port: 8288
+            traefik_container: SG04_TRAEFIK
+            portainer_container: SG04_PORTAINER
+            postgresql_container: SG04_DB
+            postgresql_docker_image : postgres:15
+            postgresql_config_file : postgresql.auto.conf_16GB.j2
+            ansible_python_interpreter: /usr/bin/python3
+            postgresql_db_admin: postgres
+            postgresql_db_password: wai39kua
+ANSIS_SGP:
+    hosts:
+        sg11:
+            ansible_host: sg01.ansis.com.sg
+            traefik_container: BYNSG01_TRAEFIK
+            portainer_container: BYNSG01_PORTAINER
+            postgresql_container: BYNSG01DB
+            postgresql_docker_image : postgres:14
+            postgresql_config_file : postgresql.auto.conf_4GB.j2
+            ansible_python_interpreter: /usr/bin/python3
+        sg12:
+            ansible_host: sg02.ansis.com.sg
+            traefik_container: SG05_TRAEFIK
+            portainer_container: SG05_PORTAINER
+            postgresql_container: SG05DB
+            postgresql_docker_image : postgres:16
+            postgresql_config_file : postgresql.auto.conf_16GB.j2
+            ansible_python_interpreter: /usr/bin/python3
+        vars:
+            ansible_user: root
+            ansible_port: 22
+            postgresql_db_admin: postgres
+            postgresql_db_password: wai39kua
+
+            
+LOCAL:
+    hosts:
+        localhost:
+            ansible_connection: local
+            ansible_sudo_pass: Waikuan1@
+            portainer_container: LOCAL_PORTAINER
+            postgresql_docker_image : postgres:latest
+            ansible_python_interpreter: /usr/bin/python3
+    vars:
+        ansible_user: root
+        ansible_port: 8288 
+        ansible_python_interpreter: /usr/bin/python3
+        postgresql_port: 1488

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cstation',
-    version='0.1.13',
+    version='0.1.14',
     py_modules=['cstation'],
     packages=find_packages(),
     url="https://github.com/ansis-ai/cstation.git",
