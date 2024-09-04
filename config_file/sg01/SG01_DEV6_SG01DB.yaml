@@ -39,7 +39,7 @@ FLOWISE_database_password: wai39kua
 FLOWISE_database_name: "flowise"
 
 # OpenAI API Key
-OPENAI_API_KEY: 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
+
 
 # Chroma Container Information ( Unique for each Container )
 # CHROMA_domain_name: chroma.{{ PW_domain_name }}
