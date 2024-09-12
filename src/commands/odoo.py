@@ -24,7 +24,7 @@ def odoo(ctx):
     "-p",
     "--ssh_port",
     metavar="<ssh_port>",
-    default="8288",
+    default="22",
     show_default=True,
     help="SSH Port",
 )
@@ -46,8 +46,8 @@ def server(ctx, host, version, ssh_port, only_addons):
     \b
     <version>: Odoo version => 16.0
     \b
-        16.0   : Version 16.0
-        17.0   : Version 17.0
+        6.0   : Odoo Version 16.0
+        7.0   : Odoo Version 17.0
     \b
     """
 

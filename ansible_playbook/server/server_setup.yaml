@@ -1,0 +1,93 @@
+#! /usr/local/bin/ansible-playbook
+---
+  - hosts: all
+    become: true
+    
+    tasks:
+      # Create machine for provision for Digital Ocean Droplet
+      # Install all the packages
+      
+      - name: Prepare the system packages for VULTR VPS installation
+        apt:
+          name: "{{ packages }}"
+          state: latest
+        vars:
+          packages:
+            # - python3
+            # - python3-pip
+            # - nfs-kernel-server    
+            - docker.io    
+            - wget
+            - rsync
+            - python3-docker
+            - python3-psycopg2
+
+      # - name: Prepare the system packages - {{ packages }} for the installation
+      #   pip:
+      #     name: "{{ packages }}"
+      #   vars:
+      #     packages:
+      #       - docker
+      #       - psycopg2-binary
+
+                  
+      # - name: Allow all access from RFC1918 networks to this host
+      #   ufw:
+      #     rule: allow
+      #     port: '{{ item }}'
+      #   loop:
+      #     - '8288'
+      #     - '9090'
+      #     - '9000'
+      #     - '9100'
+      #     - '8080'
+      #     - '2375'
+      #     - '2376'
+      #     - '2377'
+      #     - '80'
+      #     - '443'
+
+      # - name: Restart_ufw
+      #   service:
+      #     name: ufw
+      #     state: restarted
+
+
+      - name: Prepare Docker Log Rotation - /etc/docker/daemon.json
+        template:
+          src: /opt/cstation/config_file/templates/docker_daemon.json.j2
+          dest: /etc/docker/daemon.json
+          owner: 'root'
+          group: 'root'
+          mode: '0755'
+
+      # - name: Create a directory /var/lib/perfectwork/VOLUMES/
+      #   file:
+      #     path: /var/lib/perfectwork/VOLUMES/
+      #     state: directory
+      #     owner: nobody
+      #     group: nogroup
+      #     mode: '0755'
+
+      # - name: Writing /etc/exports for NFS Server 
+      #   template:
+      #     src: /opt/PW/PW_CS/templates/system_etc_exports.j2
+      #     dest: /etc/exports
+      #     owner: 'root'
+      #     group: 'root'
+      #     mode: '0755'
+
+      # - name: Allow port 2049 to access to NFS Server
+      #   ufw:
+      #     rule: allow
+      #     port: '2049'
+
+      # - name: Allow port 111 to access NFS Server
+      #   ufw:
+      #     rule: allow
+      #     port: '111'
+
+      # - name: restart NFS server
+      #   service: 
+      #     name: nfs-kernel-server 
+      #     state: restarted

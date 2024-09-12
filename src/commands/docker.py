@@ -32,9 +32,9 @@ def deploy(ctx, host, application, docker_config):
             portainer    : Portainer Application
             traefik      : Traefik Reversed Proxy
             postgresql   : PostgreSQL Database 
+            odoo         : Odoo >= 16.0
             perfectwork  : PerfectWORK 3.0 - 5.0
             perfectwork_dns : Multiple domains/databases PerfectWORK
-            perfectwork6 : PerfectWORK >= 6.0
             perfectwork6_dns : Multiple domains/databases PerfectWORK
     """
 

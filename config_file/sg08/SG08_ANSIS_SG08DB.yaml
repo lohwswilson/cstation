@@ -3,23 +3,24 @@
 #
 #
 # Container Information ( Unique for each Container )
-PW_container_name: SG11_ANSIS6_SG11DB
+PW_container_name: SG08_ANSIS6_SG08DB
 PW_domain_name: ansis.com.sg
 PW_2_domain_name: www.ansis.com.sg
 PW_3_domain_name: www.ansis.com.sg
 PW_4_domain_name: www.ansis.com.sg
 PW_5_domain_name: www.ansis.com.sg
 PW_version: 6.0 # Perfectwork Version
-PW_port: 3398 # Port linked to 8086
-PW_websocket_port: 3397 # Websocket port linked to 8072
-PW_polling_port: 3397 # PW container port used to map with 8072
+PW_port: 3318 # Port linked to 8086
+PW_websocket_port: 3317 # Websocket port linked to 8072
+PW_polling_port: 3317 # PW container port used to map with 8072
 
-# Database Connection InformationInformation ( No need to change if on same host )
-PW_db_hostname: sg01.ansis.com.sg
-PW_db_host: sg01.ansis.com.sg # Local Host --> PW_DB, external same as PW_db_hostname
-PW_db_port: "1488" # Default 5432 for Postgresql, external then 1488
+# Database Connection Information ( No need to change if on same host )
+PW_db_hostname: sg08.ansis.com.sg
+PW_db_host: SG08_DB # Local Host --> PW_DB, external same as PW_db_hostname
+PW_db_port: '5432' # Default 5432 for Postgresql, external then 1488
 PW_db_user: "{{PW_container_name|lower}}"
 PW_db_password: wai39kua
+
 
 # Information for pw.conf for each atomic_container
 # Database Settings

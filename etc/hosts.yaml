@@ -18,6 +18,7 @@ all:
     vars:
         ansible_user: root
         postgresql_db_admin: postgres
+        postgresql_db_password: wai39kua
         docker_PW_network: PW_NET
         postgresql_port: 1488
 

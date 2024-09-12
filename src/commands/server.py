@@ -36,3 +36,19 @@ def copy_ssh_key(ctx, ssh_login, ssh_port):
     # Open the file in read mode
     os.system(f'ssh-copy-id -p {ssh_port} {ssh_login}')
     #
+
+@server.command('server_setup', short_help='Setup Remote Server for Production ')
+@click.argument('host', metavar="<host>", type=click.STRING)
+@click.pass_context
+def server_setup(ctx, host):
+    """
+       Setup Remote Server for Production
+
+        \b
+        <host>: sg01 --> sg01.synercatalyst.com
+        \b
+        \b   
+    """
+    # Open the file in read mode
+    os.system(f"ansible-playbook -l {host} /opt/cstation/ansible_playbook/server/server_setup.yaml")
+    #

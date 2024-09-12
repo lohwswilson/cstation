@@ -51,6 +51,7 @@
             - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK:/etc/traefik"
             - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/letsencrypt:/letsencrypt"
             - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/conf:/conf"
+
         networks:
             - name: PW_NET
         networks_cli_compatible: yes
