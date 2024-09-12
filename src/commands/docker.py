@@ -7,38 +7,38 @@ from auto_click_auto.constants import ShellType
 
 @click.group()
 @click.pass_context
-def container(ctx):
+def docker(ctx):
     """
     \b
-    Control Station
     Docker Container Operations and Deployments
     """
     pass
 
 
-@container.command('deploy', short_help='Deploy Docker Container to Server')
+@docker.command('server', short_help='Deploy Docker Container to Server')
 @click.argument('host', metavar="<host>", type=click.STRING)
 @click.argument('application', metavar="<application>", type=click.STRING)
-@click.option('-f', '--container_config', metavar="<file>", help='Container Configuration File [US01_SYNER_US01DB]')
+@click.option('-f', '--docker_config', metavar="<file>", help='docker Configuration File [US01_SYNER_US01DB]')
 @click.pass_context
-def deploy(ctx, host, application, container_config):
+def deploy(ctx, host, application, docker_config):
     """
         Deploy Docker Container to Server
         
         \b
-        <host>: sg01.synercatalyst.com
+        <host>: sg01 --> sg01.synercatalyst.com
         \b
-        <application>: Application for Container
+        <application>: Application for docker
         \b
             portainer    : Portainer Application
             traefik      : Traefik Reversed Proxy
+            postgresql   : PostgreSQL Database 
             perfectwork  : PerfectWORK 3.0 - 5.0
             perfectwork_dns : Multiple domains/databases PerfectWORK
             perfectwork6 : PerfectWORK >= 6.0
             perfectwork6_dns : Multiple domains/databases PerfectWORK
     """
 
-    if container_config is None:
-        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible/container/{application}.yaml")
+    if docker_config is None:
+        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible_playbook/docker/{application}.yaml")
     else:
-        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible/container/{application}.yaml --extra-vars @/opt/cstation/config_file/{host}/{container_config}.yaml")
+        os.system(f"ansible-playbook -l {host} /opt/cstation/ansible_playbook/docker/{application}.yaml --extra-vars @/opt/cstation/config_file/{host}/{docker_config}.yaml")

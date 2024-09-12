@@ -1,7 +1,7 @@
 import click
 
 from commands import odoo
-from commands import container
+from commands import docker
 from commands import github
 from commands import perfectwork
 from commands import perfectwork6
@@ -20,7 +20,7 @@ def cli(ctx):
     pass
 
 cli.add_command(odoo.odoo)
-cli.add_command(container.container)
+cli.add_command(docker.container)
 cli.add_command(perfectwork.perfectwork)
 cli.add_command(perfectwork6.perfectwork6)
 cli.add_command(github.github)

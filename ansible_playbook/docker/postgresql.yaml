@@ -10,7 +10,7 @@
     - name: Configure {{inventory_hostname}} Postgresql Database Container
       docker_container:
         name: "{{ inventory_hostname|upper }}_DB"
-        image: "synercatalyst/postgresql:{{ postgresql_version }}" # From hosts/main.yaml
+        image: "{{ postgresql_docker_image }}" # From hosts/main.yaml
         state: started
         pull: true
         restart_policy: always
@@ -29,7 +29,7 @@
     - name: Prepare POSTGRESQL Configuration File
 
       template:
-        src: /opt/SysOps/config_file/templates/{{ postgresql_config_file }} # From hosts/main.yaml
+        src: /opt/cstation/config_file/templates/{{ postgresql_config_file }} # From hosts/main.yaml
         dest: /var/lib/perfectwork/{{ inventory_hostname|upper }}/DB/postgresql.auto.conf
         owner: "101"
         group: "102"

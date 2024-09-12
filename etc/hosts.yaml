@@ -71,21 +71,29 @@ SYC_SGP:
             postgresql_db_password: wai39kua
 ANSIS_SGP:
     hosts:
-        sg11:
+        sg03:
             ansible_host: sg01.ansis.com.sg
             traefik_container: BYNSG01_TRAEFIK
-            portainer_container: BYNSG01_PORTAINER
+            portainer_container: SG11_PORTAINER
             postgresql_container: BYNSG01DB
             postgresql_docker_image : postgres:14
             postgresql_config_file : postgresql.auto.conf_4GB.j2
             ansible_python_interpreter: /usr/bin/python3
-        sg12:
+        sg05:
             ansible_host: sg02.ansis.com.sg
             traefik_container: SG05_TRAEFIK
             portainer_container: SG05_PORTAINER
             postgresql_container: SG05DB
             postgresql_docker_image : postgres:16
             postgresql_config_file : postgresql.auto.conf_16GB.j2
+            ansible_python_interpreter: /usr/bin/python3
+        sg08:
+            ansible_host: sg08.ansis.com.sg
+            traefik_container: SG08_TRAEFIK
+            portainer_container: SG08_PORTAINER
+            postgresql_container: SG08DB
+            postgresql_docker_image : postgres:16
+            postgresql_config_file : postgresql.auto.conf_8GB.j2
             ansible_python_interpreter: /usr/bin/python3
         vars:
             ansible_user: root

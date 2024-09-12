@@ -8,7 +8,7 @@ import os
 def github(ctx):
     """
     \b
-    Control Station - Managing GITHUB Account
+    Managing Github for DevOps
     """
     pass
 

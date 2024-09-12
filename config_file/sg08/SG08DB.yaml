@@ -1,0 +1,14 @@
+---
+    # Define the customer information / configurations
+    #
+    #
+    
+    # Host Information
+
+    db_host: sg08db.ansis.com.sg
+    db_container_name: SG08DB
+    postgresql_docker_image : postgres:16
+    postgresql_port: 1488
+    postgresql_db_admin: postgres
+    postgresql_db_password: wai39kua  # Password suffix
+    

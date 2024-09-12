@@ -1,0 +1,64 @@
+- name: Install Traefik Reverse-Proxy V3
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Create PW_NET network
+      docker_network:
+        name: PW_NET
+
+    - name: Configure TRAEFIK Reverse-Proxy Container
+      docker_container:
+        name: "{{ inventory_hostname|upper }}_TRAEFIK"
+        image: traefik:latest
+        state: started
+        restart: yes
+        restart_policy: unless-stopped
+        command:
+          - "--api.insecure=true" 
+          - "--entryPoints.web.address=:80"
+          - "--entryPoints.websecure.address=:443"
+          - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+          - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+          - "--serversTransport.forwardingTimeouts.dialTimeout=5s"
+          - "--providers.file.directory=/etc/traefik/conf"
+          - "--providers.file.watch=true"
+          - "--providers.docker"
+          - "--providers.docker.watch"
+          - "--providers.docker.exposedByDefault=false"
+          - "--providers.docker.network={{ docker_PW_network }}"
+          - "--certificatesresolvers.le_resolver.acme.tlschallenge=true"
+          - "--certificatesresolvers.le_resolver.acme.email=info@synercatalyst.com"
+          - "--certificatesresolvers.le_resolver.acme.storage=/letsencrypt/acme.json"
+          - "--certificatesresolvers.le_dns_resolver.acme.dnschallenge=true"
+          - "--certificatesresolvers.le_dns_resolver.acme.dnschallenge.provider=cloudflare"
+          - "--certificatesresolvers.le_dns_resolver.acme.dnschallenge.delaybeforecheck=15"
+          - "--certificatesResolvers.le_dns_resolver.acme.dnsChallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
+          - "--certificatesresolvers.le_dns_resolver.acme.email=info@synercatalyst.com"
+          - "--certificatesresolvers.le_dns_resolver.acme.storage=/letsencrypt/acme_dns.json"
+          # middleware redirect
+          - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+          # global redirect to https
+          - "traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)"
+          - "traefik.http.routers.redirs.entrypoints=web"
+          - "traefik.http.routers.redirs.middlewares=redirect-to-https"
+        labels:
+            traefik.http.routers.{{ inventory_hostname|upper }}_TRAEFIK.service={{ inventory_hostname|upper }}_TRAEFIK   
+            traefik.http.services.{{ inventory_hostname|upper }}_TRAEFIK.loadbalancer.server.port=8080    
+            traefik.http.middlewares.{{ inventory_hostname|upper }}_TRAEFIK.compress=true
+        volumes:
+            - "/var/run/docker.sock:/var/run/docker.sock:ro"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK:/etc/traefik"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/letsencrypt:/letsencrypt"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/conf:/conf"
+        networks:
+            - name: PW_NET
+        networks_cli_compatible: yes
+        ports:
+          - "80:80"
+          - "443:443"
+          - "5000:8080"
+        env:
+          DHPARAM_GENERATION: 'false'
+          CF_API_EMAIL: syner.catalyst@gmail.com
+          CF_API_KEY: 923abedd02920ce74104a899309bec1434d0c

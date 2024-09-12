@@ -1,0 +1,49 @@
+---
+# Define the customer information / configurations
+#
+#
+# Container Information ( Unique for each Container )
+PW_container_name: SG11_ANSIS6_SG11DB
+PW_domain_name: ansis.com.sg
+PW_2_domain_name: www.ansis.com.sg
+PW_3_domain_name: www.ansis.com.sg
+PW_4_domain_name: www.ansis.com.sg
+PW_5_domain_name: www.ansis.com.sg
+PW_version: 6.0 # Perfectwork Version
+PW_port: 3398 # Port linked to 8086
+PW_websocket_port: 3397 # Websocket port linked to 8072
+PW_polling_port: 3397 # PW container port used to map with 8072
+
+# Database Connection InformationInformation ( No need to change if on same host )
+PW_db_hostname: sg01.ansis.com.sg
+PW_db_host: sg01.ansis.com.sg # Local Host --> PW_DB, external same as PW_db_hostname
+PW_db_port: "1488" # Default 5432 for Postgresql, external then 1488
+PW_db_user: "{{PW_container_name|lower}}"
+PW_db_password: wai39kua
+
+# Information for pw.conf for each atomic_container
+# Database Settings
+PW_admin_passwd: Wengseng1@
+PW_db_maxconn: 32 # Maximum database connection for container
+PW_dbfilter: ANSIS*
+# Logging Settings
+PW_log_level: info
+# Services Settings
+PW_addons_path: /mnt, /mnt/perfectwork, /mnt/ai, mnt/customers, /mnt/OCA, /mnt/ENTERPRISE
+PW_server_wide_modules: web
+# Email Settings
+
+# Tuning Options
+PW_workers: 3
+PW_max_cron_threads: 2
+PW_limit_time_cpu: 1800
+PW_limit_time_real: 3600
+PW_limit_memory_soft: 1677721600
+PW_limit_memory_hard: 1073741824
+PW_limit_request: 8192
+
+# Traefik rules definitation for container
+traefik_enable: true
+http_router_service_rule: Host(`{{PW_domain_name}}`)
+http_router_polling_service_rule: Host(`{{PW_domain_name}}`) && PathPrefix(`/longpolling`)
+middleware_buffering_size: 2000000

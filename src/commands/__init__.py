@@ -1,6 +1,5 @@
 from . import odoo
-from . import container
+from . import docker
 from . import github
 from . import perfectwork
 from . import perfectwork6
-from . import traefik
