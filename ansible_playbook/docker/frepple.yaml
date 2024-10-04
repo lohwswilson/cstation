@@ -1,0 +1,71 @@
+#! /usr/local/bin/ansible-playbook
+
+---
+  - hosts: all
+    become: yes
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+
+    # Configure Docker Network PW_NET
+    - name: Create {{ docker_PW_network }} network
+      docker_network:
+        name: "{{ docker_PW_network}}"
+
+    # Create the Docker Container for Application
+    - name: Configure {{ PW_container_name }}_FREPPLE Container
+      docker_container:
+        name: "{{ PW_container_name }}_FREPPLE"
+        image: "ghcr.io/frepple/frepple-community:latest"
+        state: started
+        pull: True
+        restart: yes
+        restart_policy: always
+        privileged: yes
+        volumes:
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/etc/frepple:/etc/frepple"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/var/log/frepple:/var/log/frepple"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/var/log/apache2:/var/log/apache2"
+        networks:
+            - name: '{{ docker_PW_network}}'
+        networks_cli_compatible: yes
+        ports:
+            - "3000:80"
+        env:
+          POSTGRES_HOST: "{{ PW_db_host }}"
+          POSTGRES_PORT: "{{ PW_db_port }}"
+          POSTGRES_USER: "{{ PW_db_user }}"
+          POSTGRES_PASSWORD: "{{ PW_db_password }}"
+          FREPPLE_DATE_STYLE: "year-month-day"
+          FREPPLE_DATE_STYLE_WITH_HOURS: "false"
+          FREPPLE_TIME_ZONE: "UTC"
+          FREPPLE_THEMES: "earth grass lemon odoo openbravo orange snow strawberry water"
+          FREPPLE_DEFAULT_THEME: "odoo"
+          FREPPLE_EMAIL_USE_TLS: "true"
+          FREPPLE_DEFAULT_FROM_EMAIL: "mail_service@perfectwork.app"
+          FREPPLE_SERVER_EMAIL: "mail_service@perfectwork.app"
+          FREPPLE_EMAIL_HOST_USER: "mail_service@perfectwork.app"
+          FREPPLE_EMAIL_HOST_PASSWORD: ""
+          FREPPLE_EMAIL_HOST: ""
+          FREPPLE_EMAIL_PORT: "25"
+          FREPPLE_CONTENT_SECURITY_POLICY: "frame-ancestors 'self' perfectwork.app;"
+          FREPPLE_X_FRAME_OPTIONS: "None"
+          FREPPLE_CSRF_TRUSTED_ORIGINS: "https://*.perfectwork.app"
+          FREPPLE_SECURE_PROXY_SSL_HEADER: ""
+          FREPPLE_SESSION_COOKIE_SECURE: "false"
+          FREPPLE_CSRF_COOKIE_SAMESITE: "none"
+          FREPPLE_FTP_PROTOCOL: "SFTP"
+          FREPPLE_FTP_HOST: ""
+          FREPPLE_FTP_PORT: "22"
+          FREPPLE_FTP_USER: ""
+          FREPPLE_FTP_PASSWORD: ""
+          FREPPLE_LOGDIR: "/var/log/frepple"
+        labels:
+            traefik.enable={{ traefik_enable }}
+            traefik.http.routers.{{ PW_container_name }}_FREPPLE.rule=Host(`frepple.perfectwork.app`)
+            traefik.http.routers.{{ PW_container_name }}_FREPPLE.tls=true
+            traefik.http.routers.{{ PW_container_name }}_FREPPLE.tls.certresolver=le_resolver
+            traefik.http.routers.{{ PW_container_name }}_FREPPLE.service={{ PW_container_name }}_FREPPLE  
+            traefik.http.services.{{ PW_container_name }}_FREPPLE.loadbalancer.server.port=3000
+            traefik.http.middlewares.{{ PW_container_name }}_FREPPLE.compress=true
+          

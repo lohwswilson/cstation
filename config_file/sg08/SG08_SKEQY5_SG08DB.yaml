@@ -1,41 +1,41 @@
+
 ---
 # Define the customer information / configurations
 #
 #
 # Container Information ( Unique for each Container )
-PW_container_name: SG08_ANSIS6_SG08DB
-PW_domain_name: ansis.com.sg
-PW_2_domain_name: www.ansis.com.sg
-PW_3_domain_name: www.ansis.com.sg
-PW_4_domain_name: www.ansis.com.sg
-PW_5_domain_name: www.ansis.com.sg
-PW_version: 6.0 # Perfectwork Version
-PW_port: 3318 # Port linked to 8086
-PW_websocket_port: 3317 # Websocket port linked to 8072
-PW_polling_port: 3317 # PW container port used to map with 8072
+PW_container_name: SG08_SKEQY5_SG08DB
+PW_domain_name: skinequality.com
+PW_2_domain_name: www.skinequality.com
+PW_3_domain_name: beautywithpro.com
+PW_4_domain_name: www.beautywithpro.com
+PW_5_domain_name: skinequality.com
+PW_version: 5.0 # Perfectwork Version
+PW_port: 3338 # Port linked to 8086
+PW_websocket_port: 3337 # Websocket port linked to 8072
+PW_polling_port: 3337 # PW container port used to map with 8072
 
-# Database Connection Information ( No need to change if on same host )
+# Database Connection InformationInformation ( No need to change if on same host )
 PW_db_hostname: sg08.ansis.com.sg
 PW_db_host: SG08_DB # Local Host --> PW_DB, external same as PW_db_hostname
 PW_db_port: '5432' # Default 5432 for Postgresql, external then 1488
 PW_db_user: "{{PW_container_name|lower}}"
 PW_db_password: wai39kua
 
-
 # Information for pw.conf for each atomic_container
 # Database Settings
 PW_admin_passwd: Wengseng1@
 PW_db_maxconn: 32 # Maximum database connection for container
-PW_dbfilter: ANSIS*
+PW_dbfilter: SKEQY5*
 # Logging Settings
 PW_log_level: info
 # Services Settings
-PW_addons_path: /mnt, /mnt/perfectwork, /mnt/ai, mnt/customers, /mnt/OCA, /mnt/ENTERPRISE
+PW_addons_path: /mnt/perfectwork, /mnt/ENTERPRISE, /mnt/OCA, /mnt/customers,  /mnt/themes,
 PW_server_wide_modules: web
 # Email Settings
 
 # Tuning Options
-PW_workers: 3
+PW_workers: 5
 PW_max_cron_threads: 2
 PW_limit_time_cpu: 1800
 PW_limit_time_real: 3600

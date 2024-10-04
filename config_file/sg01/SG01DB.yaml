@@ -1,0 +1,18 @@
+---
+    # Define the customer information / configurations
+    #
+    #
+    
+    # Host Information
+
+    db_host: sg01.synercatalyst.com
+    db_container_name: SG01DB
+    postgresql_docker_image : postgres:latest
+    postgresql_port: 1488
+    postgresql_db_admin: postgres
+    postgresql_db_password: wai39kua  # Password suffix
+    postgresql_container: SG01_DB
+    postgresql_docker_image : postgres:14
+    postgresql_version: 14
+    postgresql_config_file : postgresql.auto.conf_16GB.j2
+    

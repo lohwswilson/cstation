@@ -64,14 +64,14 @@
           traefik.http.routers.WS_{{ PW_container_name }}.tls=true
           traefik.http.routers.WS_{{ PW_container_name }}.rule="Path(`/websocket`) && Host(`{{ PW_domain_name }}`)"
           traefik.http.routers.WS_{{ PW_container_name }}.service=WS_{{ PW_container_name }}
-          "traefik.http.routers.WS_{{ PW_container_name }}.middlewares=upgradeheader,sslheader"
+          traefik.http.routers.WS_{{ PW_container_name }}.middlewares=upgradeheader,sslheader
           traefik.http.middlewares.WS_{{ PW_container_name }}.compress=true
           traefik.http.services.WS_{{ PW_container_name }}.loadbalancer.server.port=8072
-          "traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Upgrade=websocket"
-          "traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Connection=Upgrade"
-          "traefik.http.middlewares.upgradeheader.headers.hostsproxyheaders=websocket,Upgrade"
-          "traefik.http.middlewares.upgradeheader.headers.forcestsheader=true"
-          "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+          traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Upgrade=websocket
+          traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Connection=Upgrade
+          traefik.http.middlewares.upgradeheader.headers.hostsproxyheaders=websocket,Upgrade
+          traefik.http.middlewares.upgradeheader.headers.forcestsheader=true
+          traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
 
     # Prepare the Traefik Web Socket Configuration file
     - name: Prepare Traefik Web Socket Configuration File

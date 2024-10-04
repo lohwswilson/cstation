@@ -42,7 +42,7 @@ def server(ctx, host, version, ssh_port, only_addons):
     Setting Odoo for Remote Server Operations
 
     \b
-    <host>: Hostname in the Inventory List or local
+    <host>: Server/Host - sg08.ansis.com.sg 
     \b
     <version>: Odoo version => 16.0
     \b
@@ -60,7 +60,7 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/Addons.{version}/ root@{host}.synercatalyst.com:/var/lib/odoo/Addons.{version}'
+            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}:/var/lib/perfectwork/PW_ADDONS.{version}'
         )
     else:
         # No Need to prepare directory for sending the files to Remote Host
@@ -68,19 +68,19 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Preparing PerfectWORK Core Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f"rm -rf ./Odoo.{version}"
+            f"rm -rf ./PW.{version}"
         )
         os.system(
-            f"rsync -avzhe --delete --exclude  '.*' /opt/PW/Odoo.{version}/  ./Odoo.{version}"
+            f"rsync -avzhe --delete --exclude  '.*' /opt/PW/PW.{version}/  ./PW.{version}"
         )
         os.system(
-            f"mv ./Odoo.{version}/odoo/addons/* ./Odoo.{version}/addons/"
+            f"mv ./PW.{version}/odoo/addons/* ./PW.{version}/addons/"
         )
         os.system(
-            f"rm -rf ./Odoo.{version}/odoo/addons"
+            f"rm -rf ./PW.{version}/odoo/addons"
         )
         os.system(
-            f"mv ./Odoo.{version}/addons ./Odoo.{version}/odoo/"
+            f"mv ./PW.{version}/addons ./PW.{version}/odoo/"
         )
         os.system(
             "find ./ -name __pycache__ -type d -exec rm -rf {} + "
@@ -89,17 +89,18 @@ def server(ctx, host, version, ssh_port, only_addons):
             f"Deploy PerfectWORK Version {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f"rsync -avzhe 'ssh -p{ssh_port}'  --delete --exclude  '.*'  ./Odoo.{version}/odoo/ root@{host}.synercatalyst.com:/var/lib/odoo/Odoo.{version}"
+            f"rsync -avzhe 'ssh -p{ssh_port}'  --delete --exclude  '.*'  ./PW.{version}/odoo/ root@{host}:/var/lib/perfectwork/PW.{version}"
         )
         os.system(
-            f"rm -rf ./Odoo.{version}"
+            f"rm -rf ./PW.{version}"
         )
         click.echo(
             f"Deploy PerfectWORK Addons Modules {version} To -> {host} using Port {ssh_port}"
         )
         os.system(
-            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.{version}'
+            f'rsync -avzhe "ssh -p{ssh_port}" --copy-links --delete --exclude  ".*" --exclude "__pycache__"  /opt/PW/PW_ADDONS.{version}/ root@{host}:/var/lib/perfectwork/PW_ADDONS.{version}'
         )
+
 
 @odoo.command(
     "local", short_help="Configure Odoo for Local Host Development Operations", no_args_is_help=True

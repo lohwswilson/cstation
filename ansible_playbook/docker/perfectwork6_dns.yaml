@@ -32,9 +32,6 @@
           USER: "{{ PW_db_user }}"
           PASSWORD: "{{ PW_db_password }}"
           ODOO_RC: /var/lib/odoo/pw.conf
-          OPENAI_API_KEY: "{{ OPENAI_API_KEY }}"
-          FLOWISE_SERVER: "{{ FLOWISE_server }}"
-          CHROMA_SERVER: "{{ CHROMA_server}}"
         labels: traefik.enable={{ traefik_enable }}
           traefik.http.routers.{{ PW_container_name }}.rule=HostRegexp(`{subdomain:[a-z0-9]+}.{{ PW_domain_name }}`)
           traefik.http.routers.{{ PW_container_name }}.tls=true
