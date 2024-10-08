@@ -1,0 +1,92 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+    # Configure Docker Network PW_NET
+    - name: Create {{ docker_PW_network }} network
+      docker_network:
+        name: "{{ docker_PW_network}}"
+
+    # Create the Docker Container for Application
+    - name: Configure {{ PW_container_name }} PW Application Container
+      docker_container:
+        name: "{{ PW_container_name }}"
+        image: "synercatalyst/perfectwork{{ PW_version }}:latest"
+        state: started
+        restart: yes
+        restart_policy: always
+        volumes:
+          - "/var/lib/perfectwork/PW_ADDONS.{{ PW_version }}:/mnt"
+          - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}:/var/lib/odoo"
+          - "/var/lib/perfectwork/PW.{{ PW_version }}:/usr/lib/python3/dist-packages/odoo"
+        networks:
+          - name: "{{ docker_PW_network}}"
+        networks_cli_compatible: yes
+        ports:
+          - "{{ PW_port }}:8069"
+          - "{{ PW_polling_port }}:8072"
+        env:
+          HOST: "{{ PW_db_host }}"
+          PORT: "{{ PW_db_port }}"
+          USER: "{{ PW_db_user }}"
+          PASSWORD: "{{ PW_db_password }}"
+          ODOO_RC: /var/lib/odoo/pw.conf
+        labels: traefik.enable={{ traefik_enable }}
+          traefik.http.routers.{{ PW_container_name }}.rule=HostRegexp(`{subdomain:[a-z0-9]+}.{{ PW_domain_name }}`)
+          traefik.http.routers.{{ PW_container_name }}.tls=true
+          traefik.http.routers.{{ PW_container_name }}.tls.certresolver=le_dns_resolver
+          traefik.http.routers.{{ PW_container_name }}.tls.domains[0].main={{ PW_domain_name }}
+          traefik.http.routers.{{ PW_container_name }}.tls.domains[0].sans=*.{{ PW_domain_name }}
+          traefik.http.routers.{{ PW_container_name }}.service={{ PW_container_name }}
+          traefik.http.services.{{ PW_container_name }}.loadbalancer.server.port=8069
+          traefik.http.middlewares.{{ PW_container_name }}.compress=true
+          traefik.http.routers.WS_{{ PW_container_name }}.tls=true
+          traefik.http.routers.WS_{{ PW_container_name }}.rule="Path(`/websocket`) && HostRegexp(`{subdomain:[a-z0-9]+}.{{ PW_domain_name }}`)"
+          traefik.http.routers.WS_{{ PW_container_name }}.service=WS_{{ PW_container_name }}
+          "traefik.http.routers.WS_{{ PW_container_name }}.middlewares=upgradeheader,sslheader"
+          traefik.http.middlewares.WS_{{ PW_container_name }}.compress=true
+          traefik.http.services.WS_{{ PW_container_name }}.loadbalancer.server.port=8072
+          "traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Upgrade=websocket"
+          "traefik.http.middlewares.upgradeheader.headers.customRequestHeaders.Connection=Upgrade"
+          "traefik.http.middlewares.upgradeheader.headers.hostsproxyheaders=websocket,Upgrade"
+          "traefik.http.middlewares.upgradeheader.headers.forcestsheader=true"
+          "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+
+    # Prepare the Traefik Long Polling Configuration file
+    - name: Prepare Traefik WSocket Configuration File
+      template:
+        src: /opt/cstation/config_file/templates/traefik_websocket_config.j2
+        dest: /var/lib/traefik/{{ inventory_hostname|upper }}_TRAEFIK/conf/{{ PW_domain_name }}.yaml
+        mode: "0755"
+
+    # Need to open the firewall port
+    - name: Configure Firewall for WSocket Port
+      ufw:
+        rule: allow
+        port: "{{ PW_polling_port }}"
+
+    - name: Prepare Configuration File - /var/lib/odoo/pw.conf
+      template:
+        src: /opt/cstation/config_file/templates/pw6.conf.j2
+        dest: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/pw.conf
+        owner: "101"
+        group: "102"
+        mode: "0755"
+
+    - name: Change file permission for the "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}:/var/lib/odoo"
+      command: "{{ item }}"
+      with_items:
+        - chown -R 101:102 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}
+        - chmod -R 766 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}
+
+    # Create DB user
+    - name: Create DB user for {{ PW_container_name }} Container on {{ db_host }}
+      postgresql_user:
+        login_host: "{{PW_db_hostname}}"
+        login_user: "{{postgresql_db_admin}}" # From hosts/main.yaml
+        login_password: "{{postgresql_db_password}}" # From hosts/main.yaml
+        login_port: 1488
+        name: "{{ PW_db_user }}"
+        password: "{{ PW_db_password }}"
+        role_attr_flags: SUPERUSER

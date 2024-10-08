@@ -33,6 +33,7 @@ def deploy(ctx, host, application, docker_config):
             traefik      : Traefik Reversed Proxy
             postgresql   : PostgreSQL Database 
             odoo         : Odoo >= 16.0
+            odoo_dns     : Odoo >= 16.0 (ultiple domains/databases)
             perfectwork  : PerfectWORK 3.0 - 5.0
             perfectwork_dns : Multiple domains/databases PerfectWORK
             perfectwork6_dns : Multiple domains/databases PerfectWORK

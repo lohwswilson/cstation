@@ -8,7 +8,7 @@ import os
 def github(ctx):
     """
     \b
-    Control Station - Managing GITHUB Account
+    Managing Github for DevOps
     """
     pass
 
@@ -26,6 +26,7 @@ def oca_rebuild(ctx, version):
         \b
             6.0   : Version 16.0
             7.0   : Version 17.0
+            18.0   : Version 18.0
         \b        
         \b
         oca_addons.yaml in /opt/PW/PW_ADDONS.{version}/OCA directory

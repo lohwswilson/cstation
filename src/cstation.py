@@ -9,14 +9,14 @@ from commands import server
 
 @click.group("cli")
 @click.pass_context
-@click.version_option("0.1.14", prog_name="cstation Control Station")
+@click.version_option("0.1.15", prog_name="cstation Control Station")
 
 # @click.pass_context
 def cli(ctx):
     """
     \b
-    Control Station
-    A wrapper around ansible for Deployment
+    Control Station ( Internal Use )
+    An utilties for Deployment
     """
     pass
 

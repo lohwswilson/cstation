@@ -1,0 +1,16 @@
+cairosvg
+chromadb
+click-odoo
+lottie
+markdown
+odooly
+openai
+openupgradelib
+pw_cli
+pw_zoomus
+paramiko
+PyPDF2==1.26.0
+pyOpenSSL
+html2text
+pysftp==0.2.8
+python-telegram-bot 
