@@ -9,7 +9,6 @@ from rich import print as rprint
 
 # Import command modules
 from commands.version.main import version
-from commands.setup.main import setup
 from commands.ansible.main import ansible_app
 from commands.server.main import server_app
 from commands.github.main import github_app
@@ -24,7 +23,6 @@ app = typer.Typer(
 
 # Add commands to the main app
 app.command()(version)
-app.command()(setup)
 app.add_typer(ansible_app)
 app.add_typer(server_app)
 app.add_typer(github_app)

@@ -45,19 +45,6 @@ cstation version
 cstation ansible --help
 cstation server --help
 cstation github --help
-cstation setup --help
-```
-
-### Configuration Setup
-
-Setup local configuration directory structure:
-
-```bash
-# Setup ./etc directory with Ansible configurations
-cstation setup
-
-# Force overwrite existing configuration
-cstation setup --force
 ```
 
 ### Ansible Commands
@@ -239,21 +226,24 @@ cstation github ssh sg01 --add-to-github
 
 ## Configuration Structure
 
-When you run `cstation setup`, CStation creates the following local configuration structure:
+CStation uses the following configuration structure in the `./etc/` directory:
 
 ```
 ./etc/
 ├── README.md
 ├── ansible/
+│   ├── ansible.cfg         # Ansible configuration
 │   ├── inventory/
-│   │   └── hosts.yml       # Sample inventory
+│   │   └── hosts.yml       # Inventory file
 │   ├── group_vars/         # Group variables
 │   ├── host_vars/          # Host variables
 │   ├── playbooks/          # Ansible playbooks
 │   └── roles/              # Ansible roles
 └── github/
-    ├── repos.yml           # GitHub repositories configuration
-    └── repos.yml.example   # Example configuration template
+    ├── 16.0.oca.yml        # GitHub repositories configuration
+    ├── 17.0.oca.yml        # GitHub repositories configuration
+    ├── 18.0.oca.yml        # GitHub repositories configuration
+    └── repos.sync.yml      # Repository sync configuration
 ```
 
 ## Development
@@ -286,13 +276,10 @@ uv run python main.py --help
 ### Complete Workflow Example
 
 ```bash
-# 1. Setup local configuration
-cstation setup
-
-# 2. Edit inventory file
+# 1. Edit inventory file
 vim ./etc/ansible/inventory/hosts.yml
 
-# 3. Create a simple playbook
+# 2. Create a simple playbook
 cat > ./etc/ansible/playbooks/site.yml << EOF
 ---
 - hosts: webservers
@@ -309,10 +296,10 @@ cat > ./etc/ansible/playbooks/site.yml << EOF
         enabled: yes
 EOF
 
-# 4. Test connectivity
+# 3. Test connectivity
 cstation ansible ping -i ./etc/ansible/inventory/hosts.yml
 
-# 5. Run the playbook
+# 4. Run the playbook
 cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml
 ```
 
