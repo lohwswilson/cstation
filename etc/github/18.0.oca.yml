@@ -1,0 +1,60 @@
+github:
+  username: "lohwswilson"
+  default_clone_method: "ssh"  # or "https"
+  default_directory: "./etc/github"
+  organization: "ansis-ai"  # Default organization for repositories
+
+repositories:
+  - name: "Muk"
+    description: "Muk-it Odoo Modules"
+    url: https://github.com/muk-it/odoo-modules.git
+    branch: 18.0
+    local_path: "/opt/PW/PW_ADDONS.18.0/OCA"
+    includes:
+      - muk_contacts
+      - muk_product
+      - muk_web_appsbar
+      - muk_web_colors
+      - muk_web_chatter
+      - muk_web_dialog
+      - muk_mail_route
+      - muk_web_utils
+      - muk_web_theme
+
+  - name: "queue"
+    description: "OCA Queue"
+    url: https://github.com/OCA/queue.git
+    branch: 18.0
+    local_path: "/opt/PW/PW_ADDONS.18.0/OCA"
+    includes:
+      - queue_job
+      - queue_job_cron_jobrunner
+
+  - name: "reporting-engine"
+    description: "OCA Reporting Engine"
+    url: https://github.com/OCA/reporting-engine.git
+    branch: 18.0
+    local_path: "/opt/PW/PW_ADDONS.18.0/OCA"
+    includes:
+      - report_xlsx
+      - report_xlsx_helper
+
+  - name: "server-tools"
+    description: "OCA Server Tools"
+    url: https://github.com/OCA/server-tools.git
+    branch: 18.0
+    local_path: "/opt/PW/PW_ADDONS.18.0/OCA"
+    includes:
+      - auto_backup
+      - database_cleanup
+      - upgrade_analysis
+
+  - name: "CybroAddons"
+    description: "Cybro Addons"
+    url: https://github.com/CybroOdoo/CybroAddons.git
+    branch: 18.0
+    local_path: "/opt/PW/PW_ADDONS.18.0/OCA"
+    includes:
+      - base_accounting_kit
+      - base_account_budget
+      - dynamic_accounts_report

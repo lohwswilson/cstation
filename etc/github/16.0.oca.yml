@@ -1,0 +1,130 @@
+github:
+  username: "lohwswilson"
+  default_clone_method: "ssh"  # or "https"
+  default_directory: "./etc/github"
+  organization: "ansis-ai"  # Default organization for repositories
+
+repositories:
+  - name: "account-financial-reporting"
+    description: "OCA Account Financial Reporting"
+    url: https://github.com/OCA/account-financial-reporting.git
+    branch: 16.0
+    includes:
+      - partner_statement
+
+  - name: "account-payment"
+    description: "OCA Account Payment"
+    url: https://github.com/OCA/account-payment.git
+    branch: 16.0
+    includes:
+      - account_payment_widget_amount
+
+  - name: "bank-statement-import"
+    description: "OCA Bank Statement Import"
+    url: https://github.com/OCA/bank-statement-import.git
+    branch: 16.0
+    includes:
+      - account_statement_import_base
+      - account_statement_import
+      - account_statement_import_txt_xlsx
+
+  - name: "queue"
+    description: "OCA Queue"
+    url: https://github.com/OCA/queue.git
+    branch: 16.0
+    includes:
+      - queue_job
+    
+  - name: "reporting-engine"
+    description: "OCA Reporting Engine"
+    url: https://github.com/OCA/reporting-engine.git
+    branch: 16.0
+    includes:
+      - report_xlsx
+      - report_xlsx_helper
+
+  - name: "server-tools"
+    description: "OCA Server Tools"
+    url: https://github.com/OCA/server-tools.git
+    branch: 16.0
+    includes:
+      - auto_backup
+      - base_fontawesome
+      - database_cleanup
+      - upgrade_analysis
+      - base_view_inheritance_extension
+
+  - name: "server-ux"
+    description: "OCA Server UX"
+    url: https://github.com/OCA/server-ux.git
+    branch: 16.0
+    includes:
+      - multi_step_wizard
+      - mass_editing
+      - date_range
+      - server_action_mass_edit
+
+  - name: "spreadsheet"
+    description: "OCA Spreadsheet"
+    url: https://github.com/OCA/spreadsheet.git
+    branch: 16.0
+    includes:
+      - spreadsheet_oca
+      - spreadsheet_dashboard_oca
+
+  - name: "social"
+    description: "OCA Social"
+    url: https://github.com/OCA/social.git
+    branch: 16.0
+    includes:
+      - mass_mailing_partner
+      - mail_debrand
+      - mail_gateway
+      - mail_gateway_telegram
+      - mail_gateway_whatsapp
+
+  - name: "social"
+    description: "OCA Social"
+    url: https://github.com/OCA/social.git
+    branch: 15.0
+    includes:
+      - mass_mailing_partner
+      - mail_debrand
+      - mail_gateway
+      - mail_gateway_telegram
+      - mail_gateway_whatsapp
+
+  - name: "stock-logistics-workflow"
+    description: "OCA Stock Logistics Workflow"
+    url: https://github.com/OCA/stock-logistics-workflow.git
+    branch: 16.0
+    includes:
+    - stock_picking_invoice_link
+    - stock_picking_back2draft
+
+  - name: "web"
+    description: "OCA Web"
+    url: https://github.com/OCA/web.git
+    branch: 16.0
+    includes:
+      - web_widget_dropdown_dynamic
+      - web_group_expand
+
+  - name: "muk-web"
+    description: "Muk-it Web"
+    url: https://github.com/muk-it/muk_web.git
+    branch: 16.0
+    includes:
+      - muk_web_theme
+
+  - name: "CybroAddons"
+    description: "Cybro Addons"
+    url: https://github.com/CybroOdoo/CybroAddons.git
+    branch: 16.0
+    includes:
+      - auto_database_backup
+      - base_accounting_kit
+      - base_account_budget
+      - base_advanced_report_templates
+      - dynamic_accounts_report
+      - sales_order_delivery_status
