@@ -24,7 +24,7 @@ def manage_repo(
     action: Optional[str] = typer.Argument(None, help="Action: list, sync, clone"),
     repo_name: Optional[str] = typer.Argument(None, help="Repository name (for sync/clone action)"),
     config_file: Optional[str] = typer.Option(
-        "etc/github/repos.yml",
+        "etc/github/repos.sync.yml",
         "-c", "--config",
         help="GitHub repositories configuration file"
     ),

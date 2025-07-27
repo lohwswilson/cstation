@@ -4,8 +4,7 @@
 
 ## Features
 
-- **Ansible Integration**: Run playbooks, ping hosts, manage Galaxy roles and collections
-- **Server Management**: SSH key setup, status monitoring, and remote server administration
+- **Server Management**: SSH key setup, status monitoring, host listing, and remote server administration
 - **GitHub Management**: Repository management and SSH key setup for GitHub access
 - **Project Initialization**: Scaffold new infrastructure projects with best practices
 - **Rich CLI Interface**: Beautiful, colored output with progress indicators
@@ -17,7 +16,7 @@
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Ansible (for Ansible commands)
+- Ansible (for server management features)
 
 ### Install Dependencies
 
@@ -42,89 +41,11 @@ cstation --help
 cstation version
 
 # Get help for specific commands
-cstation ansible --help
 cstation server --help
 cstation github --help
 ```
 
-### Ansible Commands
 
-#### Playbook Management
-```bash
-# Run a playbook (using local ./etc configuration)
-cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml
-
-# Run playbook with specific tags
-cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml -t webserver
-
-# Run playbook in check mode (dry run)
-cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml --check
-
-# Ping all hosts
-cstation ansible ping -i ./etc/ansible/inventory/hosts.yml
-
-# Ping specific hosts
-cstation ansible ping -i ./etc/ansible/inventory/hosts.yml -l webservers
-```
-
-#### Configuration Management
-```bash
-# Initialize default ansible.cfg
-cstation ansible config init
-
-# View current configuration
-cstation ansible config view
-
-# Edit configuration file
-cstation ansible config edit
-
-# Set configuration values
-cstation ansible config set host_key_checking False
-cstation ansible config set inventory ./etc/ansible/inventory/hosts.yml
-
-# Get configuration values
-cstation ansible config get inventory
-cstation ansible config get host_key_checking
-
-# Use custom config file
-cstation ansible config view -c /path/to/custom/ansible.cfg
-
-# Use global config
-cstation ansible config view --global
-```
-
-#### Inventory Management
-```bash
-# List current inventory
-cstation ansible inventory list
-
-# Add a new host to default group
-cstation ansible inventory add-host web1.example.com
-
-# Add host to specific group
-cstation ansible inventory add-host web2.example.com -g webservers
-
-# Add host with variables
-cstation ansible inventory add-host db1.example.com -g databases -v "ansible_user=admin ansible_port=2222"
-
-# Add a new group
-cstation ansible inventory add-group loadbalancers
-
-# Edit inventory file
-cstation ansible inventory edit
-
-# Use custom inventory file
-cstation ansible inventory list -i /path/to/custom/inventory
-```
-
-#### Galaxy Management
-```bash
-# Install Galaxy roles
-cstation ansible galaxy install geerlingguy.nginx
-
-# Install from requirements file
-cstation ansible galaxy install -r requirements.yml
-```
 
 ### Server Management
 
@@ -141,6 +62,18 @@ cstation server ssh sg01 -k ~/.ssh/my_key.pub
 
 # Generate new SSH key and setup
 cstation server ssh sg01 --generate
+```
+
+#### Server Inventory Management
+```bash
+# List all servers in inventory
+cstation server list
+
+# Show details for specific server
+cstation server list sg01
+
+# Use custom inventory file
+cstation server list -i /path/to/inventory.yml
 ```
 
 #### Server Status and Monitoring
@@ -232,13 +165,13 @@ CStation uses the following configuration structure in the `./etc/` directory:
 ./etc/
 ├── README.md
 ├── ansible/
-│   ├── ansible.cfg         # Ansible configuration
+│   ├── ansible.cfg         # Ansible configuration for server management
 │   ├── inventory/
-│   │   └── hosts.yml       # Inventory file
+│   │   └── hosts.yml       # Server inventory file
 │   ├── group_vars/         # Group variables
 │   ├── host_vars/          # Host variables
-│   ├── playbooks/          # Ansible playbooks
-│   └── roles/              # Ansible roles
+│   ├── playbooks/          # Ansible playbooks (for server management)
+│   └── roles/              # Ansible roles (for server management)
 └── github/
     ├── 16.0.oca.yml        # GitHub repositories configuration
     ├── 17.0.oca.yml        # GitHub repositories configuration
@@ -268,7 +201,7 @@ uv run python main.py --help
 
 - **Typer**: Modern CLI framework with automatic help generation
 - **Rich**: Beautiful terminal output with colors and formatting
-- **Ansible**: Infrastructure automation and configuration management
+- **Ansible**: Used internally for server management and infrastructure automation
 - **Python 3.13**: Latest Python with improved performance and features
 
 ## Examples
@@ -276,31 +209,25 @@ uv run python main.py --help
 ### Complete Workflow Example
 
 ```bash
-# 1. Edit inventory file
-vim ./etc/ansible/inventory/hosts.yml
+# 1. List all servers in inventory
+cstation server list
 
-# 2. Create a simple playbook
-cat > ./etc/ansible/playbooks/site.yml << EOF
----
-- hosts: webservers
-  become: yes
-  tasks:
-    - name: Install nginx
-      package:
-        name: nginx
-        state: present
-    - name: Start nginx
-      service:
-        name: nginx
-        state: started
-        enabled: yes
-EOF
+# 2. Setup SSH keys for servers
+cstation server ssh sg01
+cstation server ssh sg02
 
-# 3. Test connectivity
-cstation ansible ping -i ./etc/ansible/inventory/hosts.yml
+# 3. Check server status
+cstation server status
 
-# 4. Run the playbook
-cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml
+# 4. Check specific server status with services
+cstation server status sg01 --services
+
+# 5. Check server uptime
+cstation server uptime sg01
+
+# 6. Setup GitHub repositories
+cstation github repo config
+cstation github repo sync
 ```
 
 ## Contributing

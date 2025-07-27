@@ -55,18 +55,52 @@ def server_status(
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
-        if result.returncode == 0:
-            console.print("[green]✓ System information gathered successfully[/green]")
+        # Process output regardless of return code (ansible returns 4 for unreachable hosts)
+        if result.stdout:
+            console.print("[green]✓ System information gathered (some hosts may be unreachable)[/green]")
             
             # Parse and display key information
             lines = result.stdout.split('\n')
+            hosts_found = False
+            
             for line in lines:
-                if 'SUCCESS' in line and '=>' in line:
-                    host = line.split()[0]
-                    console.print(f"[green]✓ {host} - Online[/green]")
+                 # Look for SUCCESS indicators
+                 if 'SUCCESS' in line:
+                     # Extract hostname from SUCCESS line
+                     parts = line.split()
+                     if len(parts) > 0:
+                         host = parts[0].strip()
+                         # Skip 'vars' as it's not a hostname but variables section
+                         if host != 'vars':
+                             console.print(f"[green]✓ {host} - Online[/green]")
+                             hosts_found = True
+                 # Look for UNREACHABLE indicators
+                 elif 'UNREACHABLE' in line:
+                     parts = line.split()
+                     if len(parts) > 0:
+                         host = parts[0].strip()
+                         # Skip 'vars' as it's not a hostname but variables section
+                         if host != 'vars':
+                             console.print(f"[red]✗ {host} - Unreachable[/red]")
+                             hosts_found = True
+                 # Look for FAILED indicators
+                 elif 'FAILED' in line:
+                     parts = line.split()
+                     if len(parts) > 0:
+                         host = parts[0].strip()
+                         # Skip 'vars' as it's not a hostname but variables section
+                         if host != 'vars':
+                             console.print(f"[yellow]⚠ {host} - Failed[/yellow]")
+                             hosts_found = True
+            
+            if not hosts_found:
+                console.print("[yellow]No host status information found in output[/yellow]")
         else:
             console.print(f"[red]Failed to gather system information:[/red]")
-            console.print(result.stderr)
+            if result.stderr:
+                console.print(result.stderr)
+            else:
+                console.print("No output received from ansible command")
             
     except FileNotFoundError:
         console.print(f"[red]ansible command not found. Please install Ansible.[/red]")

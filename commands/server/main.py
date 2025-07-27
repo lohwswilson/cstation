@@ -9,6 +9,7 @@ from rich import print as rprint
 # Import subcommands
 from .ssh import setup_ssh
 from .status import server_status, server_uptime
+from .list import server_list
 
 # Create Server app
 server_app = typer.Typer(
@@ -21,6 +22,7 @@ server_app = typer.Typer(
 server_app.command("ssh")(setup_ssh)
 server_app.command("status")(server_status)
 server_app.command("uptime")(server_uptime)
+server_app.command("list")(server_list)
 
 @server_app.callback()
 def server_callback(ctx: typer.Context):
