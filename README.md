@@ -78,21 +78,25 @@ cstation server list -i /path/to/inventory.yml
 
 #### Server Status and Monitoring
 ```bash
-# Check status of all servers
+# Check status and uptime of all servers (displays in unified table)
 cstation server status
 
-# Check status of specific server
+# Check status and uptime of specific server
 cstation server status sg01
 
-# Check status with service information
-cstation server status sg01 --services
+# Check status only without uptime information
+cstation server status --no-uptime
 
-# Check uptime of all servers
-cstation server uptime
-
-# Check uptime of specific server
-cstation server uptime sg01
+# Check status of specific server without uptime
+cstation server status sg01 --no-uptime
 ```
+
+**Status Display Features:**
+- **Unified Table Format**: Status and uptime information displayed in a single, organized table
+- **YAML-based Parsing**: Uses YAML library for reliable inventory file parsing
+- **Smart Filtering**: Automatically filters out 'vars' sections from Ansible inventory
+- **Clean Output**: Professional table layout with proper column headers (Host, Status, Uptime)
+- **Conditional Columns**: When using `--no-uptime`, only Host and Status columns are shown
 
 ### GitHub Management
 
@@ -216,14 +220,14 @@ cstation server list
 cstation server ssh sg01
 cstation server ssh sg02
 
-# 3. Check server status
+# 3. Check server status and uptime (unified table display)
 cstation server status
 
-# 4. Check specific server status with services
-cstation server status sg01 --services
+# 4. Check specific server status and uptime
+cstation server status sg01
 
-# 5. Check server uptime
-cstation server uptime sg01
+# 5. Check server status only (without uptime)
+cstation server status --no-uptime
 
 # 6. Setup GitHub repositories
 cstation github repo config

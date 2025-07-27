@@ -46,7 +46,7 @@ cstation github repo sync my-project
 
 All GitHub configurations are stored in `./etc/github/`:
 
-- `repos.yml` - Repository configuration file
+- `repos.sync.yml` - Repository configuration file
 - `repos.yml.example` - Example configuration template
 
 ### Repository Configuration Format
@@ -89,7 +89,7 @@ repositories:
 
 ## Repository Management Options
 
-- `--config, -c`: Configuration file path (default: etc/github/repos.yml)
+- `--config, -c`: Configuration file path (default: etc/github/repos.sync.yml)
 - `--directory, -d`: Target directory for cloning
 - `--user, -u`: GitHub username (overrides config)
 
@@ -173,7 +173,7 @@ cstation github repo sync my-project
 ### Repository Issues
 
 - **Sync failed**: Verify local repository state and remote access
-- **Config not found**: Ensure configuration file exists at etc/github/repos.yml
+- **Config not found**: Ensure configuration file exists at etc/github/repos.sync.yml
 
 ### Ansible Issues
 

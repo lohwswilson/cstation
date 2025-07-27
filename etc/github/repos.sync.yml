@@ -90,13 +90,4 @@ repositories:
     fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
     category: "migration"
 
-  # Development Tools
-  - name: "cstation"
-    description: "Infrastructure Management CLI Tool"
-    clone_method: "ssh"
-    auto_sync: true
-    local_path: "~/PythonProject/cstation"
-    branch: "main"
-    upstream_url: "https://github.com/lohwswilson/cstation.git"
-    category: "devops"
     

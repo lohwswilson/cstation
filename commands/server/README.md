@@ -8,6 +8,14 @@ The `server` command provides remote server management capabilities for CStation
 
 Automatically configure SSH key authentication on remote servers using Ansible.
 
+### Server Status & Health Monitoring
+
+Check server status, health, and uptime information using Ansible.
+
+### Server Inventory Management
+
+List and manage servers from Ansible inventory.
+
 ## Commands
 
 ### `cstation server ssh <hostname>`
@@ -36,6 +44,58 @@ cstation server ssh sg01 -k ~/.ssh/my_key.pub
 
 # Generate new SSH key and setup
 cstation server ssh sg01 --generate
+```
+
+### `cstation server status [hostname]`
+
+Check server status, health, and uptime using Ansible.
+
+**Arguments:**
+- `hostname` - Target hostname from inventory (optional - shows all if not specified)
+
+**Options:**
+- `-i, --inventory` - Inventory file path (default: `etc/ansible/inventory/hosts.yml`)
+- `--services` - Check common services status (docker, nginx, etc.)
+- `--uptime/--no-uptime` - Include uptime information in status check (default: enabled)
+
+**Examples:**
+
+```bash
+# Check status of all servers
+cstation server status
+
+# Check status of specific server
+cstation server status sg01
+
+# Check status with services information
+cstation server status --services
+
+# Check status without uptime information
+cstation server status --no-uptime
+
+# Check status with custom inventory
+cstation server status -i /path/to/inventory.yml
+```
+
+### `cstation server list`
+
+List servers from Ansible inventory in a formatted table.
+
+**Options:**
+- `-i, --inventory` - Inventory file path (default: `etc/ansible/inventory/hosts.yml`)
+- `--detail` - Show detailed host information
+
+**Examples:**
+
+```bash
+# List all servers
+cstation server list
+
+# List servers with detailed information
+cstation server list --detail
+
+# List servers from custom inventory
+cstation server list -i /path/to/inventory.yml
 ```
 
 ## How it Works

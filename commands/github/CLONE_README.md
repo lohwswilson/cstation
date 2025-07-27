@@ -59,7 +59,7 @@ cstation github repo clone Muk --config etc/github/18.0.oca.yml --directory /cus
 
 ## Command Options
 
-- `--config, -c`: GitHub repositories configuration file (default: etc/github/repos.yml)
+- `--config, -c`: GitHub repositories configuration file (default: etc/github/repos.sync.yml)
 - `--directory, -d`: Target directory for cloning (default: current directory)
 - `--user, -u`: GitHub username (will use config if not provided)
 - `--help`: Show help message
