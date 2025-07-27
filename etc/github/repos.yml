@@ -1,0 +1,102 @@
+# GitHub Repositories Configuration
+# Based on repo_example.yml with enhanced details
+
+github:
+  username: "lohwswilson"
+  default_clone_method: "ssh"  # or "https"
+  default_directory: "./etc/github"
+  organization: "ansis-ai"  # Default organization for repositories
+
+repositories:
+  # Odoo Repositories
+  - name: "odoo-18"
+    description: "Odoo ERP System - Main Repository"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/PW.18.0"
+    branch: "18.0"
+    upstream_url: "https://github.com/odoo/odoo.git"
+    fork_url: "git@github.com:ansis-ai/odoo"
+    category: "erp"
+    
+  - name: "odoo-17"
+    description: "Odoo ERP System - Version 17.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/PW.7.0"
+    branch: "17.0"
+    upstream_url: "https://github.com/odoo/odoo.git"
+    fork_url: "git@github.com:ansis-ai/odoo"
+    category: "erp"
+    
+  - name: "odoo-16"
+    description: "Odoo ERP System - Version 16.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/PW.6.0"
+    branch: "16.0"
+    upstream_url: "https://github.com/odoo/odoo.git"
+    fork_url: "git@github.com:ansis-ai/odoo"
+    category: "erp"
+
+  # OpenUpgrade Repositories
+  - name: "OpenUpgrade"
+    description: "OpenUpgrade Migration Framework - Latest"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/OpenUpgrade_18.0"
+    branch: "18.0"
+    upstream_url: "https://github.com/OCA/OpenUpgrade.git"
+    fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
+    category: "migration"
+    
+  - name: "OpenUpgrade-17"
+    description: "OpenUpgrade Migration Framework - Version 17.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/OpenUpgrade_17.0"
+    branch: "17.0"
+    upstream_url: "https://github.com/OCA/OpenUpgrade.git"
+    fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
+    category: "migration"
+    
+  - name: "OpenUpgrade-16"
+    description: "OpenUpgrade Migration Framework - Version 16.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/OpenUpgrade_16.0"
+    branch: "16.0"
+    upstream_url: "https://github.com/OCA/OpenUpgrade.git"
+    fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
+    category: "migration"
+    
+  - name: "OpenUpgrade-15"
+    description: "OpenUpgrade Migration Framework - Version 15.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/OpenUpgrade_15.0"
+    branch: "15.0"
+    upstream_url: "https://github.com/OCA/OpenUpgrade.git"
+    fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
+    category: "migration"
+    
+  - name: "OpenUpgrade-14"
+    description: "OpenUpgrade Migration Framework - Version 14.0"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "/opt/PW/OpenUpgrade_14.0"
+    branch: "14.0"
+    upstream_url: "https://github.com/OCA/OpenUpgrade.git"
+    fork_url: "git@github.com:ansis-ai/OpenUpgrade.git"
+    category: "migration"
+
+  # Development Tools
+  - name: "cstation"
+    description: "Infrastructure Management CLI Tool"
+    clone_method: "ssh"
+    auto_sync: true
+    local_path: "~/PythonProject/cstation"
+    branch: "main"
+    upstream_url: "https://github.com/lohwswilson/cstation.git"
+    category: "devops"
+    
