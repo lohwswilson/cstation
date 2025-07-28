@@ -98,6 +98,257 @@ cstation server status sg01 --no-uptime
 - **Clean Output**: Professional table layout with proper column headers (Host, Status, Uptime)
 - **Conditional Columns**: When using `--no-uptime`, only Host and Status columns are shown
 
+#### Server Setup and Configuration Management
+```bash
+# List available software profiles
+cstation server profiles
+
+# Setup database server with dry run
+cstation server setup sg01 --profile database_server --dry-run
+
+# Setup database server on specific host
+cstation server setup sg01 --profile database_server
+
+# Setup web server on all hosts
+cstation server setup all --profile web_server
+
+# Setup Odoo application server
+cstation server setup sg02 --profile odoo_app
+
+# Use custom inventory file
+cstation server setup sg01 --profile web_server --inventory /path/to/inventory.yml
+
+# Enable verbose output
+cstation server setup sg01 --profile database_server --verbose
+```
+
+**Server Setup Features:**
+- **Profile-based Configuration**: Use predefined software profiles for different server types
+- **Ansible Integration**: Leverages existing Ansible inventory and generates dynamic playbooks
+- **Dry Run Mode**: Preview changes before execution for safe deployments
+- **Template Management**: Jinja2 templates for service configurations (PostgreSQL, Nginx)
+- **Service Management**: Automatically configure and start services after installation
+- **Firewall Configuration**: Automated firewall rule setup based on profile requirements
+- **Multi-Server Support**: Deploy software across multiple servers simultaneously
+- **Custom Inventory**: Support for custom Ansible inventory files
+
+**Available Software Profiles:**
+- **database_server**: PostgreSQL, Redis, monitoring tools with optimized configurations
+- **web_server**: Nginx, SSL certificates, security tools, and firewall setup
+- **odoo_app**: Complete Odoo application server with Python dependencies and web stack
+
+**Profile Structure:**
+Profiles are YAML files located in `etc/profiles/servers/` that define complete server configurations including:
+- **Packages**: List of software packages to install with version specifications
+- **Services**: Service configuration with enable/disable and start/stop settings
+- **Configurations**: Template files for service configuration (PostgreSQL, Nginx, etc.)
+- **Docker Containers**: Container definitions with images, ports, volumes, and networks
+- **Docker Networks**: Network creation and configuration for container communication
+- **Firewall Rules**: Port and protocol specifications for security
+- **Environment Variables**: Service-specific environment configuration
+- **Post-install Tasks**: Additional Ansible tasks for custom setup requirements
+
+**Profile Types:**
+
+**Unified Profiles** (Recommended): Contain both software and container definitions in a single file
+- `basic_server.yml` - Basic server setup with essential packages and Docker
+- `web_server.yml` - Complete web server with Nginx, Traefik, WordPress, MySQL, Redis
+- `database_server.yml` - Database server with PostgreSQL, Redis, and monitoring tools
+
+**Creating a New Profile:**
+
+```bash
+# Create a new profile based on existing one
+cp etc/profiles/servers/web_server.yml etc/profiles/servers/my_profile.yml
+# Edit the profile
+vim etc/profiles/servers/my_profile.yml
+```
+
+### Host-Specific Variables
+
+Host-specific variables can be defined in `etc/ansible/host_vars/<hostname>.yml` to override profile defaults and customize configurations for individual servers:
+
+#### Basic Host Override Example
+```yaml
+# etc/ansible/host_vars/server01.yml
+server_info:
+  hostname: server01
+  environment: production
+
+docker_daemon_config:
+  log_driver: "json-file"
+  log_opts:
+    docker_log_max_size: "50m"
+    docker_log_max_file: "3"
+
+containers:
+  traefik:
+    environment:
+      TRAEFIK_LOG_LEVEL: "INFO"
+```
+
+#### Production Host Override Example
+The `web01.yml` example demonstrates a comprehensive production server configuration:
+
+```yaml
+# etc/ansible/host_vars/web01.yml
+server_info:
+  hostname: web01
+  environment: production
+  location: usa_east
+
+# Production domain settings
+domain_name: "mycompany.com"
+ssl_email: "devops@mycompany.com"
+
+# Enhanced Docker daemon for production
+docker_daemon_config:
+  log_driver: "json-file"
+  log_opts:
+    docker_log_max_size: "100m"  # Larger logs
+    docker_log_max_file: "5"     # More retention
+  live_restore: true
+
+# Override containers with production settings
+containers:
+  traefik:
+    name: "traefik_prod"
+    environment:
+      TRAEFIK_API_INSECURE: "false"  # Secure dashboard
+      TRAEFIK_LOG_LEVEL: "INFO"
+    resource_limits:
+      memory: "1g"
+      cpu: "1.0"
+    labels:
+      traefik.http.routers.traefik.rule: "Host(`traefik.mycompany.com`)"
+      traefik.http.routers.traefik.tls.certresolver: "letsencrypt"
+
+  wordpress:
+    name: "wordpress_prod"
+    environment:
+      WORDPRESS_DB_NAME: "wordpress_prod"
+      FORCE_SSL_ADMIN: "true"
+    labels:
+      traefik.http.routers.wordpress.rule: "Host(`www.mycompany.com`) || Host(`mycompany.com`)"
+
+# Additional production containers
+  prometheus:
+    name: "prometheus_prod"
+    image: "prom/prometheus:latest"
+    volumes:
+      - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+    command:
+      - "--storage.tsdb.retention.time=30d"
+
+# Production-specific networks
+docker_networks:
+  - name: "monitoring_network"
+    driver: "bridge"
+
+# Production backup configuration
+backup_config:
+  enabled: true
+  s3_bucket: "mycompany-backups"
+  retention_policy:
+    daily: 7
+    weekly: 4
+    monthly: 12
+```
+
+#### Host Override Capabilities
+
+**Complete Override**: Replace entire sections
+```yaml
+containers:
+  nginx:  # Completely replaces nginx container definition
+    image: "nginx:alpine"
+    ports: ["8080:80"]
+```
+
+**Partial Override**: Merge with profile defaults
+```yaml
+containers:
+  nginx:
+    environment:  # Adds to existing environment variables
+      CUSTOM_VAR: "value"
+```
+
+**Resource Scaling**: Adjust for different environments
+```yaml
+containers:
+  mysql:
+    resource_limits:
+      memory: "4g"    # Production: more memory
+      cpu: "2.0"      # Production: more CPU
+```
+
+**Environment-Specific Settings**:
+```yaml
+# Development
+containers:
+  app:
+    environment:
+      DEBUG: "true"
+      LOG_LEVEL: "debug"
+
+# Production  
+containers:
+  app:
+    environment:
+      DEBUG: "false"
+      LOG_LEVEL: "info"
+```
+
+**Profile Configuration Sections:**
+
+*Software Configuration:*
+```yaml
+packages:
+  - name: nginx
+    version: latest
+  - name: docker.io
+    version: latest
+
+services:
+  - name: nginx
+    state: started
+    enabled: true
+  - name: docker
+    state: started
+    enabled: true
+
+configurations:
+  - src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+```
+
+*Container Configuration:*
+```yaml
+containers:
+  traefik:
+    name: "traefik"
+    image: "traefik:v3.0"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      TRAEFIK_API_DASHBOARD: "true"
+    networks:
+      - "web_network"
+    restart_policy: "unless-stopped"
+    labels:
+      traefik.enable: "true"
+
+docker_networks:
+  - name: "web_network"
+    driver: "bridge"
+```
+
 ### GitHub Management
 
 #### Repository Management
@@ -175,7 +426,10 @@ CStation uses the following configuration structure in the `./etc/` directory:
 │   ├── group_vars/         # Group variables
 │   ├── host_vars/          # Host variables
 │   ├── playbooks/          # Ansible playbooks (for server management)
-│   └── roles/              # Ansible roles (for server management)
+│   ├── roles/              # Ansible roles (for server management)
+│   └── software/           # Software installation configurations (legacy)
+│       ├── packages.yml    # Legacy software groups and packages
+│       └── examples/       # Legacy example configurations
 └── github/
     ├── 16.0.oca.yml        # GitHub repositories configuration
     ├── 17.0.oca.yml        # GitHub repositories configuration
@@ -210,6 +464,112 @@ uv run python main.py --help
 
 ## Examples
 
+### Complete Server Setup with Profiles
+
+#### Basic Server Setup
+```bash
+# Setup a basic server with essential packages and Docker
+cstation server setup sg01 --profile basic_server
+
+# Deploy containers defined in the profile
+cstation server setup docker sg01
+```
+
+#### Web Server with Custom Configuration
+```bash
+# Setup web server with Nginx, Traefik, WordPress, MySQL, Redis
+cstation server setup web01 --profile web_server
+
+# Deploy all containers (Traefik, WordPress, MySQL, Redis, monitoring)
+cstation server setup docker web01
+```
+
+#### Database Server Setup
+```bash
+# Setup database server with PostgreSQL, Redis, and monitoring
+cstation server setup db01 --profile database_server
+
+# Deploy database containers (PostgreSQL, Redis, pgAdmin, monitoring)
+cstation server setup docker db01
+```
+
+### Production Deployment with Host Overrides
+
+#### Production Web Server (using web01.yml host vars)
+```bash
+# Deploy production web server with custom domain and SSL
+cstation server setup software web01 --profile web_server
+
+# Deploy production containers with enhanced security and monitoring
+cstation server setup docker web01
+```
+
+#### Container-Only Deployments
+```bash
+# Deploy only specific containers (assumes software is installed)
+cstation server setup docker web01
+
+# Update container configurations without reinstalling software
+cstation server setup docker web01 --force
+```
+
+### Development vs Production
+
+#### Development Environment
+```bash
+# Create development host vars with debug settings
+# etc/ansible/host_vars/dev01.yml
+server_info:
+  environment: development
+containers:
+  wordpress:
+    environment:
+      WORDPRESS_DEBUG: "true"
+      WP_DEBUG_LOG: "true"
+
+# Deploy development server
+cstation server setup dev01 --profile web_server
+cstation server setup docker dev01
+```
+
+#### Production Environment
+```bash
+# Use production host vars (web01.yml) with optimized settings
+# Enhanced security, monitoring, backups, SSL certificates
+
+# Deploy production server
+cstation server setup software web01 --profile web_server
+cstation server setup docker web01
+```
+
+### Scaling and Customization
+
+#### Custom Profile Creation
+```bash
+# Create custom profile based on web_server
+cp etc/profiles/servers/web_server.yml etc/profiles/servers/ecommerce_server.yml
+
+# Edit to add ecommerce-specific containers
+vim etc/profiles/servers/ecommerce_server.yml
+
+# Deploy custom profile
+cstation server setup shop01 --profile ecommerce_server
+cstation server setup docker shop01
+```
+
+#### Multi-Server Deployment
+```bash
+# Deploy multiple servers with same profile but different host configs
+cstation server setup web01 --profile web_server  # Production
+cstation server setup web02 --profile web_server  # Staging
+cstation server setup dev01 --profile web_server  # Development
+
+# Deploy containers to all servers
+cstation server setup docker web01
+cstation server setup docker web02
+cstation server setup docker dev01
+```
+
 ### Complete Workflow Example
 
 ```bash
@@ -223,13 +583,10 @@ cstation server ssh sg02
 # 3. Check server status and uptime (unified table display)
 cstation server status
 
-# 4. Check specific server status and uptime
-cstation server status sg01
+# 4. Check server status after setup
+cstation server status
 
-# 5. Check server status only (without uptime)
-cstation server status --no-uptime
-
-# 6. Setup GitHub repositories
+# 5. Setup GitHub repositories
 cstation github repo config
 cstation github repo sync
 ```

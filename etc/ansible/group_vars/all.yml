@@ -1,0 +1,29 @@
+# Global variables for all hosts
+# These variables apply to every host in the inventory
+
+
+# Common security settings
+security_settings:
+  ufw_enabled: true
+  fail2ban_enabled: true
+  ssh_port: 22
+  ssh_permit_root_login: false
+  ssh_password_authentication: false
+
+# Common service ports
+common_ports:
+  http: 80
+  https: 443
+  ssh: 22
+
+# Default timezone
+timezone: "UTC"
+
+# Common packages for all servers
+common_packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - unzip
+  - rsync

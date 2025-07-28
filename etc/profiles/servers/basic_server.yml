@@ -1,0 +1,131 @@
+# Basic Server Profile
+# Essential tools and security configuration for general-purpose servers
+
+description: "Basic server setup with Docker, Python3, essential tools, and security configuration"
+
+packages:
+  - name: docker.io
+    version: latest
+  - name: docker-compose
+    version: latest
+  - name: python3
+    version: latest
+  - name: python3-pip
+    version: latest
+  - name: wget
+    version: latest
+  - name: ufw
+    version: latest
+  - name: rsync
+    version: latest
+  - name: curl
+    version: latest
+  - name: git
+    version: latest
+  - name: htop
+    version: latest
+  - name: unzip
+    version: latest
+  - name: logrotate
+    version: latest
+
+services:
+  - name: docker
+    enabled: true
+    state: started
+  - name: ufw
+    enabled: true
+    state: started
+
+configurations:
+  - src: docker/daemon.json.j2
+    dest: /etc/docker/daemon.json
+  - src: ufw/ufw.conf.j2
+    dest: /etc/ufw/ufw.conf
+
+firewall_rules:
+  - port: 22
+    protocol: tcp
+    rule: allow
+    comment: "SSH"
+  - port: 80
+    protocol: tcp
+    rule: allow
+    comment: "HTTP"
+  - port: 443
+    protocol: tcp
+    rule: allow
+    comment: "HTTPS"
+
+environment_variables:
+  DOCKER_BUILDKIT: "1"
+  COMPOSE_DOCKER_CLI_BUILD: "1"
+  DOCKER_LOG_MAX_SIZE: "10m"
+  DOCKER_LOG_MAX_FILE: "3"
+
+post_install_tasks:
+  - name: "Add current user to docker group"
+    user:
+      name: "{{ ansible_user }}"
+      groups: docker
+      append: yes
+  
+  - name: "Enable UFW firewall with default deny"
+    ufw:
+      state: enabled
+      policy: deny
+      direction: incoming
+  
+  - name: "Configure system log rotation for Docker containers"
+    copy:
+      content: |
+        /var/lib/docker/containers/*/*.log {
+          daily
+          missingok
+          rotate 7
+          compress
+          delaycompress
+          copytruncate
+          notifempty
+        }
+      dest: /etc/logrotate.d/docker-containers
+      mode: '0644'
+  
+  - name: "Set secure SSH configuration"
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?PermitRootLogin'
+      line: 'PermitRootLogin no'
+    notify: restart ssh
+  
+  - name: "Disable password authentication for SSH"
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?PasswordAuthentication'
+      line: 'PasswordAuthentication no'
+    notify: restart ssh
+  
+  - name: "Enable automatic security updates"
+    apt:
+      name: unattended-upgrades
+      state: present
+  
+  - name: "Configure automatic security updates"
+    copy:
+      content: |
+        APT::Periodic::Update-Package-Lists "1";
+        APT::Periodic::Unattended-Upgrade "1";
+        APT::Periodic::AutocleanInterval "7";
+      dest: /etc/apt/apt.conf.d/20auto-upgrades
+      mode: '0644'
+
+handlers:
+  - name: restart docker
+    systemd:
+      name: docker
+      state: restarted
+  
+  - name: restart ssh
+    systemd:
+      name: ssh
+      state: restarted

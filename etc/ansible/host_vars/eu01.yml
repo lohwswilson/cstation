@@ -1,0 +1,95 @@
+# Host-specific variables for eu01
+# These variables override group variables and apply only to this host
+
+# Server identification
+server_info:
+  hostname: eu01
+  environment: production
+  location: germany
+  datacenter: ansis_eu
+  role: application_server
+  timezone: "Europe/Berlin"
+
+# Common Docker settings - Overwrite group variables
+docker_daemon_config:
+  log_driver: "json-file"
+  log_opts:
+    docker_log_max_size: "50m"
+    docker_log_max_file: "3"
+  storage_driver: "overlay2"
+  experimental: false
+
+# Hardware specifications
+hardware:
+  cpu_cores: 4
+  memory_gb: 16
+  disk_space_gb: 500
+  network_interface: eth0
+  architecture: "x86_64"
+
+# Domain and SSL Configuration
+domain_name: "portainer.eu01.ansis.com"
+ssl_email: "admin@ansis.com"
+ssl_enabled: true
+
+# Portainer Configuration
+portainer_admin_password: "{{ vault_portainer_admin_password | default('admin123') }}"
+portainer_domain: "{{ domain_name }}"
+portainer_ssl_enabled: "{{ ssl_enabled | string }}"
+portainer_data_path: "/opt/portainer/data"
+
+# Vault Variables (encrypted)
+# Use ansible-vault encrypt_string to encrypt sensitive values
+# Example: ansible-vault encrypt_string 'your_password' --name 'vault_portainer_admin_password'
+vault_portainer_admin_password: "admin123"
+# Replace with actual encrypted vault output in production
+
+# Network Configuration
+portainer_network:
+  name: "ANSIS_NET"
+  subnet: "172.20.0.0/16"
+  gateway: "172.20.0.1"
+
+# Firewall Rules
+firewall_rules:
+  - port: 22
+    protocol: tcp
+    rule: allow
+    comment: "SSH access"
+  - port: 9000
+    protocol: tcp
+    rule: allow
+    comment: "Portainer HTTP"
+  - port: 9443
+    protocol: tcp
+    rule: allow
+    comment: "Portainer HTTPS"
+
+# Environment Variables
+environment_variables:
+  PORTAINER_ADMIN_PASSWORD: "{{ portainer_admin_password }}"
+  PORTAINER_DOMAIN: "{{ portainer_domain }}"
+  PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled | string }}"
+  DOCKER_HOST: "unix:///var/run/docker.sock"
+
+# Backup Configuration
+backup_config:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  backup_path: "/opt/backups/portainer"
+  s3_bucket: "eu01-portainer-backups"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_interval: "30s"
+  log_level: "info"
+
+# Security Configuration
+security:
+  fail2ban_enabled: true
+  ufw_enabled: true
+  ssh_key_only: true
+  disable_root_login: true

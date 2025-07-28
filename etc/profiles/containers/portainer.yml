@@ -1,0 +1,114 @@
+# Portainer Container Management Profile
+# Minimal profile for deploying Portainer container management interface
+
+description: "Lightweight profile for Portainer container management interface with minimal software dependencies"
+
+# Container Configuration
+containers:
+  portainer:
+    name: "portainer"
+    image: "portainer/portainer-ce:latest"
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "{{ portainer_data_path }}:/data"
+    environment:
+      PORTAINER_ADMIN_PASSWORD: "{{ portainer_admin_password }}"
+      PORTAINER_DOMAIN: "{{ portainer_domain }}"
+      PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled }}"
+    networks:
+      - "{{ portainer_network.name }}"
+    restart_policy: "unless-stopped"
+    resource_limits:
+      memory: "256m"
+      cpu: 0.5
+    labels:
+      description: "Portainer Container Management Interface"
+      version: "latest"
+      traefik.enable: "true"
+      traefik.http.routers.portainer.rule: "Host(`{{ portainer_domain }}`)"
+      traefik.http.routers.portainer.tls: "true"
+      traefik.http.routers.portainer.tls.certresolver: "letsencrypt"
+      traefik.http.services.portainer.loadbalancer.server.port: "9000"
+
+# Docker networks
+docker_networks:
+  - name: "{{ portainer_network.name }}"
+    driver: "bridge"
+    ipam:
+      config:
+        - subnet: "{{ portainer_network.subnet }}"
+          gateway: "{{ portainer_network.gateway }}"
+
+
+# Environment variables
+environment_variables:
+  PORTAINER_ADMIN_PASSWORD: "{{ portainer_admin_password | default('admin123') }}"
+  PORTAINER_LOGO: "https://portainer.io/images/logos/portainer.png"
+  PORTAINER_DOMAIN: "{{ portainer_domain }}"
+  PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled }}"
+  DOCKER_HOST: "unix:///var/run/docker.sock"
+
+# Post-installation tasks
+post_install_tasks:
+  - name: "Create Portainer admin password file"
+    description: "Set up initial admin password for Portainer"
+    command: |
+      mkdir -p /var/lib/docker/volumes/portainer_data/_data
+      echo "{{ portainer_admin_password | default('admin123') }}" | docker run --rm -i portainer/helper-reset-password > /var/lib/docker/volumes/portainer_data/_data/admin_password
+    
+  - name: "Enable UFW firewall"
+    description: "Enable and configure UFW firewall"
+    command: "ufw --force enable"
+    
+  - name: "Set Docker to start on boot"
+    description: "Ensure Docker service starts automatically"
+    command: "systemctl enable docker"
+
+# Default variables that can be overridden in host_vars
+vars:
+  # Domain and SSL Configuration
+  domain_name: "portainer.localhost"
+  ssl_email: "admin@localhost"
+  ssl_enabled: false
+  
+  # Portainer Configuration
+  portainer_admin_password: "admin123"  # Change this in production
+  portainer_domain: "{{ domain_name }}"
+  portainer_ssl_enabled: "{{ ssl_enabled }}"
+  portainer_data_path: "/opt/portainer/data"
+  docker_log_max_size: "10m"
+  docker_log_max_file: "3"
+  
+  # Network Configuration
+  portainer_network:
+    name: "portainer_network"
+    subnet: "172.20.0.0/16"
+    gateway: "172.20.0.1"
+  
+  # Firewall Rules
+  firewall_rules:
+    - port: 22
+      protocol: tcp
+      rule: allow
+      comment: "SSH access"
+    - port: 9000
+      protocol: tcp
+      rule: allow
+      comment: "Portainer HTTP"
+    - port: 9443
+      protocol: tcp
+      rule: allow
+      comment: "Portainer HTTPS"
+
+# Handlers for service management
+handlers:
+  - name: "restart docker"
+    description: "Restart Docker service"
+    command: "systemctl restart docker"
+    
+  - name: "reload ufw"
+    description: "Reload UFW firewall rules"
+    command: "ufw reload"

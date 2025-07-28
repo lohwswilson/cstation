@@ -11,6 +11,7 @@ from rich import print as rprint
 from commands.version.main import version
 from commands.server.main import server_app
 from commands.github.main import github_app
+from commands.docker.main import docker_app
 
 # Initialize main Typer app
 app = typer.Typer(
@@ -24,6 +25,7 @@ app = typer.Typer(
 app.command()(version)
 app.add_typer(server_app)
 app.add_typer(github_app)
+app.add_typer(docker_app)
 
 @app.callback()
 def main_callback(ctx: typer.Context):
