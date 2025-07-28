@@ -21,9 +21,6 @@ containers:
     networks:
       - "{{ portainer_network.name }}"
     restart_policy: "unless-stopped"
-    resource_limits:
-      memory: "256m"
-      cpu: 0.5
     labels:
       description: "Portainer Container Management Interface"
       version: "latest"
@@ -87,28 +84,3 @@ vars:
     name: "portainer_network"
     subnet: "172.20.0.0/16"
     gateway: "172.20.0.1"
-  
-  # Firewall Rules
-  firewall_rules:
-    - port: 22
-      protocol: tcp
-      rule: allow
-      comment: "SSH access"
-    - port: 9000
-      protocol: tcp
-      rule: allow
-      comment: "Portainer HTTP"
-    - port: 9443
-      protocol: tcp
-      rule: allow
-      comment: "Portainer HTTPS"
-
-# Handlers for service management
-handlers:
-  - name: "restart docker"
-    description: "Restart Docker service"
-    command: "systemctl restart docker"
-    
-  - name: "reload ufw"
-    description: "Reload UFW firewall rules"
-    command: "ufw reload"
