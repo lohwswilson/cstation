@@ -14,8 +14,7 @@ packages:
     version: latest
   - name: wget
     version: latest
-  - name: ufw
-    version: latest
+
   - name: rsync
     version: latest
   - name: curl
@@ -33,29 +32,10 @@ services:
   - name: docker
     enabled: true
     state: started
-  - name: ufw
-    enabled: true
-    state: started
 
 configurations:
   - src: docker/daemon.json.j2
     dest: /etc/docker/daemon.json
-  - src: ufw/ufw.conf.j2
-    dest: /etc/ufw/ufw.conf
-
-firewall_rules:
-  - port: 22
-    protocol: tcp
-    rule: allow
-    comment: "SSH"
-  - port: 80
-    protocol: tcp
-    rule: allow
-    comment: "HTTP"
-  - port: 443
-    protocol: tcp
-    rule: allow
-    comment: "HTTPS"
 
 environment_variables:
   DOCKER_BUILDKIT: "1"
@@ -69,12 +49,6 @@ post_install_tasks:
       name: "{{ ansible_user }}"
       groups: docker
       append: yes
-  
-  - name: "Enable UFW firewall with default deny"
-    ufw:
-      state: enabled
-      policy: deny
-      direction: incoming
   
   - name: "Configure system log rotation for Docker containers"
     copy:
@@ -98,11 +72,11 @@ post_install_tasks:
       line: 'PermitRootLogin no'
     notify: restart ssh
   
-  - name: "Disable password authentication for SSH"
+  - name: "Allow root login with SSH keys only"
     lineinfile:
       path: /etc/ssh/sshd_config
-      regexp: '^#?PasswordAuthentication'
-      line: 'PasswordAuthentication no'
+      regexp: '^#?PermitRootLogin'
+      line: 'PermitRootLogin prohibit-password'
     notify: restart ssh
   
   - name: "Enable automatic security updates"

@@ -17,7 +17,7 @@ containers:
     environment:
       PORTAINER_ADMIN_PASSWORD: "{{ portainer_admin_password }}"
       PORTAINER_DOMAIN: "{{ portainer_domain }}"
-      PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled }}"
+      PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled | string }}"
     networks:
       - "{{ portainer_network.name }}"
     restart_policy: "unless-stopped"
@@ -39,48 +39,43 @@ docker_networks:
         - subnet: "{{ portainer_network.subnet }}"
           gateway: "{{ portainer_network.gateway }}"
 
+# Configuration files
+configurations:
+  - src: docker/daemon.json.j2
+    dest: /etc/docker/daemon.json
 
 # Environment variables
 environment_variables:
   PORTAINER_ADMIN_PASSWORD: "{{ portainer_admin_password | default('admin123') }}"
   PORTAINER_LOGO: "https://portainer.io/images/logos/portainer.png"
   PORTAINER_DOMAIN: "{{ portainer_domain }}"
-  PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled }}"
+  PORTAINER_SSL_ENABLED: "{{ portainer_ssl_enabled | string }}"
   DOCKER_HOST: "unix:///var/run/docker.sock"
 
 # Post-installation tasks
 post_install_tasks:
-  - name: "Create Portainer admin password file"
-    description: "Set up initial admin password for Portainer"
-    command: |
-      mkdir -p /var/lib/docker/volumes/portainer_data/_data
-      echo "{{ portainer_admin_password | default('admin123') }}" | docker run --rm -i portainer/helper-reset-password > /var/lib/docker/volumes/portainer_data/_data/admin_password
-    
-  - name: "Enable UFW firewall"
-    description: "Enable and configure UFW firewall"
-    command: "ufw --force enable"
-    
   - name: "Set Docker to start on boot"
-    description: "Ensure Docker service starts automatically"
-    command: "systemctl enable docker"
+    systemd:
+      name: docker
+      enabled: yes
 
 # Default variables that can be overridden in host_vars
 vars:
   # Domain and SSL Configuration
-  domain_name: "portainer.localhost"
+  domain_name: "portainer.eu1.ansis.com.sg"
   ssl_email: "admin@localhost"
   ssl_enabled: false
-  
+
   # Portainer Configuration
-  portainer_admin_password: "admin123"  # Change this in production
+  portainer_admin_password: "admin123" # Change this in production
   portainer_domain: "{{ domain_name }}"
   portainer_ssl_enabled: "{{ ssl_enabled }}"
   portainer_data_path: "/opt/portainer/data"
   docker_log_max_size: "10m"
   docker_log_max_file: "3"
-  
+
   # Network Configuration
   portainer_network:
-    name: "portainer_network"
+    name: "ANSIS_NET"
     subnet: "172.20.0.0/16"
     gateway: "172.20.0.1"

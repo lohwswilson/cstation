@@ -177,7 +177,6 @@ def merge_configurations(profile_config: dict, host_vars: dict) -> dict:
             console.print(f"[blue]🔧 Overriding {key} with host-specific values[/blue]")
             merged_config[key] = host_vars[key]
     
-    # Docker daemon configuration is handled by the docker module
     
     # Merge any other host variables into vars section
     if 'vars' not in merged_config:
@@ -314,6 +313,17 @@ def create_and_run_software_playbook(target: str, merged_config: dict, inventory
                         'backup': True
                     }
                 })
+    
+    # Add post-installation tasks
+    post_install_tasks = merged_config.get('post_install_tasks', [])
+    for task in post_install_tasks:
+        if isinstance(task, dict):
+            playbook['tasks'].append(task)
+    
+    # Add handlers
+    handlers = merged_config.get('handlers', [])
+    if handlers:
+        playbook['handlers'] = handlers
     
     # Write playbook to temporary file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:

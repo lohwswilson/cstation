@@ -32,38 +32,12 @@ domain_name: "portainer.eu01.ansis.com"
 ssl_email: "admin@ansis.com"
 ssl_enabled: true
 
-# Portainer Configuration
-portainer_admin_password: "{{ vault_portainer_admin_password | default('admin123') }}"
-portainer_domain: "{{ domain_name }}"
-portainer_ssl_enabled: "{{ ssl_enabled | string }}"
-portainer_data_path: "/opt/portainer/data"
 
 # Vault Variables (encrypted)
 # Use ansible-vault encrypt_string to encrypt sensitive values
 # Example: ansible-vault encrypt_string 'your_password' --name 'vault_portainer_admin_password'
 vault_portainer_admin_password: "admin123"
 # Replace with actual encrypted vault output in production
-
-# Network Configuration
-portainer_network:
-  name: "ANSIS_NET"
-  subnet: "172.20.0.0/16"
-  gateway: "172.20.0.1"
-
-# Firewall Rules
-firewall_rules:
-  - port: 22
-    protocol: tcp
-    rule: allow
-    comment: "SSH access"
-  - port: 9000
-    protocol: tcp
-    rule: allow
-    comment: "Portainer HTTP"
-  - port: 9443
-    protocol: tcp
-    rule: allow
-    comment: "Portainer HTTPS"
 
 # Environment Variables
 environment_variables:

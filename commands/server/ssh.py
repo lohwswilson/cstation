@@ -147,6 +147,9 @@ def setup_ssh(
             console.print(f"ssh {hostname}")
         else:
             console.print(f"[red]Ansible playbook failed:[/red]")
+            console.print("[red]STDOUT:[/red]")
+            console.print(result.stdout)
+            console.print("[red]STDERR:[/red]")
             console.print(result.stderr)
             raise typer.Exit(1)
             

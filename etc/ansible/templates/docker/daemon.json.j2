@@ -1,8 +1,8 @@
 {
   "log-driver": "json-file",
   "log-opts": {
-    "max-size": "{{ docker_log_max_size | default('10m') }}",
-    "max-file": "{{ docker_log_max_file | default('3') }}"
+    "max-size": "{{ docker_daemon_config.log_opts.docker_log_max_size | default('10m') }}",
+    "max-file": "{{ docker_daemon_config.log_opts.docker_log_max_file | default('3') }}"
   },
   "storage-driver": "overlay2",
   "live-restore": true,
