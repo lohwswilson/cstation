@@ -101,7 +101,7 @@ cstation server status sg01 --no-uptime
 #### Server Setup and Configuration Management
 ```bash
 # List available software profiles
-cstation server profiles
+cstation server profile
 
 # Setup database server with dry run
 cstation server setup sg01 --profile database_server --dry-run

@@ -132,7 +132,7 @@ def list_containers(
     # TODO: Implement container listing functionality
     console.print("[yellow]Container listing functionality coming soon![/yellow]")
 
-@docker_app.command("profiles")
+@docker_app.command("profile")
 def list_profiles(
     profile_name: Optional[str] = typer.Argument(None, help="Specific profile name to display details"),
     containers_only: bool = typer.Option(False, "--containers-only", "-c", help="Show only container profiles"),
@@ -142,9 +142,9 @@ def list_profiles(
     List available Docker container profiles or show details of a specific profile.
     
     Examples:
-    - cstation docker profiles
-    - cstation docker profiles portainer
-    - cstation docker profiles --containers-only
+    - cstation docker profile
+    - cstation docker profile portainer
+    - cstation docker profile --containers-only
     """
     try:
         if profile_name:
@@ -246,7 +246,7 @@ def list_available_profiles(containers_only: bool, verbose: bool):
     
     if profiles_found:
         console.print(table)
-        console.print(f"\n[blue]💡 Use 'cstation docker profiles <profile_name>' to see details[/blue]")
+        console.print(f"\n[blue]💡 Use 'cstation docker profile <profile_name>' to see details[/blue]")
     else:
         console.print("[yellow]No container profiles found.[/yellow]")
         console.print(f"[blue]💡 Create profiles in {containers_dir}[/blue]")

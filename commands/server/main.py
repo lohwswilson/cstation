@@ -24,7 +24,7 @@ server_app = typer.Typer(
 server_app.command("ssh")(setup_ssh)
 server_app.command("status")(server_status)
 server_app.command("list")(server_list)
-server_app.command("profiles")(list_profiles)
+server_app.command("profile")(list_profiles)
 server_app.command("setup")(setup_software)
 
 @server_app.callback()

@@ -24,7 +24,7 @@ cstation server setup
 ### Software Installation
 ```bash
 # List available profiles
-cstation server profiles
+cstation server profile
 
 # Setup database server software (dry run)
 cstation server setup sg01 --profile database_server --dry-run
