@@ -5,18 +5,18 @@ This guide demonstrates how the **Portainer profile** (`portainer.yml`) works wi
 ## Overview
 
 The setup consists of:
-- **Profile**: `etc/ansible/profiles/portainer.yml` - Defines the Portainer deployment template
-- **Host Variables**: `etc/ansible/host_vars/eu01.yml` - Contains server-specific configuration
+- **Profile**: `/etc/cstation/profiles/containers/portainer.yml` - Defines the Portainer deployment template
+- **Host Variables**: `/etc/cstation/ansible/host_vars/eu01.yml` - Contains server-specific configuration
 - **Variable Override System**: Host variables automatically override profile defaults
 
 ## File Structure
 
 ```
 cstation/
-├── etc/ansible/
-│   ├── profiles/
+├── /etc/cstation/
+│   ├── profiles/containers/
 │   │   └── portainer.yml          # Portainer profile template
-│   └── host_vars/
+│   └── ansible/host_vars/
 │       └── eu01.yml               # Host-specific variables
 └── commands/server/setup/
     └── main.py                    # CLI implementation
@@ -250,10 +250,10 @@ For different environments, create additional host variable files:
 
 ```bash
 # Development environment
-echo 'domain_name: "portainer.dev.local"' > etc/ansible/host_vars/dev01.yml
+echo 'domain_name: "portainer.dev.local"' > /etc/cstation/ansible/host_vars/dev01.yml
 
 # Staging environment
-echo 'domain_name: "portainer.staging.ansis.com"' > etc/ansible/host_vars/staging01.yml
+echo 'domain_name: "portainer.staging.ansis.com"' > /etc/cstation/ansible/host_vars/staging01.yml
 ```
 
 ### Custom Container Configuration
@@ -261,7 +261,7 @@ echo 'domain_name: "portainer.staging.ansis.com"' > etc/ansible/host_vars/stagin
 Override specific container settings in host variables:
 
 ```yaml
-# In host_vars/eu01.yml
+# In /etc/cstation/ansible/host_vars/eu01.yml
 containers:
   portainer:
     deploy:

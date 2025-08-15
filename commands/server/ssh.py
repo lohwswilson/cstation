@@ -18,7 +18,7 @@ console = Console()
 def setup_ssh(
     hostname: str = typer.Argument(..., help="Target hostname from inventory"),
     inventory: Optional[str] = typer.Option(
-        "etc/ansible/inventory/hosts.yml", 
+        "/etc/cstation/ansible/inventory/hosts.yml", 
         "-i", "--inventory", 
         help="Inventory file path"
     ),
@@ -141,7 +141,7 @@ def setup_ssh(
         
         # Set environment to use our ansible.cfg
         env = os.environ.copy()
-        env['ANSIBLE_CONFIG'] = str(Path.cwd() / 'etc/ansible/ansible.cfg')
+        env['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
         
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         

@@ -15,7 +15,7 @@ def list_profiles():
     """
     List available software profiles.
     """
-    profiles_dir = Path("./etc/profiles/servers")
+    profiles_dir = Path("/etc/cstation/profiles/servers")
     
     if not profiles_dir.exists():
         console.print(f"[red]Profiles directory not found: {profiles_dir}[/red]")

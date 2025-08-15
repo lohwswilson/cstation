@@ -18,14 +18,26 @@
 - [uv](https://docs.astral.sh/uv/) package manager
 - Ansible (for server management features)
 
-### Install Dependencies
+## Quick Start
 
 ```bash
-# Install dependencies with uv
-uv sync
+# Install the CLI
+pip install cstation
 
-# Install the CLI tool in development mode
-uv pip install -e .
+# Initialize system configuration
+sudo cstation init
+
+# Initialize with user-friendly permissions (allows regular users to edit configs)
+sudo cstation init --user-friendly
+
+# View available commands
+cstation --help
+
+# List available server profiles
+cstation server profile
+
+# Deploy containers to a server
+cstation docker deploy <target> --profile <profile>
 ```
 
 ## Usage
@@ -76,6 +88,27 @@ cstation server list sg01
 cstation server list -i /path/to/inventory.yml
 ```
 
+#### Server Inventory Management
+```bash
+# Remove server from inventory with confirmation
+cstation server rm eu01
+
+# Force remove without confirmation
+cstation server rm eu01 --force
+
+# Preview what would be removed (dry run)
+cstation server rm eu01 --dry-run
+
+# Remove without creating backup
+cstation server rm eu01 --no-backup
+```
+
+**Server Removal Features:**
+- **Safe Removal**: Confirmation prompts and automatic backups by default
+- **Cross-group Search**: Automatically finds servers across all inventory groups
+- **Dry Run Support**: Preview changes before execution
+- **Detailed Feedback**: Shows exactly what will be removed and lists available servers if not found
+
 #### Server Status and Monitoring
 ```bash
 # Check status and uptime of all servers (displays in unified table)
@@ -125,7 +158,7 @@ cstation server setup sg01 --profile database_server --verbose
 **Server Setup Features:**
 - **Profile-based Configuration**: Use predefined software profiles for different server types
 - **Ansible Integration**: Leverages existing Ansible inventory and generates dynamic playbooks
-- **Automatic Configuration**: CLI commands automatically use `etc/ansible/ansible.cfg` for consistent Ansible settings
+- **Automatic Configuration**: CLI commands automatically use `/etc/cstation/ansible/ansible.cfg` for consistent Ansible settings
 - **Dry Run Mode**: Preview changes before execution for safe deployments
 - **Template Management**: Jinja2 templates for service configurations (PostgreSQL, Nginx)
 - **Service Management**: Automatically configure and start services after installation
@@ -139,7 +172,7 @@ cstation server setup sg01 --profile database_server --verbose
 - **odoo_app**: Complete Odoo application server with Python dependencies and web stack
 
 **Profile Structure:**
-Profiles are YAML files located in `etc/profiles/servers/` that define complete server configurations including:
+Profiles are YAML files located in `/etc/cstation/profiles/servers/` that define complete server configurations including:
 - **Packages**: List of software packages to install with version specifications
 - **Services**: Service configuration with enable/disable and start/stop settings
 - **Configurations**: Template files for service configuration (PostgreSQL, Nginx, etc.)
@@ -160,18 +193,18 @@ Profiles are YAML files located in `etc/profiles/servers/` that define complete 
 
 ```bash
 # Create a new profile based on existing one
-cp etc/profiles/servers/web_server.yml etc/profiles/servers/my_profile.yml
+sudo cp /etc/cstation/profiles/servers/web_server.yml /etc/cstation/profiles/servers/my_profile.yml
 # Edit the profile
-vim etc/profiles/servers/my_profile.yml
+sudo vim /etc/cstation/profiles/servers/my_profile.yml
 ```
 
 ### Host-Specific Variables
 
-Host-specific variables can be defined in `etc/ansible/host_vars/<hostname>.yml` to override profile defaults and customize configurations for individual servers:
+Host-specific variables can be defined in `/etc/cstation/ansible/host_vars/<hostname>.yml` to override profile defaults and customize configurations for individual servers:
 
 #### Basic Host Override Example
 ```yaml
-# etc/ansible/host_vars/server01.yml
+# /etc/cstation/ansible/host_vars/server01.yml
 server_info:
   hostname: server01
   environment: production
@@ -192,7 +225,7 @@ containers:
 The `web01.yml` example demonstrates a comprehensive production server configuration:
 
 ```yaml
-# etc/ansible/host_vars/web01.yml
+# /etc/cstation/ansible/host_vars/web01.yml
 server_info:
   hostname: web01
   environment: production
@@ -415,10 +448,10 @@ cstation github ssh sg01 --add-to-github
 
 ## Configuration Structure
 
-CStation uses the following configuration structure in the `./etc/` directory:
+CStation uses the following configuration structure in the `/etc/cstation/` directory:
 
 ```
-./etc/
+/etc/cstation/
 ├── README.md
 ├── ansible/
 │   ├── ansible.cfg         # Ansible configuration for server management
@@ -519,7 +552,7 @@ cstation server setup docker web01 --force
 #### Development Environment
 ```bash
 # Create development host vars with debug settings
-# etc/ansible/host_vars/dev01.yml
+# /etc/cstation/ansible/host_vars/dev01.yml
 server_info:
   environment: development
 containers:
@@ -548,10 +581,10 @@ cstation server setup docker web01
 #### Custom Profile Creation
 ```bash
 # Create custom profile based on web_server
-cp etc/profiles/servers/web_server.yml etc/profiles/servers/ecommerce_server.yml
+sudo cp /etc/cstation/profiles/servers/web_server.yml /etc/cstation/profiles/servers/ecommerce_server.yml
 
 # Edit to add ecommerce-specific containers
-vim etc/profiles/servers/ecommerce_server.yml
+sudo vim /etc/cstation/profiles/servers/ecommerce_server.yml
 
 # Deploy custom profile
 cstation server setup shop01 --profile ecommerce_server

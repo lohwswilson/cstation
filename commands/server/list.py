@@ -16,7 +16,7 @@ console = Console()
 def server_list(
     hostname: Optional[str] = typer.Argument(None, help="Hostname to show details for (optional)"),
     inventory_file: Optional[str] = typer.Option(
-        "etc/ansible/inventory/hosts.yml", 
+        "/etc/cstation/ansible/inventory/hosts.yml", 
         "-i", "--inventory", 
         help="Inventory file path"
     )

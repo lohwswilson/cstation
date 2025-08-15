@@ -24,7 +24,7 @@ The configuration file should follow this YAML structure:
 github:
   username: "your-github-username"
   default_clone_method: "ssh"  # or "https"
-  default_directory: "./etc/github"
+  default_directory: "/etc/cstation/github"
   organization: "your-org"  # Default organization for repositories
 
 repositories:
@@ -44,22 +44,22 @@ repositories:
 
 ### Clone a specific repository
 ```bash
-cstation github repo clone Muk --config etc/github/18.0.oca.yml
+cstation github repo clone Muk --config /etc/cstation/github/18.0.oca.yml
 ```
 
 ### Clone all repositories from configuration
 ```bash
-cstation github repo clone --config etc/github/18.0.oca.yml
+cstation github repo clone --config /etc/cstation/github/18.0.oca.yml
 ```
 
 ### Clone with custom target directory
 ```bash
-cstation github repo clone Muk --config etc/github/18.0.oca.yml --directory /custom/path
+cstation github repo clone Muk --config /etc/cstation/github/18.0.oca.yml --directory /custom/path
 ```
 
 ## Command Options
 
-- `--config, -c`: GitHub repositories configuration file (default: etc/github/repos.sync.yml)
+- `--config, -c`: GitHub repositories configuration file (default: /etc/cstation/github/repos.sync.yml)
 - `--directory, -d`: Target directory for cloning (default: current directory)
 - `--user, -u`: GitHub username (will use config if not provided)
 - `--help`: Show help message
@@ -78,7 +78,7 @@ cstation github repo clone Muk --config etc/github/18.0.oca.yml --directory /cus
 github:
   username: "lohwswilson"
   default_clone_method: "ssh"
-  default_directory: "./etc/github"
+  default_directory: "/etc/cstation/github"
   organization: "ansis-ai"
 
 repositories:

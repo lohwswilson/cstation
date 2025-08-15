@@ -5,7 +5,7 @@ This guide explains the recommended approach for organizing configuration variab
 ## Directory Structure
 
 ```
-etc/ansible/
+/etc/cstation/ansible/
 ├── group_vars/
 │   ├── all.yml                    # Global variables for all hosts
 │   ├── database_servers.yml       # Variables for database server group

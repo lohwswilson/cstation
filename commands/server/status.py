@@ -61,7 +61,7 @@ def get_hosts_from_inventory(inventory_path: str, target_hostname: Optional[str]
 def server_status(
     hostname: Optional[str] = typer.Argument(None, help="Target hostname from inventory (optional - shows all if not specified)"),
     inventory: Optional[str] = typer.Option(
-        "etc/ansible/inventory/hosts.yml", 
+        "/etc/cstation/ansible/inventory/hosts.yml", 
         "-i", "--inventory", 
         help="Inventory file path"
     ),

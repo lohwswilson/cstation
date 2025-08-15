@@ -6,7 +6,7 @@ The GitHub command module provides comprehensive GitHub repository management an
 
 - **SSH Key Management**: Set up SSH keys for GitHub access on remote servers
 - **Repository Management**: List and sync GitHub repositories
-- **Configuration Management**: Store all GitHub configurations in `./etc/github`
+- **Configuration Management**: Store all GitHub configurations in `/etc/cstation/github`
 - **Ansible Integration**: Use Ansible for remote SSH key setup
 - **Batch Operations**: Sync multiple repositories at once
 
@@ -44,7 +44,7 @@ cstation github repo sync my-project
 
 ## Configuration
 
-All GitHub configurations are stored in `./etc/github/`:
+All GitHub configurations are stored in `/etc/cstation/github/`:
 
 - `repos.sync.yml` - Repository configuration file
 - `repos.yml.example` - Example configuration template
@@ -89,7 +89,7 @@ repositories:
 
 ## Repository Management Options
 
-- `--config, -c`: Configuration file path (default: etc/github/repos.sync.yml)
+- `--config, -c`: Configuration file path (default: /etc/cstation/github/repos.sync.yml)
 - `--directory, -d`: Target directory for cloning
 - `--user, -u`: GitHub username (overrides config)
 
@@ -173,7 +173,7 @@ cstation github repo sync my-project
 ### Repository Issues
 
 - **Sync failed**: Verify local repository state and remote access
-- **Config not found**: Ensure configuration file exists at etc/github/repos.sync.yml
+- **Config not found**: Ensure configuration file exists at /etc/cstation/github/repos.sync.yml
 
 ### Ansible Issues
 

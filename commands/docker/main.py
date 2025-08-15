@@ -42,7 +42,7 @@ def deploy_containers(
     try:
         # Set default inventory path
         if not inventory:
-            inventory = "./etc/ansible/inventory/hosts.yml"
+            inventory = "/etc/cstation/ansible/inventory/hosts.yml"
         
         # Validate inventory file exists
         if not Path(inventory).exists():
@@ -55,8 +55,8 @@ def deploy_containers(
             raise typer.Exit(1)
         
         # Check if profile file exists - check containers directory first, then main profiles
-        containers_profile_path = Path(f"./etc/profiles/containers/{profile}.yml")
-        main_profile_path = Path(f"./etc/profiles/servers/{profile}.yml")
+        containers_profile_path = Path(f"/etc/cstation/profiles/containers/{profile}.yml")
+        main_profile_path = Path(f"/etc/cstation/profiles/servers/{profile}.yml")
         
         profile_path = None
         if containers_profile_path.exists():
@@ -85,7 +85,7 @@ def deploy_containers(
         # Load host variables if they exist
         host_vars = load_host_variables(target)
         if host_vars:
-            console.print(f"[green]✓ Loaded host variables from etc/ansible/host_vars/{target}.yml[/green]")
+            console.print(f"[green]✓ Loaded host variables from /etc/cstation/ansible/host_vars/{target}.yml[/green]")
         
         # Merge configurations
         merged_config = merge_configurations(profile_config, host_vars)
@@ -163,8 +163,8 @@ def list_available_profiles(containers_only: bool, verbose: bool):
     """
     from rich.table import Table
     
-    profiles_dir = Path("./etc/profiles/servers")
-    containers_dir = Path("./etc/profiles/containers")
+    profiles_dir = Path("/etc/cstation/profiles/servers")
+    containers_dir = Path("/etc/cstation/profiles/containers")
     
     console.print("\n[bold blue]📋 Available Docker Profiles[/bold blue]")
     
@@ -259,8 +259,8 @@ def show_profile_details(profile_name: str, verbose: bool):
     from rich.panel import Panel
     
     # Look for profile in containers directory first, then main profiles
-    containers_path = Path(f"./etc/profiles/containers/{profile_name}.yml")
-    main_path = Path(f"./etc/profiles/servers/{profile_name}.yml")
+    containers_path = Path(f"/etc/cstation/profiles/containers/{profile_name}.yml")
+    main_path = Path(f"/etc/cstation/profiles/servers/{profile_name}.yml")
     
     profile_path = None
     if containers_path.exists():
@@ -364,7 +364,7 @@ def load_host_variables(target: str) -> dict:
     """
     Load host-specific variables from host_vars directory.
     """
-    host_vars_path = Path(f"./etc/ansible/host_vars/{target}.yml")
+    host_vars_path = Path(f"/etc/cstation/ansible/host_vars/{target}.yml")
     if host_vars_path.exists():
         with open(host_vars_path, 'r') as f:
             return yaml.safe_load(f) or {}
@@ -591,7 +591,7 @@ def create_and_run_docker_playbook(target: str, merged_config: dict, inventory: 
         
         # Set environment to use our ansible.cfg
         env = os.environ.copy()
-        env['ANSIBLE_CONFIG'] = str(Path.cwd() / 'etc/ansible/ansible.cfg')
+        env['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
         
         # Execute the playbook
         process = subprocess.Popen(

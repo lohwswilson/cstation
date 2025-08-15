@@ -13,7 +13,7 @@ The Ansible setup has been enhanced with:
 ## Directory Structure
 
 ```
-etc/ansible/
+/etc/cstation/ansible/
 ├── ansible.cfg              # Main Ansible configuration
 ├── inventory/
 │   └── hosts.yml            # Improved inventory with vault integration
@@ -57,7 +57,7 @@ etc/ansible/
 
 ```bash
 # Navigate to the ansible directory
-cd etc/ansible
+cd /etc/cstation/ansible
 
 # Copy and customize the vault template
 cp vault/secrets.yml.template vault/secrets.yml
@@ -174,7 +174,7 @@ A template for managing sensitive variables:
    ansible-inventory --list --limit production
    
    # Test with explicit config (if CLI commands fail)
-   ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
+   ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-inventory --list
    ```
 
 4. **Configuration Issues**
@@ -186,7 +186,7 @@ A template for managing sensitive variables:
    ansible-config view
    
    # Test inventory parsing
-   ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
+   ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-inventory --list
    ```
 
 ### Debug Commands

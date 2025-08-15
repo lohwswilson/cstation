@@ -21,7 +21,7 @@ Deploy Docker containers on servers using Ansible profiles.
 
 **Options:**
 - `--profile, -p`: Software profile containing container definitions (required)
-- `--inventory, -i`: Path to Ansible inventory file (default: ./etc/ansible/inventory/hosts.yml)
+- `--inventory, -i`: Path to Ansible inventory file (default: /etc/cstation/ansible/inventory/hosts.yml)
 - `--dry-run`: Show what containers would be deployed without executing
 - `--verbose, -v`: Enable verbose output
 
@@ -70,8 +70,8 @@ cstation docker deploy eu01 --profile portainer
 
 The docker module follows the same architecture as the original implementation:
 
-1. **Profile Loading**: Reads container profiles from `./etc/profiles/containers/` and server profiles from `./etc/profiles/servers/`
-2. **Host Variables**: Loads host-specific variables from `./etc/ansible/host_vars/`
+1. **Profile Loading**: Reads container profiles from `/etc/cstation/profiles/containers/` and server profiles from `/etc/cstation/profiles/servers/`
+2. **Host Variables**: Loads host-specific variables from `/etc/cstation/ansible/host_vars/`
 3. **Configuration Merging**: Merges profile and host variables
 4. **Ansible Execution**: Creates and executes Ansible playbooks for container deployment
 

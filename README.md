@@ -5,17 +5,27 @@ A powerful Python CLI tool for managing DevOps infrastructure using Typer, Ansib
 ## Quick Start
 
 ```bash
-# Install dependencies
-uv sync
+# Install CStation
+pip install cstation
+
+# Initialize system configuration
+# Standard initialization (root-only editing)
+sudo cstation init
+
+# User-friendly initialization (allows regular users to edit configs)
+sudo cstation init --user-friendly
 
 # View available commands
-python cstation.py --help
+cstation --help
 
 # List server profiles
-python cstation.py server profile
+cstation server profile
+
+# Remove server from inventory
+cstation server rm <server_name>
 
 # Deploy containers
-python cstation.py docker deploy <target> --profile <profile>
+cstation docker deploy <target> --profile <profile>
 ```
 
 ## Documentation
@@ -61,7 +71,10 @@ All documentation has been consolidated in the `docs/` directory:
 cstation/
 ├── commands/          # CLI command modules
 ├── docs/             # Consolidated documentation
-├── etc/              # Configuration files
+├── etc/              # Configuration templates (copied to /etc/cstation during installation)
+│   ├── ansible/      # Ansible playbooks and configs
+│   └── profiles/     # Server and container profiles
+├── /etc/cstation/    # System configuration directory (created during installation)
 │   ├── ansible/      # Ansible playbooks and configs
 │   └── profiles/     # Server and container profiles
 └── cstation.py       # Main CLI entry point

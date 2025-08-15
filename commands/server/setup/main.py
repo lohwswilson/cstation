@@ -29,7 +29,7 @@ def setup_software(
     try:
         # Set default inventory path
         if not inventory:
-            inventory = "./etc/ansible/inventory/hosts.yml"
+            inventory = "/etc/cstation/ansible/inventory/hosts.yml"
         
         # Validate inventory file exists
         if not Path(inventory).exists():
@@ -42,7 +42,7 @@ def setup_software(
             raise typer.Exit(1)
         
         # Check if profile file exists
-        profile_path = Path(f"./etc/profiles/servers/{profile}.yml")
+        profile_path = Path(f"/etc/cstation/profiles/servers/{profile}.yml")
         if not profile_path.exists():
             console.print(f"[red]Error: Profile file not found: {profile_path}[/red]")
             console.print("[yellow]Available profiles:[/yellow]")
@@ -145,7 +145,7 @@ def load_host_variables(target: str) -> dict:
     Load host-specific variables from host_vars directory.
     """
     host_vars = {}
-    host_vars_file = Path(f"./etc/ansible/host_vars/{target}.yml")
+    host_vars_file = Path(f"/etc/cstation/ansible/host_vars/{target}.yml")
     
     if host_vars_file.exists():
         try:
@@ -292,7 +292,7 @@ def create_and_run_software_playbook(target: str, merged_config: dict, inventory
             dest = config.get('dest')
             if src and dest:
                 # Convert relative template path to absolute path
-                template_path = Path('./etc/ansible/templates') / src
+                template_path = Path('/etc/cstation/ansible/templates') / src
                 
                 # Ensure destination directory exists
                 dest_dir = str(Path(dest).parent)
@@ -348,7 +348,7 @@ def create_and_run_software_playbook(target: str, merged_config: dict, inventory
         
         # Set environment to use our ansible.cfg
         env = os.environ.copy()
-        env['ANSIBLE_CONFIG'] = str(project_root / 'etc/ansible/ansible.cfg')
+        env['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
         
         if verbose:
             # Run with full output for verbose mode

@@ -13,7 +13,7 @@ The inventory has been restructured to provide:
 ## Directory Structure
 
 ```
-etc/ansible/
+/etc/cstation/ansible/
 ├── inventory/
 │   └── hosts.yml          # Main inventory file
 ├── vault/
@@ -40,17 +40,17 @@ etc/ansible/
 
 ```bash
 # Copy the template
-cp etc/ansible/vault/secrets.yml.template etc/ansible/vault/secrets.yml
+sudo cp /etc/cstation/ansible/vault/secrets.yml.template /etc/cstation/ansible/vault/secrets.yml
 
 # Edit the file and replace all CHANGE_ME_* values with actual secrets
-vim etc/ansible/vault/secrets.yml
+sudo vim /etc/cstation/ansible/vault/secrets.yml
 ```
 
 ### 2. Encrypt the Vault
 
 ```bash
 # Encrypt the vault file
-ansible-vault encrypt etc/ansible/vault/secrets.yml
+ansible-vault encrypt /etc/cstation/ansible/vault/secrets.yml
 
 # You'll be prompted to create a vault password
 ```
@@ -59,7 +59,7 @@ ansible-vault encrypt etc/ansible/vault/secrets.yml
 
 ```bash
 # Edit the encrypted vault
-ansible-vault edit etc/ansible/vault/secrets.yml
+ansible-vault edit /etc/cstation/ansible/vault/secrets.yml
 ```
 
 ## Using the Inventory
@@ -68,13 +68,13 @@ ansible-vault edit etc/ansible/vault/secrets.yml
 
 ```bash
 # Run against all production servers
-ansible-playbook -i etc/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit production
+ansible-playbook -i /etc/cstation/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit production
 
 # Run against specific service group
-ansible-playbook -i etc/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit postgresql_servers
+ansible-playbook -i /etc/cstation/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit postgresql_servers
 
 # Run against specific host
-ansible-playbook -i etc/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit sg01.syc.com
+ansible-playbook -i /etc/cstation/ansible/inventory/hosts.yml --ask-vault-pass playbook.yml --limit sg01.syc.com
 ```
 
 ### Using Vault Password File
@@ -85,7 +85,7 @@ echo "your_vault_password" > .vault_pass
 chmod 600 .vault_pass
 
 # Use vault password file
-ansible-playbook -i etc/ansible/inventory/hosts.yml --vault-password-file .vault_pass playbook.yml
+ansible-playbook -i /etc/cstation/ansible/inventory/hosts.yml --vault-password-file .vault_pass playbook.yml
 ```
 
 ## Vault Variables Reference
@@ -125,7 +125,7 @@ postgresql_servers:
 
 ```bash
 # Edit vault to add new secrets
-ansible-vault edit etc/ansible/vault/secrets.yml
+ansible-vault edit /etc/cstation/ansible/vault/secrets.yml
 ```
 
 ## Security Best Practices
@@ -150,10 +150,10 @@ ansible-vault edit etc/ansible/vault/secrets.yml
 
 ```bash
 # Test connection to all hosts
-ansible -i etc/ansible/inventory/hosts.yml all -m ping --ask-vault-pass
+ansible -i /etc/cstation/ansible/inventory/hosts.yml all -m ping --ask-vault-pass
 
 # Test specific group
-ansible -i etc/ansible/inventory/hosts.yml production -m ping --ask-vault-pass
+ansible -i /etc/cstation/ansible/inventory/hosts.yml production -m ping --ask-vault-pass
 ```
 
 ## Migration from Old Inventory
@@ -174,7 +174,7 @@ If you're migrating from the old inventory format:
   hosts: production
   become: yes
   vars_files:
-    - etc/ansible/vault/secrets.yml
+    - /etc/cstation/ansible/vault/secrets.yml
   tasks:
     - name: Configure PostgreSQL
       postgresql_user:

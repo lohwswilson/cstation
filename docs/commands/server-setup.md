@@ -88,7 +88,7 @@ cstation server setup sg02 --profile odoo_app
 
 ## Profile Structure
 
-Each profile is a YAML file located in `etc/profiles/servers/` with the following structure:
+Each profile is a YAML file located in `/etc/cstation/profiles/servers/` with the following structure:
 
 ```yaml
 description: "Profile description"
@@ -125,7 +125,7 @@ post_install_tasks:
 
 ## Configuration Templates
 
-Templates are stored in `etc/ansible/templates/` and use Jinja2 syntax:
+Templates are stored in `/etc/cstation/ansible/templates/` and use Jinja2 syntax:
 
 ### PostgreSQL Templates
 - `postgresql/postgresql.conf.j2`: Main PostgreSQL configuration
@@ -137,7 +137,7 @@ Templates are stored in `etc/ansible/templates/` and use Jinja2 syntax:
 
 ## Host-Specific Variables
 
-The setup command automatically loads and merges host-specific variables from `etc/ansible/host_vars/{hostname}.yml` files. These variables override profile defaults and enable per-host customization.
+The setup command automatically loads and merges host-specific variables from `/etc/cstation/ansible/host_vars/{hostname}.yml` files. These variables override profile defaults and enable per-host customization.
 
 ### Variable Processing
 
@@ -232,9 +232,9 @@ This provides better command organization and dedicated Docker management capabi
 
 To create a new profile:
 
-1. Create a new YAML file in `etc/profiles/servers/`
+1. Create a new YAML file in `/etc/cstation/profiles/servers/`
 2. Follow the profile structure documented above
-3. Add any required templates to `etc/ansible/templates/`
+3. Add any required templates to `/etc/cstation/ansible/templates/`
 4. Test with `--dry-run` before deployment
 
 ## Dependencies

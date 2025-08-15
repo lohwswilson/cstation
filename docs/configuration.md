@@ -20,7 +20,7 @@ This directory contains all configuration files for CStation infrastructure mana
 
 ### Ansible
 ```bash
-# CLI commands automatically use etc/ansible/ansible.cfg configuration
+# CLI commands automatically use /etc/cstation/ansible/ansible.cfg configuration
 # Run server setup (uses ansible.cfg automatically)
 cstation server setup sg01 --profile database_server
 
@@ -31,12 +31,12 @@ cstation server ssh sg01
 cstation docker deploy sg01 --profile web_server
 
 # Manual ansible commands (if needed)
-ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
-ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-playbook playbook.yml
+ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-inventory --list
+ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-playbook playbook.yml
 ```
 
 ### Docker
 ```bash
 # Use compose file from etc directory
-docker-compose -f ./etc/docker/compose/docker-compose.yml up -d
+docker-compose -f /etc/cstation/docker/compose/docker-compose.yml up -d
 ```

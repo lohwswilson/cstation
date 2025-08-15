@@ -26,7 +26,7 @@ Setup SSH key authentication for a remote server.
 - `hostname` - Target hostname from the Ansible inventory
 
 **Options:**
-- `-i, --inventory` - Inventory file path (default: `etc/ansible/inventory/hosts.yml`)
+- `-i, --inventory` - Inventory file path (default: `/etc/cstation/ansible/inventory/hosts.yml`)
 - `-k, --key-path` - Path to SSH public key (default: `~/.ssh/id_rsa.pub`)
 - `--generate` - Generate new SSH key pair if not exists
 
@@ -54,7 +54,7 @@ Check server status, health, and uptime using Ansible.
 - `hostname` - Target hostname from inventory (optional - shows all if not specified)
 
 **Options:**
-- `-i, --inventory` - Inventory file path (default: `etc/ansible/inventory/hosts.yml`)
+- `-i, --inventory` - Inventory file path (default: `/etc/cstation/ansible/inventory/hosts.yml`)
 - `--services` - Check common services status (docker, nginx, etc.)
 - `--uptime/--no-uptime` - Include uptime information in status check (default: enabled)
 
@@ -113,7 +113,7 @@ cstation server list -i /path/to/inventory.yml
 - Ansible must be installed and accessible via `ansible-playbook` command
 - Target server must be defined in the Ansible inventory
 - Initial access to the target server (password or existing key)
-- CLI automatically uses `etc/ansible/ansible.cfg` configuration for all Ansible operations
+- CLI automatically uses `/etc/cstation/ansible/ansible.cfg` configuration for all Ansible operations
 
 ## Security Notes
 
@@ -122,11 +122,46 @@ cstation server list -i /path/to/inventory.yml
 - Public keys are safely added to authorized_keys without overwriting existing entries
 - Temporary playbook files are automatically cleaned up after execution
 
+### `cstation server rm <server_name>`
+
+Remove a server entry from the Ansible inventory.
+
+**Arguments:**
+- `server_name` - Name of the server to remove from inventory
+
+**Options:**
+- `-f, --force` - Force removal without confirmation
+- `--backup/--no-backup` - Create backup before modification (default: backup)
+- `--dry-run` - Show what would be removed without executing
+
+**Examples:**
+
+```bash
+# Remove server with confirmation
+cstation server rm eu01
+
+# Force remove without confirmation
+cstation server rm eu01 --force
+
+# Preview what would be removed
+cstation server rm eu01 --dry-run
+
+# Remove without creating backup
+cstation server rm eu01 --no-backup
+```
+
+**Features:**
+- Searches across all inventory groups
+- Shows detailed information about what will be removed
+- Creates automatic backups by default
+- Provides confirmation prompts for safety
+- Lists available servers if target not found
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"ansible-playbook command not found"**
+1. **"Ansible not found"**
    - Install Ansible: `pip install ansible`
 
 2. **"SSH public key not found"**
@@ -134,9 +169,17 @@ cstation server list -i /path/to/inventory.yml
    - Or specify existing key with `-k` option
 
 3. **"Host not found in inventory"**
-   - Verify hostname exists in inventory: `cstation ansible inventory list`
+   - Verify hostname exists in inventory: `cstation server list`
    - Check inventory file path with `-i` option
 
 4. **"Permission denied"**
    - Ensure you have initial access to the target server
    - Check if the target user has sudo privileges
+
+5. **"Server not found in inventory" (rm command)**
+   - Use `cstation server list` to see available servers
+   - Check server name spelling and case sensitivity
+
+6. **"Permission denied accessing inventory file" (rm command)**
+   - Ensure you have write permissions to `/etc/cstation/ansible/inventory/hosts.yml`
+   - Run with appropriate privileges if needed
