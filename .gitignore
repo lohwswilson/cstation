@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Ansible sensitive files
+# Vault files containing actual secrets (keep templates)
+etc/ansible/vault/secrets.yml
+# Vault password files
+etc/ansible/.vault_pass
+.vault_pass
+# Ansible retry files
+*.retry
+# Ansible log files
+ansible.log
