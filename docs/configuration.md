@@ -5,6 +5,7 @@ This directory contains all configuration files for CStation infrastructure mana
 ## Structure
 
 ### Ansible Configuration
+- `ansible/ansible.cfg` - Main Ansible configuration (automatically used by CLI commands)
 - `ansible/inventory/` - Ansible inventory files
 - `ansible/group_vars/` - Group variables
 - `ansible/host_vars/` - Host variables  
@@ -19,11 +20,19 @@ This directory contains all configuration files for CStation infrastructure mana
 
 ### Ansible
 ```bash
-# Run playbook with local inventory
-cstation ansible playbook ./etc/ansible/playbooks/site.yml -i ./etc/ansible/inventory/hosts.yml
+# CLI commands automatically use etc/ansible/ansible.cfg configuration
+# Run server setup (uses ansible.cfg automatically)
+cstation server setup sg01 --profile database_server
 
-# Ping hosts using local inventory
-cstation ansible ping -i ./etc/ansible/inventory/hosts.yml
+# Setup SSH keys (uses ansible.cfg automatically)
+cstation server ssh sg01
+
+# Deploy containers (uses ansible.cfg automatically)
+cstation docker deploy sg01 --profile web_server
+
+# Manual ansible commands (if needed)
+ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
+ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-playbook playbook.yml
 ```
 
 ### Docker

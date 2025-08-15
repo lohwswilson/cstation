@@ -125,6 +125,7 @@ cstation server setup sg01 --profile database_server --verbose
 **Server Setup Features:**
 - **Profile-based Configuration**: Use predefined software profiles for different server types
 - **Ansible Integration**: Leverages existing Ansible inventory and generates dynamic playbooks
+- **Automatic Configuration**: CLI commands automatically use `etc/ansible/ansible.cfg` for consistent Ansible settings
 - **Dry Run Mode**: Preview changes before execution for safe deployments
 - **Template Management**: Jinja2 templates for service configurations (PostgreSQL, Nginx)
 - **Service Management**: Automatically configure and start services after installation

@@ -346,9 +346,13 @@ def create_and_run_software_playbook(target: str, merged_config: dict, inventory
         # Change to project root directory to ensure ansible.cfg and templates are found
         project_root = Path.cwd()
         
+        # Set environment to use our ansible.cfg
+        env = os.environ.copy()
+        env['ANSIBLE_CONFIG'] = str(project_root / 'etc/ansible/ansible.cfg')
+        
         if verbose:
             # Run with full output for verbose mode
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root, env=env)
             
             if result.returncode == 0:
                 console.print("[green]✓ Software setup completed successfully![/green]")
@@ -365,7 +369,7 @@ def create_and_run_software_playbook(target: str, merged_config: dict, inventory
             import re
             
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                                     text=True, cwd=project_root, bufsize=1, universal_newlines=True)
+                                     text=True, cwd=project_root, env=env, bufsize=1, universal_newlines=True)
             
             task_pattern = re.compile(r'^TASK \[(.+?)\]')
             play_pattern = re.compile(r'^PLAY \[(.+?)\]')

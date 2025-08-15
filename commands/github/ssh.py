@@ -214,7 +214,11 @@ def setup_github_ssh(
             "-v"
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Set environment to use our ansible.cfg
+        env = os.environ.copy()
+        env['ANSIBLE_CONFIG'] = str(Path.cwd() / 'etc/ansible/ansible.cfg')
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         if result.returncode == 0:
             console.print("[green]GitHub SSH setup completed successfully![/green]")

@@ -108,11 +108,12 @@ cstation server list -i /path/to/inventory.yml
    - Tests the SSH connection
 4. **Cleanup**: Removes temporary files after execution
 
-## Prerequisites
+## Requirements
 
 - Ansible must be installed and accessible via `ansible-playbook` command
 - Target server must be defined in the Ansible inventory
 - Initial access to the target server (password or existing key)
+- CLI automatically uses `etc/ansible/ansible.cfg` configuration for all Ansible operations
 
 ## Security Notes
 

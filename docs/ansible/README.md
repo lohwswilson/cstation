@@ -38,7 +38,13 @@ etc/ansible/
 - **Consistent Naming**: Clear, descriptive host and group names
 - **Scalable Structure**: Easy to add new hosts and environments
 
-### 3. Configuration Optimizations
+### 3. Configuration Management
+
+- **Automatic Configuration Discovery**: CLI commands automatically set `ANSIBLE_CONFIG` environment variable
+- **Consistent Ansible Settings**: All commands use the same `ansible.cfg` configuration
+- **Proper Inventory Resolution**: Inventory path resolves correctly relative to config file location
+
+### 4. Configuration Optimizations
 
 - **Performance**: SSH multiplexing, pipelining, and smart fact gathering
 - **User Experience**: Better output formatting with colors and YAML callback
@@ -166,6 +172,21 @@ A template for managing sensitive variables:
    
    # Check specific group
    ansible-inventory --list --limit production
+   
+   # Test with explicit config (if CLI commands fail)
+   ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
+   ```
+
+4. **Configuration Issues**
+   ```bash
+   # Verify ansible.cfg is being used
+   ansible-config dump --only-changed
+   
+   # Check which config file is active
+   ansible-config view
+   
+   # Test inventory parsing
+   ANSIBLE_CONFIG=etc/ansible/ansible.cfg ansible-inventory --list
    ```
 
 ### Debug Commands

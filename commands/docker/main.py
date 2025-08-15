@@ -589,6 +589,10 @@ def create_and_run_docker_playbook(target: str, merged_config: dict, inventory: 
         if verbose:
             cmd.append('-v')
         
+        # Set environment to use our ansible.cfg
+        env = os.environ.copy()
+        env['ANSIBLE_CONFIG'] = str(Path.cwd() / 'etc/ansible/ansible.cfg')
+        
         # Execute the playbook
         process = subprocess.Popen(
             cmd,
@@ -596,7 +600,8 @@ def create_and_run_docker_playbook(target: str, merged_config: dict, inventory: 
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            env=env
         )
         
         # Track output for error reporting
