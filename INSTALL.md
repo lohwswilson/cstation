@@ -30,7 +30,7 @@ pip install -e .
 sudo cstation init
 
 # For user-friendly permissions (allows regular users to edit config files)
-sudo cstation init --user-friendly
+sudo cstation init --developer
 
 # Or with other options
 sudo cstation init --force --backup
@@ -39,7 +39,7 @@ sudo cstation init --force --backup
 The `cstation init` command will:
 - Create `/etc/cstation` directory structure
 - Copy all configuration files from the package to `/etc/cstation/`
-- Set proper permissions (root ownership by default, or user-editable with --user-friendly)
+- Set proper permissions (root ownership by default, or user-editable with --developer)
 - Create a timestamped backup of any existing `/etc/cstation` directory
 - Update Ansible configuration with absolute paths
 
@@ -125,7 +125,7 @@ sudo find /etc/cstation -name "*.cfg" -exec chmod 644 {} \;
 - Files are owned by root but with permissive permissions (666/755)
 - Regular users can edit configuration files
 - Better for development and testing
-- Use: `sudo cstation init --user-friendly`
+- Use: `sudo cstation init --developer`
 
 To switch between modes, re-run the init command with your preferred option.
 

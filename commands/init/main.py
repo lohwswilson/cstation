@@ -16,7 +16,7 @@ def init_command(
     force: bool = typer.Option(False, "--force", "-f", help="Force initialization even if /etc/cstation exists"),
     backup: bool = typer.Option(True, "--backup/--no-backup", help="Create backup of existing /etc/cstation directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
-    user_friendly: bool = typer.Option(False, "--user-friendly", help="Set permissions to allow regular users to edit configuration files")
+    developer: bool = typer.Option(False, "--developer", help="Set permissions to allow regular users to edit configuration files")
 ):
     """
     Initialize CStation configuration directory at /etc/cstation.
@@ -24,7 +24,7 @@ def init_command(
     This command sets up the system-wide configuration directory by:
     - Creating /etc/cstation directory structure
     - Copying configuration files from the package
-    - Setting proper permissions (root ownership by default, user-friendly with --user-friendly)
+    - Setting proper permissions (root ownership by default, developer-friendly with --developer)
     - Creating backups if requested
     """
     
@@ -92,7 +92,7 @@ def init_command(
                 if src.is_dir():
                     dst.mkdir(exist_ok=True)
                     if not dry_run:
-                        if user_friendly:
+                        if developer:
                             # Set group ownership and permissions for user access
                             os.chown(dst, 0, 0)  # root:root (keep root ownership for security)
                             os.chmod(dst, 0o755)  # rwxr-xr-x (allow read/execute for all)
@@ -106,7 +106,7 @@ def init_command(
                     if not dry_run:
                         shutil.copy2(src, dst)
                         
-                        if user_friendly:
+                        if developer:
                             # Set more permissive permissions for user editing
                             os.chown(dst, 0, 0)  # root:root (keep root ownership)
                             if dst.suffix in ['.yml', '.yaml', '.cfg', '.conf']:
@@ -171,7 +171,7 @@ def init_command(
                 # Write back
                 ansible_cfg_path.write_text(content)
                 os.chown(ansible_cfg_path, 0, 0)
-                if user_friendly:
+                if developer:
                     os.chmod(ansible_cfg_path, 0o666)  # rw-rw-rw-
                 else:
                     os.chmod(ansible_cfg_path, 0o644)  # rw-r--r--

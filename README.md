@@ -12,8 +12,8 @@ pip install cstation
 # Standard initialization (root-only editing)
 sudo cstation init
 
-# User-friendly initialization (allows regular users to edit configs)
-sudo cstation init --user-friendly
+# Developer initialization (allows regular users to edit configs)
+sudo cstation init --developer
 
 # View available commands
 cstation --help

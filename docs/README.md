@@ -28,7 +28,7 @@ pip install cstation
 sudo cstation init
 
 # Initialize with user-friendly permissions (allows regular users to edit configs)
-sudo cstation init --user-friendly
+sudo cstation init --developer
 
 # View available commands
 cstation --help
