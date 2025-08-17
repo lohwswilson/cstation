@@ -5,7 +5,7 @@ This guide demonstrates how the **Portainer profile** (`portainer.yml`) works wi
 ## Overview
 
 The setup consists of:
-- **Profile**: `/etc/cstation/service/containers/portainer.yml` - Defines the Portainer deployment template
+- **Profile**: `/etc/cstation/service/docker/portainer.yml` - Defines the Portainer deployment template
 - **Host Variables**: `/etc/cstation/ansible/host_vars/eu01.yml` - Contains server-specific configuration
 - **Variable Override System**: Host variables automatically override profile defaults
 
@@ -14,7 +14,7 @@ The setup consists of:
 ```
 cstation/
 ├── /etc/cstation/
-│   ├── profiles/containers/
+│   ├── profiles/docker/
 │   │   └── portainer.yml          # Portainer profile template
 │   └── ansible/host_vars/
 │       └── eu01.yml               # Host-specific variables
