@@ -34,14 +34,10 @@ This directory contains all configuration files for CStation infrastructure mana
 ### Ansible
 ```bash
 # CLI commands automatically use /etc/cstation/ansible/ansible.cfg configuration
-# Run server setup (uses ansible.cfg automatically)
-cstation server setup sg01 --profile database_server
-
 # Setup SSH keys (uses ansible.cfg automatically)
 cstation server ssh sg01
 
-# Deploy containers (uses ansible.cfg automatically)
-cstation docker deploy sg01 --profile web_server
+
 
 # Manual ansible commands (if needed)
 ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-inventory --list

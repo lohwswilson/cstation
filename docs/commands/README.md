@@ -8,7 +8,7 @@ This directory contains detailed documentation for all CStation commands.
 - [Server Management](server.md) - Manage server inventory and operations
 - [Docker Management](docker.md) - Deploy and manage containers
 - [GitHub Integration](github.md) - Repository management and synchronization
-- [Server Setup](server-setup.md) - Automated server provisioning
+
 
 ## Benefits of This Structure
 

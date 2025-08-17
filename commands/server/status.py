@@ -3,6 +3,7 @@
 Server status and health check commands
 """
 
+import os
 import subprocess
 import typer
 from typing import Optional, List
@@ -83,11 +84,15 @@ def server_status(
             "ansible",
             target,
             "-i", inventory_path,
-            "-m", "setup",
-            "--tree", "/tmp/ansible_facts"
+            "-m", "setup"
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Create environment without ANSIBLE_CONFIG to get simple output format
+        env = os.environ.copy()
+        if 'ANSIBLE_CONFIG' in env:
+            del env['ANSIBLE_CONFIG']
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         # Process output regardless of return code (ansible returns 4 for unreachable hosts)
         if result.stdout:
@@ -175,7 +180,12 @@ def server_status(
                 "-a", "uptime"
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Create environment without ANSIBLE_CONFIG to get simple output format
+            env = os.environ.copy()
+            if 'ANSIBLE_CONFIG' in env:
+                del env['ANSIBLE_CONFIG']
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
             
             if result.returncode == 0 or result.stdout:
                 # Parse and update uptime information in host_info

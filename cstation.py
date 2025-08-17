@@ -16,7 +16,7 @@ from commands.version.main import version
 from commands.init.main import init_command
 from commands.server.main import server_app
 from commands.github.main import github_app
-from commands.docker.main import docker_app
+
 from commands.service.main import service_app
 
 # Initialize main Typer app
@@ -32,7 +32,7 @@ app.command()(version)
 app.command(name="init")(init_command)
 app.add_typer(server_app)
 app.add_typer(github_app)
-app.add_typer(docker_app)
+
 app.add_typer(service_app)
 
 @app.callback()

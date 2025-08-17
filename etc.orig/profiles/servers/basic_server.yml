@@ -1,7 +1,7 @@
 # Basic Server Profile
 # Essential tools and security configuration for general-purpose servers
 
-description: "Basic server setup with Docker, Python3, essential tools, and security configuration"
+description: "Basic server profile with Docker, Python3, essential tools, and security configuration"
 
 packages:
   - name: docker.io

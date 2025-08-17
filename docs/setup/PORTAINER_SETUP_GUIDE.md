@@ -166,17 +166,14 @@ When deploying to `eu01`, Ansible resolves variables in this order:
 ### 1. Deploy Portainer to eu01
 
 ```bash
-# Deploy software packages and configuration
-cstation server setup eu01 --profile portainer
-
-# Deploy Docker containers
-cstation server setup docker eu01
+# Deploy Docker containers using service profiles
+cstation service docker deploy eu01 --profile portainer
 ```
 
 ### 2. List Available Profiles
 
 ```bash
-cstation server setup list-profiles
+cstation service docker list-profiles
 ```
 
 Output:

@@ -27,8 +27,7 @@ cstation server profile
 # Remove server from inventory (requires sudo)
 sudo cstation server rm <server_name>
 
-# Deploy containers
-cstation docker deploy <target> --profile <profile>
+
 ```
 
 ## Documentation
@@ -41,9 +40,9 @@ All documentation has been consolidated in the `docs/` directory:
 
 ### Commands
 - [📋 Commands Overview](docs/commands/README.md) - All available commands
-- [🐳 Docker Commands](docs/commands/docker.md) - Container management
+
 - [🖥️ Server Commands](docs/commands/server.md) - Server management
-- [🔧 Server Setup](docs/commands/server-setup.md) - Server configuration
+
 - [📦 GitHub Commands](docs/commands/github.md) - Repository management
 - [🔄 GitHub Clone](docs/commands/github-clone.md) - Repository cloning
 
