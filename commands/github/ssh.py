@@ -12,15 +12,16 @@ from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+from ..server.inventory_utils import host_exists
 
 console = Console()
 
 def setup_github_ssh(
     hostname: str = typer.Argument(..., help="Target hostname from inventory"),
-    inventory: Optional[str] = typer.Option(
-        "/etc/cstation/ansible/inventory/hosts.yml", 
+    inventory_path: Optional[str] = typer.Option(
+        "/etc/cstation/ansible/inventory", 
         "-i", "--inventory", 
-        help="Inventory file path"
+        help="Inventory directory path"
     ),
     key_path: Optional[str] = typer.Option(
         None,
@@ -91,16 +92,21 @@ def setup_github_ssh(
         console.print(f"[red]Failed to read SSH keys: {e}[/red]")
         raise typer.Exit(1)
     
-    # Check if inventory file exists
-    if not os.path.exists(inventory):
-        console.print(f"[red]Inventory file not found: {inventory}[/red]")
+    # Check if inventory directory exists
+    if not os.path.exists(inventory_path):
+        console.print(f"[red]Inventory directory not found: {inventory_path}[/red]")
+        raise typer.Exit(1)
+    
+    # Check if host exists in inventory
+    if not host_exists(hostname, inventory_path):
+        console.print(f"[red]Host '{hostname}' not found in inventory[/red]")
         raise typer.Exit(1)
     
     console.print(Panel.fit(
         f"[bold]Setting up GitHub SSH access for host: {hostname}[/bold]\n"
         f"GitHub User: {github_user}\n"
         f"Key: {key_path}\n"
-        f"Inventory: {inventory}",
+        f"Inventory: {inventory_path}",
         title="GitHub SSH Setup",
         border_style="blue"
     ))
@@ -209,7 +215,7 @@ def setup_github_ssh(
     try:
         cmd = [
             "ansible-playbook",
-            "-i", inventory,
+            "-i", inventory_path,
             temp_playbook,
             "-v"
         ]

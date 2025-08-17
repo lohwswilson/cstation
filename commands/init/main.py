@@ -1,4 +1,5 @@
 import os
+import pwd
 import shutil
 import stat
 from pathlib import Path
@@ -12,11 +13,39 @@ from rich.prompt import Confirm
 
 console = Console()
 
+def get_user_info():
+    """Get current user information when running with sudo"""
+    # Get the user who invoked sudo (if any)
+    sudo_user = os.environ.get('SUDO_USER')
+    if sudo_user:
+        try:
+            user_info = pwd.getpwnam(sudo_user)
+            return user_info.pw_uid, user_info.pw_gid, sudo_user
+        except KeyError:
+            pass
+    
+    # Fallback to current user
+    user_info = pwd.getpwuid(os.getuid())
+    return user_info.pw_uid, user_info.pw_gid, user_info.pw_name
+
+def change_ownership_recursive(path: Path, uid: int, gid: int, dry_run: bool = False):
+    """Recursively change ownership of directory and all contents"""
+    if dry_run:
+        return
+        
+    try:
+        os.chown(path, uid, gid)
+        if path.is_dir():
+            for item in path.iterdir():
+                change_ownership_recursive(item, uid, gid, dry_run)
+    except (OSError, PermissionError) as e:
+        console.print(f"[yellow]Warning: Could not change ownership of {path}: {e}[/yellow]")
+
 def init_command(
     force: bool = typer.Option(False, "--force", "-f", help="Force initialization even if /etc/cstation exists"),
     backup: bool = typer.Option(True, "--backup/--no-backup", help="Create backup of existing /etc/cstation directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
-    developer: bool = typer.Option(False, "--developer", help="Set permissions to allow regular users to edit configuration files")
+    developer: bool = typer.Option(False, "--developer", help="Set user ownership and permissions to allow editing configuration files without sudo")
 ):
     """
     Initialize CStation configuration directory at /etc/cstation.
@@ -87,14 +116,17 @@ def init_command(
             # Step 3: Copy files
             copy_task = progress.add_task("Copying configuration files...", total=None)
             
+            # Get user information for ownership management
+            user_uid, user_gid, username = get_user_info()
+            
             def copy_with_permissions(src: Path, dst: Path):
                 """Copy files and set appropriate permissions"""
                 if src.is_dir():
                     dst.mkdir(exist_ok=True)
                     if not dry_run:
                         if developer:
-                            # Set group ownership and permissions for user access
-                            os.chown(dst, 0, 0)  # root:root (keep root ownership for security)
+                            # Set user ownership and permissions for developer access
+                            os.chown(dst, user_uid, user_gid)  # Current user ownership
                             os.chmod(dst, 0o755)  # rwxr-xr-x (allow read/execute for all)
                         else:
                             os.chown(dst, 0, 0)  # root:root
@@ -107,8 +139,8 @@ def init_command(
                         shutil.copy2(src, dst)
                         
                         if developer:
-                            # Set more permissive permissions for user editing
-                            os.chown(dst, 0, 0)  # root:root (keep root ownership)
+                            # Set user ownership and permissive permissions for editing
+                            os.chown(dst, user_uid, user_gid)  # Current user ownership
                             if dst.suffix in ['.yml', '.yaml', '.cfg', '.conf']:
                                 os.chmod(dst, 0o666)  # rw-rw-rw- (allow all users to edit)
                             elif dst.suffix in ['.sh']:
@@ -116,7 +148,7 @@ def init_command(
                             else:
                                 os.chmod(dst, 0o666)  # rw-rw-rw-
                         else:
-                            # Default restrictive permissions
+                            # Default restrictive permissions with root ownership
                             os.chown(dst, 0, 0)  # root:root
                             if dst.suffix in ['.yml', '.yaml', '.cfg', '.conf']:
                                 os.chmod(dst, 0o644)  # rw-r--r--
@@ -156,8 +188,8 @@ def init_command(
                 
                 # Update paths to absolute
                 content = content.replace(
-                    "inventory = inventory/hosts.yml",
-                    "inventory = /etc/cstation/ansible/inventory/hosts.yml"
+                    "inventory = inventory",
+                    "inventory = /etc/cstation/ansible/inventory"
                 )
                 content = content.replace(
                     "roles_path = roles",
@@ -170,10 +202,11 @@ def init_command(
                 
                 # Write back
                 ansible_cfg_path.write_text(content)
-                os.chown(ansible_cfg_path, 0, 0)
                 if developer:
+                    os.chown(ansible_cfg_path, user_uid, user_gid)
                     os.chmod(ansible_cfg_path, 0o666)  # rw-rw-rw-
                 else:
+                    os.chown(ansible_cfg_path, 0, 0)
                     os.chmod(ansible_cfg_path, 0o644)  # rw-r--r--
             
             console.print(f"[green]✓[/green] Ansible configuration updated")
@@ -190,8 +223,20 @@ def init_command(
     # Success message
     if not dry_run:
         console.print("\n[bold green]🎉 CStation initialization completed successfully![/bold green]")
+        
+        if developer:
+            console.print("\n[yellow]Developer mode enabled:[/yellow]")
+            console.print(f"  • Configuration files owned by user '{username}'")
+            console.print("  • You can edit files without sudo")
+            console.print("  • Use 'cstation init' (without --developer) to restore root ownership")
+        else:
+            # If not in developer mode, ensure root ownership
+            console.print("\n[blue]Ensuring root ownership...[/blue]")
+            change_ownership_recursive(target_dir, 0, 0, dry_run)
+            console.print("[green]✓[/green] Root ownership restored")
+        
         console.print("\n[blue]Next steps:[/blue]")
-        console.print("1. Configure your inventory: [cyan]sudo vim /etc/cstation/ansible/inventory/hosts.yml[/cyan]")
+        console.print("1. Configure your inventory: [cyan]sudo vim /etc/cstation/ansible/inventory/ANSIS.yml[/cyan]")
         console.print("2. Set up Ansible vault: [cyan]cd /etc/cstation/ansible && sudo ./setup-vault.sh[/cyan]")
         console.print("3. Test your setup: [cyan]cstation server status[/cyan]")
     else:

@@ -1,27 +1,14 @@
-# Commands Module Structure
+# CStation Commands Documentation
 
-This directory contains the modular command structure for CStation CLI, organized for easier debugging and maintenance.
+This directory contains detailed documentation for all CStation commands.
 
-## Directory Structure
+## Available Commands
 
-```
-commands/
-├── __init__.py              # Commands package initialization
-├── ansible/                 # Ansible command group
-│   ├── __init__.py         # Ansible module initialization
-│   ├── main.py             # Main ansible app and callback
-│   ├── config.py           # ansible config subcommand
-│   ├── galaxy.py           # ansible galaxy subcommand
-│   ├── inventory.py        # ansible inventory subcommand
-│   ├── ping.py             # ansible ping subcommand
-│   └── playbook.py         # ansible playbook subcommand
-├── setup/                   # Setup command
-│   ├── __init__.py         # Setup module initialization
-│   └── main.py             # Setup command implementation
-└── version/                 # Version command
-    ├── __init__.py         # Version module initialization
-    └── main.py             # Version command implementation
-```
+- [Init](init.md) - Initialize CStation configuration system
+- [Server Management](server.md) - Manage server inventory and operations
+- [Docker Management](docker.md) - Deploy and manage containers
+- [GitHub Integration](github.md) - Repository management and synchronization
+- [Server Setup](server-setup.md) - Automated server provisioning
 
 ## Benefits of This Structure
 

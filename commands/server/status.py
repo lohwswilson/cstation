@@ -5,65 +5,23 @@ Server status and health check commands
 
 import subprocess
 import typer
-import yaml
 from typing import Optional, List
 from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from pathlib import Path
+from .inventory_utils import get_all_hosts, host_exists
 
 console = Console()
 
-def get_hosts_from_inventory(inventory_path: str, target_hostname: Optional[str] = None) -> List[str]:
-    """
-    Parse Ansible inventory YAML file and extract host names
-    
-    Args:
-        inventory_path: Path to the inventory YAML file
-        target_hostname: Specific hostname to filter for, or None for all hosts
-    
-    Returns:
-        List of host names from the inventory
-    """
-    try:
-        inventory_file = Path(inventory_path)
-        if not inventory_file.exists():
-            console.print(f"[red]Inventory file not found: {inventory_path}[/red]")
-            return []
-        
-        with open(inventory_file, 'r') as f:
-            inventory_data = yaml.safe_load(f)
-        
-        hosts = []
-        
-        # Traverse the inventory structure to find hosts
-        if isinstance(inventory_data, dict):
-            for group_name, group_data in inventory_data.items():
-                if isinstance(group_data, dict) and 'hosts' in group_data:
-                    group_hosts = group_data['hosts']
-                    if isinstance(group_hosts, dict):
-                        for host_name in group_hosts.keys():
-                            # Skip 'vars' entries as they are variable declarations
-                            if host_name != 'vars':
-                                if target_hostname is None or host_name == target_hostname:
-                                    hosts.append(host_name)
-        
-        return list(set(hosts))  # Remove duplicates
-        
-    except yaml.YAMLError as e:
-        console.print(f"[red]Error parsing YAML inventory file: {e}[/red]")
-        return []
-    except Exception as e:
-        console.print(f"[red]Error reading inventory file: {e}[/red]")
-        return []
+
 
 def server_status(
     hostname: Optional[str] = typer.Argument(None, help="Target hostname from inventory (optional - shows all if not specified)"),
-    inventory: Optional[str] = typer.Option(
-        "/etc/cstation/ansible/inventory/hosts.yml", 
+    inventory_path: Optional[str] = typer.Option(
+        "/etc/cstation/ansible/inventory", 
         "-i", "--inventory", 
-        help="Inventory file path"
+        help="Inventory directory path"
     ),
     check_services: bool = typer.Option(
         False,
@@ -80,18 +38,23 @@ def server_status(
     Check server status, health, and uptime using Ansible
     """
     
-    # Get hosts from inventory using YAML parsing
-    hosts_list = get_hosts_from_inventory(inventory, hostname)
-    
-    if not hosts_list:
-        console.print(f"[red]No hosts found in inventory or host '{hostname}' not found[/red]")
-        raise typer.Exit(1)
+    # Get hosts from inventory using ansible-inventory
+    if hostname:
+        if not host_exists(hostname, inventory_path):
+            console.print(f"[red]Host '{hostname}' not found in inventory[/red]")
+            raise typer.Exit(1)
+        hosts_list = [hostname]
+    else:
+        hosts_list = get_all_hosts(inventory_path)
+        if not hosts_list:
+            console.print(f"[red]No hosts found in inventory[/red]")
+            raise typer.Exit(1)
     
     target = hostname if hostname else "all"
     
     console.print(Panel.fit(
         f"[bold]Checking server status for: {target}[/bold]\n"
-        f"Inventory: {inventory}\n"
+        f"Inventory: {inventory_path}\n"
         f"Hosts found: {', '.join(hosts_list)}",
         title="Server Status Check",
         border_style="blue"
@@ -119,7 +82,7 @@ def server_status(
         cmd = [
             "ansible",
             target,
-            "-i", inventory,
+            "-i", inventory_path,
             "-m", "setup",
             "--tree", "/tmp/ansible_facts"
         ]
@@ -184,7 +147,7 @@ def server_status(
                 cmd = [
                     "ansible",
                     target,
-                    "-i", inventory,
+                    "-i", inventory_path,
                     "-m", "service_facts"
                 ]
                 
@@ -207,7 +170,7 @@ def server_status(
             cmd = [
                 "ansible",
                 target,
-                "-i", inventory,
+                "-i", inventory_path,
                 "-m", "command",
                 "-a", "uptime"
             ]

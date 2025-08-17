@@ -28,7 +28,7 @@ docker_app = typer.Typer(
 def deploy_containers(
     target: str = typer.Argument(..., help="Target server or 'all' for all servers"),
     profile: Optional[str] = typer.Option(None, "--profile", "-p", help="Software profile containing container definitions"),
-    inventory: Optional[str] = typer.Option(None, "--inventory", "-i", help="Path to Ansible inventory file"),
+    inventory: Optional[str] = typer.Option(None, "--inventory", "-i", help="Path to Ansible inventory directory"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what containers would be deployed without executing"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
@@ -42,11 +42,11 @@ def deploy_containers(
     try:
         # Set default inventory path
         if not inventory:
-            inventory = "/etc/cstation/ansible/inventory/hosts.yml"
+            inventory = "/etc/cstation/ansible/inventory"
         
-        # Validate inventory file exists
+        # Validate inventory directory exists
         if not Path(inventory).exists():
-            console.print(f"[red]Error: Inventory file not found: {inventory}[/red]")
+            console.print(f"[red]Error: Inventory directory not found: {inventory}[/red]")
             raise typer.Exit(1)
         
         # Validate profile is provided
@@ -118,7 +118,7 @@ def deploy_containers(
 @docker_app.command("list")
 def list_containers(
     target: str = typer.Argument(..., help="Target server to list containers from"),
-    inventory: Optional[str] = typer.Option(None, "--inventory", "-i", help="Path to Ansible inventory file"),
+    inventory: Optional[str] = typer.Option(None, "--inventory", "-i", help="Path to Ansible inventory directory"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output")
 ):
     """

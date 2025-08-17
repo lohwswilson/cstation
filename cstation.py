@@ -4,8 +4,12 @@ CStation - Infrastructure Management CLI
 A DevOps CLI tool for managing infrastructure using Ansible
 """
 
+import os
 import typer
 from rich import print as rprint
+
+# Set Ansible configuration path
+os.environ['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
 
 # Import command modules
 from commands.version.main import version

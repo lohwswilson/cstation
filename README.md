@@ -9,11 +9,14 @@ A powerful Python CLI tool for managing DevOps infrastructure using Typer, Ansib
 pip install cstation
 
 # Initialize system configuration
-# Standard initialization (root-only editing)
+# Standard initialization (root ownership, requires sudo for editing)
 sudo cstation init
 
-# Developer initialization (allows regular users to edit configs)
+# Developer initialization (user ownership, allows editing without sudo)
 sudo cstation init --developer
+
+# Restore root ownership after developer mode
+sudo cstation init
 
 # View available commands
 cstation --help
@@ -21,8 +24,8 @@ cstation --help
 # List server profiles
 cstation server profile
 
-# Remove server from inventory
-cstation server rm <server_name>
+# Remove server from inventory (requires sudo)
+sudo cstation server rm <server_name>
 
 # Deploy containers
 cstation docker deploy <target> --profile <profile>

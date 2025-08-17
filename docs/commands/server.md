@@ -137,18 +137,20 @@ Remove a server entry from the Ansible inventory.
 **Examples:**
 
 ```bash
-# Remove server with confirmation
-cstation server rm eu01
+# Remove server with confirmation (requires sudo)
+sudo cstation server rm eu01
 
 # Force remove without confirmation
-cstation server rm eu01 --force
+sudo cstation server rm eu01 --force
 
-# Preview what would be removed
+# Preview what would be removed (no sudo needed for dry-run)
 cstation server rm eu01 --dry-run
 
 # Remove without creating backup
-cstation server rm eu01 --no-backup
+sudo cstation server rm eu01 --no-backup
 ```
+
+**Note:** This command requires `sudo` privileges because it modifies system configuration files in `/etc/cstation/`. Only the `--dry-run` option can be used without elevated privileges.
 
 **Features:**
 - Searches across all inventory groups

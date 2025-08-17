@@ -21,14 +21,17 @@
 ## Quick Start
 
 ```bash
-# Install the CLI
+# Install CStation
 pip install cstation
 
-# Initialize system configuration
+# Initialize system configuration (root ownership)
 sudo cstation init
 
-# Initialize with user-friendly permissions (allows regular users to edit configs)
+# Initialize with user ownership (allows editing without sudo)
 sudo cstation init --developer
+
+# Restore root ownership after developer mode
+sudo cstation init
 
 # View available commands
 cstation --help
@@ -38,6 +41,40 @@ cstation server profile
 
 # Deploy containers to a server
 cstation docker deploy <target> --profile <profile>
+```
+
+## Ownership Management
+
+CStation supports two ownership modes for configuration files:
+
+### Production Mode (Default)
+- Files owned by root with restrictive permissions
+- Requires `sudo` for editing configuration files
+- Recommended for production environments
+
+```bash
+sudo cstation init
+```
+
+### Developer Mode
+- Files owned by current user with permissive permissions
+- Allows editing configuration files without `sudo`
+- Ideal for development and testing
+
+```bash
+sudo cstation init --developer
+```
+
+### Switching Modes
+
+You can easily switch between modes by re-running the init command:
+
+```bash
+# Enable developer mode
+sudo cstation init --developer
+
+# Restore production mode
+sudo cstation init
 ```
 
 ## Usage
@@ -90,17 +127,17 @@ cstation server list -i /path/to/inventory.yml
 
 #### Server Inventory Management
 ```bash
-# Remove server from inventory with confirmation
-cstation server rm eu01
+# Remove server from inventory with confirmation (requires sudo)
+sudo cstation server rm eu01
 
 # Force remove without confirmation
-cstation server rm eu01 --force
+sudo cstation server rm eu01 --force
 
-# Preview what would be removed (dry run)
+# Preview what would be removed (dry run - no sudo needed)
 cstation server rm eu01 --dry-run
 
 # Remove without creating backup
-cstation server rm eu01 --no-backup
+sudo cstation server rm eu01 --no-backup
 ```
 
 **Server Removal Features:**

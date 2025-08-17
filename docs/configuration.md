@@ -1,4 +1,17 @@
-# Configuration Directory
+# Configuration Guide
+
+CStation uses a structured configuration system located in `/etc/cstation/`. This guide covers how to configure and customize your CStation setup.
+
+## Configuration File Ownership
+
+CStation supports two ownership modes that affect how you edit configuration files:
+
+- **Production Mode**: Files owned by root, requires `sudo` for editing
+- **Developer Mode**: Files owned by current user, allows editing without `sudo`
+
+See the [Init Command Documentation](commands/init.md) for details on switching between modes.
+
+## Directory Structure
 
 This directory contains all configuration files for CStation infrastructure management.
 

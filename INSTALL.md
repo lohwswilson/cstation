@@ -113,21 +113,59 @@ sudo find /etc/cstation -name "*.yaml" -exec chmod 644 {} \;
 sudo find /etc/cstation -name "*.cfg" -exec chmod 644 {} \;
 ```
 
-### Configuration File Editing
+### Ownership Management
 
-**Standard Mode (Default)**:
-- Files are owned by root with restrictive permissions (644/755)
-- Only root can edit configuration files
-- More secure for production environments
-- Use: `sudo cstation init`
+CStation provides flexible ownership management to support both production and development workflows:
 
-**User-Friendly Mode**:
-- Files are owned by root but with permissive permissions (666/755)
-- Regular users can edit configuration files
-- Better for development and testing
-- Use: `sudo cstation init --developer`
+#### Production Mode (Default)
+```bash
+sudo cstation init
+```
+- **Ownership**: Files owned by `root:wheel`
+- **Permissions**: Restrictive (644 for files, 755 for directories)
+- **Editing**: Requires `sudo` for all configuration changes
+- **Use Case**: Production servers, shared systems, security-sensitive environments
+- **Security**: Maximum security with root-only write access
 
-To switch between modes, re-run the init command with your preferred option.
+#### Developer Mode
+```bash
+sudo cstation init --developer
+```
+- **Ownership**: Files owned by current user (detected from `SUDO_USER`)
+- **Permissions**: Permissive (666 for config files, 755 for executables)
+- **Editing**: No `sudo` required for configuration changes
+- **Use Case**: Local development, testing, rapid iteration
+- **Convenience**: Easy editing with any text editor
+
+#### Switching Between Modes
+
+You can seamlessly switch between ownership modes:
+
+```bash
+# Enable developer mode for easy editing
+sudo cstation init --developer
+
+# Work on configurations
+vim /etc/cstation/ansible/inventory/hosts.yml
+cstation server list
+
+# Restore production security when done
+sudo cstation init
+```
+
+#### When to Use Each Mode
+
+**Use Production Mode When**:
+- Deploying to production servers
+- Multiple users access the system
+- Security compliance is required
+- System is shared or managed by multiple administrators
+
+**Use Developer Mode When**:
+- Local development and testing
+- Rapid configuration iteration
+- Single-user development environment
+- Frequent configuration file editing
 
 ### Initialization Options
 
