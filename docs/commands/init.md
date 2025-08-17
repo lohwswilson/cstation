@@ -131,11 +131,11 @@ If you need to restore from a backup:
 
 ```bash
 # List available backups
-ls -la /etc/cstation.backup.*
+ls -la /tmp/cstation.backup.*
 
 # Restore from backup (replace timestamp)
 sudo rm -rf /etc/cstation
-sudo mv /etc/cstation.backup.TIMESTAMP /etc/cstation
+sudo mv /tmp/cstation.backup.TIMESTAMP /etc/cstation
 ```
 
 ## Related Commands

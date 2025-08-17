@@ -140,7 +140,7 @@ def server_remove(
             import time
             timestamp = int(time.time())
             for yaml_file in files_to_modify:
-                backup_path = yaml_file.with_suffix(f".backup.{timestamp}.yml")
+                backup_path = Path("/tmp") / f"{yaml_file.stem}.backup.{timestamp}.yml"
                 shutil.copy2(yaml_file, backup_path)
                 console.print(f"[green]✓[/green] Backup created: {backup_path}")
         

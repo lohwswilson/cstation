@@ -15,14 +15,14 @@ def list_profiles():
     """
     List available software profiles.
     """
-    profiles_dir = Path("/etc/cstation/profiles/servers")
+    profiles_dir = Path("/etc/cstation/service/server")
     
     if not profiles_dir.exists():
         console.print(f"[red]Profiles directory not found: {profiles_dir}[/red]")
         return
     
     table = Table(title="Available Server Profiles")
-    table.add_column("Profile", style="cyan")
+    table.add_column("Service", style="cyan")
     table.add_column("Description", style="green")
     table.add_column("Packages", style="yellow")
     table.add_column("Services", style="magenta")

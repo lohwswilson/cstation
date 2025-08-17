@@ -100,7 +100,7 @@ def init_command(
             # Step 1: Create backup if requested
             if backup and target_dir.exists() and not dry_run:
                 backup_task = progress.add_task("Creating backup...", total=None)
-                backup_dir = Path(f"/etc/cstation.backup.{int(__import__('time').time())}")
+                backup_dir = Path(f"/tmp/cstation.backup.{int(__import__('time').time())}")
                 if not dry_run:
                     shutil.copytree(target_dir, backup_dir)
                 console.print(f"[green]✓[/green] Backup created: {backup_dir}")

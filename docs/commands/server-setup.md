@@ -88,7 +88,7 @@ cstation server setup sg02 --profile odoo_app
 
 ## Profile Structure
 
-Each profile is a YAML file located in `/etc/cstation/profiles/servers/` with the following structure:
+Each profile is a YAML file located in `/etc/cstation/service/server/` with the following structure:
 
 ```yaml
 description: "Profile description"
@@ -232,7 +232,7 @@ This provides better command organization and dedicated Docker management capabi
 
 To create a new profile:
 
-1. Create a new YAML file in `/etc/cstation/profiles/servers/`
+1. Create a new YAML file in `/etc/cstation/service/server/`
 2. Follow the profile structure documented above
 3. Add any required templates to `/etc/cstation/ansible/templates/`
 4. Test with `--dry-run` before deployment

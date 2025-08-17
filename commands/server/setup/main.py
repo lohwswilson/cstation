@@ -42,7 +42,7 @@ def setup_software(
             raise typer.Exit(1)
         
         # Check if profile file exists
-        profile_path = Path(f"/etc/cstation/profiles/servers/{profile}.yml")
+        profile_path = Path(f"/etc/cstation/service/server/{profile}.yml")
         if not profile_path.exists():
             console.print(f"[red]Error: Profile file not found: {profile_path}[/red]")
             console.print("[yellow]Available profiles:[/yellow]")

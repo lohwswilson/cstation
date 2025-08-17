@@ -55,8 +55,8 @@ def deploy_containers(
             raise typer.Exit(1)
         
         # Check if profile file exists - check containers directory first, then main profiles
-        containers_profile_path = Path(f"/etc/cstation/profiles/containers/{profile}.yml")
-        main_profile_path = Path(f"/etc/cstation/profiles/servers/{profile}.yml")
+        containers_profile_path = Path(f"/etc/cstation/service/containers/{profile}.yml")
+        main_profile_path = Path(f"/etc/cstation/service/server/{profile}.yml")
         
         profile_path = None
         if containers_profile_path.exists():
@@ -163,14 +163,14 @@ def list_available_profiles(containers_only: bool, verbose: bool):
     """
     from rich.table import Table
     
-    profiles_dir = Path("/etc/cstation/profiles/servers")
-    containers_dir = Path("/etc/cstation/profiles/containers")
+    profiles_dir = Path("/etc/cstation/service/server")
+    containers_dir = Path("/etc/cstation/service/containers")
     
     console.print("\n[bold blue]📋 Available Docker Profiles[/bold blue]")
     
     # Create table for profiles
     table = Table(title="Docker Container Profiles")
-    table.add_column("Profile", style="cyan")
+    table.add_column("Docker Service", style="cyan")
     table.add_column("Location", style="green")
     table.add_column("Description", style="yellow")
     table.add_column("Containers", style="magenta")
@@ -215,7 +215,7 @@ def list_available_profiles(containers_only: bool, verbose: bool):
                 continue
                 
             profile_name = profile_file.stem
-            location = "profiles/"
+            location = "service/"
             
             # Load profile to check if it has containers
             try:
@@ -259,8 +259,8 @@ def show_profile_details(profile_name: str, verbose: bool):
     from rich.panel import Panel
     
     # Look for profile in containers directory first, then main profiles
-    containers_path = Path(f"/etc/cstation/profiles/containers/{profile_name}.yml")
-    main_path = Path(f"/etc/cstation/profiles/servers/{profile_name}.yml")
+    containers_path = Path(f"/etc/cstation/service/containers/{profile_name}.yml")
+    main_path = Path(f"/etc/cstation/service/server/{profile_name}.yml")
     
     profile_path = None
     if containers_path.exists():

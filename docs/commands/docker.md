@@ -70,7 +70,7 @@ cstation docker deploy eu01 --profile portainer
 
 The docker module follows the same architecture as the original implementation:
 
-1. **Profile Loading**: Reads container profiles from `/etc/cstation/profiles/containers/` and server profiles from `/etc/cstation/profiles/servers/`
+1. **Profile Loading**: Reads container profiles from `/etc/cstation/service/containers/` and server profiles from `/etc/cstation/service/server/`
 2. **Host Variables**: Loads host-specific variables from `/etc/cstation/ansible/host_vars/`
 3. **Configuration Merging**: Merges profile and host variables
 4. **Ansible Execution**: Creates and executes Ansible playbooks for container deployment

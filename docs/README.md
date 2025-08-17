@@ -209,7 +209,7 @@ cstation server setup sg01 --profile database_server --verbose
 - **odoo_app**: Complete Odoo application server with Python dependencies and web stack
 
 **Profile Structure:**
-Profiles are YAML files located in `/etc/cstation/profiles/servers/` that define complete server configurations including:
+Profiles are YAML files located in `/etc/cstation/service/server/` that define complete server configurations including:
 - **Packages**: List of software packages to install with version specifications
 - **Services**: Service configuration with enable/disable and start/stop settings
 - **Configurations**: Template files for service configuration (PostgreSQL, Nginx, etc.)
@@ -230,9 +230,9 @@ Profiles are YAML files located in `/etc/cstation/profiles/servers/` that define
 
 ```bash
 # Create a new profile based on existing one
-sudo cp /etc/cstation/profiles/servers/web_server.yml /etc/cstation/profiles/servers/my_profile.yml
+sudo cp /etc/cstation/service/server/web_server.yml /etc/cstation/service/server/my_profile.yml
 # Edit the profile
-sudo vim /etc/cstation/profiles/servers/my_profile.yml
+sudo vim /etc/cstation/service/server/my_profile.yml
 ```
 
 ### Host-Specific Variables
@@ -618,10 +618,10 @@ cstation server setup docker web01
 #### Custom Profile Creation
 ```bash
 # Create custom profile based on web_server
-sudo cp /etc/cstation/profiles/servers/web_server.yml /etc/cstation/profiles/servers/ecommerce_server.yml
+sudo cp /etc/cstation/service/server/web_server.yml /etc/cstation/service/server/ecommerce_server.yml
 
 # Edit to add ecommerce-specific containers
-sudo vim /etc/cstation/profiles/servers/ecommerce_server.yml
+sudo vim /etc/cstation/service/server/ecommerce_server.yml
 
 # Deploy custom profile
 cstation server setup shop01 --profile ecommerce_server
