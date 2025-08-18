@@ -7,8 +7,8 @@ import typer
 from rich import print as rprint
 
 # Import subcommands
-from .profiles import list_profiles
-from .docker_profiles import list_docker_profiles
+from .service import list_service, push_server
+from .docker import list_docker_profiles, push_docker
 
 # Create Server sub-app
 server_app = typer.Typer(
@@ -18,7 +18,8 @@ server_app = typer.Typer(
 )
 
 # Add commands to the server app
-server_app.command("ls")(list_profiles)
+server_app.command("ls")(list_service)
+server_app.command("push")(push_server)
 
 @server_app.callback()
 def server_callback(ctx: typer.Context):
@@ -37,6 +38,7 @@ docker_app = typer.Typer(
 
 # Add commands to the docker app
 docker_app.command("ls")(list_docker_profiles)
+docker_app.command("push")(push_docker)
 
 @docker_app.callback()
 def docker_callback(ctx: typer.Context):

@@ -142,4 +142,4 @@ sudo mv /tmp/cstation.backup.TIMESTAMP /etc/cstation
 
 - [`cstation server list`](server.md#list): List configured servers
 - [`cstation server rm`](server.md#remove): Remove servers (requires appropriate permissions)
-- [`cstation service docker ls`](../README.md): List Docker service profiles
+- [`cstation service docker ls`](../README.md): List available Docker service profiles

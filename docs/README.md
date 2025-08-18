@@ -39,8 +39,11 @@ cstation --help
 # List available server profiles
 cstation server profile
 
-# Deploy containers to a server
+# List available Docker service profiles
 cstation service docker ls
+
+# Deploy Docker service to a server
+cstation service docker push <profile> <target_host>
 ```
 
 ## Ownership Management

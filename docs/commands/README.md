@@ -6,6 +6,7 @@ This directory contains detailed documentation for all CStation commands.
 
 - [Init](init.md) - Initialize CStation configuration system
 - [Server Management](server.md) - Manage server inventory and operations
+- [Service Management](service.md) - Deploy and manage server and Docker services
 - [Docker Management](docker.md) - Deploy and manage containers
 - [GitHub Integration](github.md) - Repository management and synchronization
 
