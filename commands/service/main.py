@@ -7,27 +7,9 @@ import typer
 from rich import print as rprint
 
 # Import subcommands
-from .service import list_service, push_server
 from .docker import list_docker_profiles, push_docker
 
-# Create Server sub-app
-server_app = typer.Typer(
-    name="server",
-    help="Server service management",
-    invoke_without_command=True
-)
-
-# Add commands to the server app
-server_app.command("ls")(list_service)
-server_app.command("push")(push_server)
-
-@server_app.callback()
-def server_callback(ctx: typer.Context):
-    """Server service management"""
-    if ctx.invoked_subcommand is None:
-        # Show help when no subcommand is provided
-        rprint(ctx.get_help())
-        raise typer.Exit(0)
+# Server functionality has been moved to main server module
 
 # Create Docker sub-app
 docker_app = typer.Typer(
@@ -56,7 +38,6 @@ service_app = typer.Typer(
 )
 
 # Add sub-apps to the main service app
-service_app.add_typer(server_app, name="server")
 service_app.add_typer(docker_app, name="docker")
 
 @service_app.callback()

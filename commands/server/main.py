@@ -9,9 +9,9 @@ from rich import print as rprint
 # Import subcommands
 from .ssh import setup_ssh
 from .status import server_status
-from .list import server_list
-
-
+from .ls import server_list
+from .code import list_server_code
+from .push import push_server
 from .remove import server_remove
 
 
@@ -26,8 +26,8 @@ server_app = typer.Typer(
 server_app.command("ssh")(setup_ssh)
 server_app.command("status")(server_status)
 server_app.command("ls")(server_list)
-
-
+server_app.command("code")(list_server_code)
+server_app.command("push")(push_server)
 server_app.command("rm")(server_remove)
 
 

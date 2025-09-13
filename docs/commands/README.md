@@ -10,6 +10,12 @@ This directory contains detailed documentation for all CStation commands.
 - [Docker Management](docker.md) - Deploy and manage containers
 - [GitHub Integration](github.md) - Repository management and synchronization
 
+## Ansible Configuration Guides
+
+- [Inventory Variables Guide](../ansible/inventory-variables-guide.md) - How to structure variables in `/etc/ansible/inventory`
+- [Host Variables Example](../ansible/host_vars_example.yml) - Example host_vars configuration
+- [Ansible Vault Guide](../ansible/ansible-vault-guide.md) - How to encrypt and manage sensitive data with Ansible Vault
+
 
 ## Benefits of This Structure
 

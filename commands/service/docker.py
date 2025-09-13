@@ -68,7 +68,12 @@ def list_docker_profiles():
     console.print(table)
 
 
-def push_docker(ansible_playbook: str, target_host: str):
+def push_docker(
+    ansible_playbook: str, 
+    target_host: str,
+    ask_vault_pass: bool = typer.Option(False, "--ask-vault-pass", help="Ask for vault password"),
+    vault_password_file: Optional[str] = typer.Option(None, "--vault-password-file", help="Path to vault password file")
+):
     """
     Execute an Ansible playbook from docker directory on a specific target host.
     """
@@ -102,7 +107,13 @@ def push_docker(ansible_playbook: str, target_host: str):
             "-v"
         ]
         
-        # Set environment to use our ansible.cfg
+        # Add vault password options if provided
+        if ask_vault_pass:
+            cmd.append("--ask-vault-pass")
+        elif vault_password_file:
+            cmd.extend(["--vault-password-file", vault_password_file])
+        
+        # Set environment to use system-wide ansible.cfg
         env = os.environ.copy()
         env['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
         
