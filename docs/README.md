@@ -2,6 +2,22 @@
 
 🚀 A powerful DevOps CLI tool for managing infrastructure using Ansible, built with Python 3.13, Typer, and uv.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Ownership Management](#ownership-management)
+- [Usage](#usage)
+  - [Basic Commands](#basic-commands)
+  - [Server Management](#server-management)
+  - [GitHub Management](#github-management)
+  - [Docker Services](#docker-services)
+- [Available Docker Services](#available-docker-services)
+- [Documentation](#documentation)
+- [Configuration](#configuration)
+- [Development](#development)
+
 ## Features
 
 - **Server Management**: SSH key setup, status monitoring, host listing, and remote server administration
@@ -236,6 +252,46 @@ cstation github ssh sg01 --github-user myusername
 cstation github ssh sg01 --add-to-github
 ```
 
+### Docker Services
+
+#### List Available Docker Services
+```bash
+# List all available Docker service profiles
+cstation service docker ls
+```
+
+#### Deploy Docker Services
+```bash
+# Deploy Portainer (full management UI)
+cstation service docker push portainer <target_host>
+
+# Deploy Portainer Agent (for remote management)
+cstation service docker push portainer_agent <target_host>
+
+# Deploy other services
+cstation service docker push traefik <target_host>
+```
+
+**Docker Service Features:**
+- **Ansible-based Deployment**: Uses Ansible playbooks for reliable container deployment
+- **Inventory Integration**: Validates target hosts against your server inventory
+- **Service Profiles**: Pre-configured service templates for common applications
+- **Automated Setup**: Handles container creation, networking, and volume management
+
+## Available Docker Services
+
+| Service | Description | Ports | Use Case |
+|---------|-------------|-------|----------|
+| **portainer** | Full Docker management UI | 8000, 9000, 9443 | Standalone Docker management or primary hub |
+| **portainer_agent** | Lightweight remote management agent | 9001 | Remote Docker host management |
+| **traefik** | Reverse proxy and load balancer | 80, 443, 8080 | HTTP routing and SSL termination |
+
+### Service Setup Guides
+
+- [Portainer Setup Guide](setup/PORTAINER_SETUP_GUIDE.md) - Complete Docker management UI
+- [Portainer Agent Setup Guide](setup/PORTAINER_AGENT_SETUP_GUIDE.md) - Remote Docker management
+- [Docker Service Management](commands/docker.md) - General service deployment guide
+
 ## Configuration Structure
 
 CStation uses the following configuration structure in the `/etc/cstation/` directory:
@@ -314,18 +370,25 @@ Detailed documentation is available in the following sections:
 - [Commands Overview](commands/README.md) - Complete guide to all available commands
 - [Docker Management](commands/docker.md) - Container and image management
 - [Server Management](commands/server.md) - Server provisioning and management
-
+- [Service Management](commands/service.md) - Docker service deployment and management
 - [GitHub Integration](commands/github.md) - Repository management and automation
 - [GitHub Clone](commands/github-clone.md) - Repository cloning utilities
+- [Init Command](commands/init.md) - System initialization and setup
+
+### Docker Services
+- [Services Overview](services/README.md) - Complete guide to all available Docker services
+- [Portainer Setup](setup/PORTAINER_SETUP_GUIDE.md) - Full Docker management UI setup
+- [Portainer Agent Setup](setup/PORTAINER_AGENT_SETUP_GUIDE.md) - Remote Docker management agent
 
 ### Configuration
 - [Configuration Guide](configuration.md) - System configuration and settings
-- [Portainer Setup](setup/PORTAINER_SETUP_GUIDE.md) - Container management UI setup
 
 ### Ansible Infrastructure Management
 - [Ansible Overview](ansible/README.md) - Complete Ansible setup and usage guide
 - [Inventory Management](ansible/inventory-guide.md) - Advanced inventory configuration
 - [Variables Guide](ansible/variables-guide.md) - Ansible automation variables
+- [Ansible Vault Guide](ansible/ansible-vault-guide.md) - Secure secrets management
+- [Host Variables Example](ansible/host_vars_example.yml) - Example host configuration
 
 ## Contributing
 

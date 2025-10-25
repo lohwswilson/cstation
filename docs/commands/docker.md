@@ -22,12 +22,13 @@ Lists all available Docker service profiles (Ansible playbooks) in the `/etc/cst
 ```
 Available Docker service profiles:
 
-┌─────────────┬─────────────────────────────────────┬──────────┬─────────────────────┐
-│ Profile     │ Description                         │ Size     │ Last Modified       │
-├─────────────┼─────────────────────────────────────┼──────────┼─────────────────────┤
-│ traefik     │ Traefik reverse proxy service       │ 1.2 KB   │ 2024-01-15 10:30:45 │
-│ portainer   │ Portainer Docker management UI      │ 0.8 KB   │ 2024-01-14 15:22:10 │
-└─────────────┴─────────────────────────────────────┴──────────┴─────────────────────┘
+┌─────────────────┬─────────────────────────────────────┬──────────┬─────────────────────┐
+│ Profile         │ Description                         │ Size     │ Last Modified       │
+├─────────────────┼─────────────────────────────────────┼──────────┼─────────────────────┤
+│ traefik         │ Traefik reverse proxy service       │ 1.2 KB   │ 2024-01-15 10:30:45 │
+│ portainer       │ Portainer Docker management UI      │ 0.8 KB   │ 2024-01-14 15:22:10 │
+│ portainer_agent │ Portainer Agent for remote mgmt     │ 0.6 KB   │ 2024-01-16 09:15:30 │
+└─────────────────┴─────────────────────────────────────┴──────────┴─────────────────────┘
 ```
 
 ### Deploy Docker Service
@@ -55,6 +56,9 @@ cstation service docker push traefik eu01
 
 # Deploy Portainer to us01 server  
 cstation service docker push portainer us01
+
+# Deploy Portainer Agent to remote server for centralized management
+cstation service docker push portainer_agent eu02
 ```
 
 **Output:**
@@ -80,4 +84,41 @@ eu01                       : ok=3    changed=2    unreachable=0    failed=0
 [SUCCESS] Ansible playbook executed successfully
 ```
 
+## Available Docker Services
+
+### Portainer vs Portainer Agent
+
+**Portainer (Full UI)**
+- Complete Docker management interface
+- Runs on ports 8000, 9000, and 9443
+- Suitable for standalone Docker hosts or primary management server
+- Includes web UI, API, and all management features
+
+**Portainer Agent**
+- Lightweight agent for remote Docker management
+- Runs on port 9001
+- Designed to be managed by a central Portainer instance
+- Minimal resource footprint
+- Ideal for remote servers in a distributed setup
+
+### When to Use Each
+
+- **Use Portainer** when you need a standalone Docker management UI or want to set up the primary management server
+- **Use Portainer Agent** when you want to manage remote Docker hosts from a central Portainer instance
+
+### Typical Architecture
+
 ```
+[Main Server]     [Remote Servers]
+Portainer UI  --> Portainer Agent (Server 1)
+(Port 9000)   --> Portainer Agent (Server 2)
+              --> Portainer Agent (Server N)
+```
+
+## See Also
+
+- [Services Overview](../services/README.md) - Complete guide to all available Docker services
+- [Portainer Setup Guide](../setup/PORTAINER_SETUP_GUIDE.md) - Full Portainer deployment guide
+- [Portainer Agent Setup Guide](../setup/PORTAINER_AGENT_SETUP_GUIDE.md) - Remote management agent setup
+- [Service Management](service.md) - General service management commands
+- [Server Management](server.md) - Managing target servers and inventory

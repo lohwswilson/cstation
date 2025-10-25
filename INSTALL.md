@@ -1,59 +1,159 @@
 # CStation Installation Guide
 
-This guide explains how to install CStation CLI with system-wide configuration support.
+This guide provides comprehensive installation instructions for CStation, a Python CLI tool for DevOps infrastructure management.
 
-## Overview
+## Prerequisites
 
-CStation now uses `/etc/cstation` as the system-wide configuration directory. This ensures that:
-- Configuration files are accessible from anywhere on the system
-- Multiple users can share the same configuration
-- The CLI works consistently regardless of the current working directory
+- **Python 3.8+** (recommended: Python 3.9 or later)
+- **pip** (Python package installer)
+- **Ansible** (will be installed automatically as a dependency)
+- **Docker** (optional, for containerized deployments)
+
+## Installation Methods
+
+### Method 1: Package Installation (Recommended)
+
+#### Install from Source (Development)
+```bash
+# Clone the repository
+git clone <repository-url>
+cd cstation
+
+# Install in development mode
+pip install -e .
+
+# Verify installation
+cstation --help
+```
+
+#### Install with Test Dependencies
+```bash
+# Install with testing capabilities
+pip install -e ".[test]"
+
+# Run tests to verify installation
+pytest tests/
+```
+
+### Method 2: Direct Installation (Future PyPI Release)
+```bash
+# When available on PyPI
+pip install cstation
+
+# Verify installation
+cstation --help
+```
+
+## Post-Installation Configuration
+
+### Automatic Configuration Detection
+
+CStation automatically detects and loads configuration files from multiple locations with the following precedence:
+
+1. **Local Configuration** (highest precedence): `./etc/`
+2. **System Configuration**: 
+   - Unix/Linux/macOS: `/etc/cstation/`
+   - Windows: `%PROGRAMDATA%/cstation/`
+3. **User Configuration** (lowest precedence):
+   - Unix/Linux/macOS: `~/.config/cstation/`
+   - Windows: `%APPDATA%/cstation/`
+
+### Initial Setup Options
+
+#### Option 1: Local Development Setup
+```bash
+# Create local configuration directory
+mkdir -p ./etc/ansible
+
+# Create basic Ansible configuration
+cat > ./etc/ansible/ansible.cfg << EOF
+[defaults]
+host_key_checking = False
+inventory = inventory/hosts.yml
+timeout = 30
+
+[ssh_connection]
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s
+pipelining = True
+EOF
+
+# Create inventory directory
+mkdir -p ./etc/ansible/inventory
+
+# Create basic inventory file
+cat > ./etc/ansible/inventory/hosts.yml << EOF
+all:
+  children:
+    servers:
+      hosts:
+        # Add your servers here
+        # example-server:
+        #   ansible_host: 192.168.1.100
+        #   ansible_user: ubuntu
+EOF
+```
+
+#### Option 2: System-Wide Setup (Production)
+```bash
+# Create system configuration directory (requires sudo)
+sudo mkdir -p /etc/cstation/ansible/inventory
+
+# Copy configuration from local setup
+sudo cp -r ./etc/* /etc/cstation/
+
+# Set appropriate permissions
+sudo chmod -R 644 /etc/cstation/
+sudo chmod 755 /etc/cstation/ansible
+```
+
+#### Option 3: User-Specific Setup
+```bash
+# Create user configuration directory
+mkdir -p ~/.config/cstation/ansible/inventory
+
+# Copy configuration
+cp -r ./etc/* ~/.config/cstation/
+```
 
 ## Installation Steps
 
-### 1. Install CStation CLI
+## Verification and Testing
 
+### Verify Installation
 ```bash
-# Install from PyPI
-pip install cstation
-
-# Or install in development mode
-git clone <repository-url>
-cd cstation
-pip install -e .
-```
-
-### 2. Initialize System Configuration
-
-```bash
-# Initialize /etc/cstation directory (requires sudo)
-sudo cstation init
-
-# For user-friendly permissions (allows regular users to edit config files)
-sudo cstation init --developer
-
-# Or with other options
-sudo cstation init --force --backup
-```
-
-The `cstation init` command will:
-- Create `/etc/cstation` directory structure
-- Copy all configuration files from the package to `/etc/cstation/`
-- Set proper permissions (root ownership by default, or user-editable with --developer)
-- Create a timestamped backup of any existing `/etc/cstation` directory
-- Update Ansible configuration with absolute paths
-
-### 3. Verify Installation
-
-```bash
-# Check if cstation command is available
+# Check if cstation command is available globally
 cstation --help
 
-# Test configuration access
-cstation server list
+# Check version
+cstation version
 
-# Verify Ansible configuration
-ANSIBLE_CONFIG=/etc/cstation/ansible/ansible.cfg ansible-inventory --list
+# Test configuration loading (if implemented)
+cstation config info
+```
+
+### Test Configuration Precedence
+```bash
+# Create test configurations in different locations
+mkdir -p ./etc/app
+echo "app: {name: 'local-config'}" > ./etc/app/config.yml
+
+mkdir -p ~/.config/cstation/app
+echo "app: {name: 'user-config'}" > ~/.config/cstation/app/config.yml
+
+# Local config should take precedence
+cstation config show  # Should show 'local-config'
+```
+
+### Run Tests (Development Installation)
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage
+pytest tests/ --cov=cstation
+
+# Run specific test categories
+pytest tests/test_config.py -v
 ```
 
 ## Configuration Structure

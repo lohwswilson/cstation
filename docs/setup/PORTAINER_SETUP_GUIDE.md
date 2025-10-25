@@ -106,3 +106,28 @@ Common customizations include:
 - Custom port mappings
 - Volume mount configurations
 - Environment variables
+
+## Related Services
+
+### Portainer Agent
+
+For managing remote Docker hosts from this Portainer instance, consider deploying Portainer Agent on remote servers:
+
+- [Portainer Agent Setup Guide](PORTAINER_AGENT_SETUP_GUIDE.md) - Deploy lightweight agents for remote management
+- Command: `cstation service docker push portainer_agent <remote_host>`
+
+### Service Architecture
+
+**Centralized Management Setup:**
+```
+[This Server]           [Remote Servers]
+Portainer UI        --> Portainer Agent (Server 1)
+(Port 9000)         --> Portainer Agent (Server 2)
+                    --> Portainer Agent (Server N)
+```
+
+## Related Documentation
+
+- [Docker Service Management](../commands/docker.md) - General Docker service deployment
+- [Services Overview](../services/README.md) - All available Docker services
+- [Server Management](../commands/server.md) - Managing target servers
