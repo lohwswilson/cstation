@@ -65,7 +65,7 @@ sudo cstation init
 
 1. **Directory Structure**: Creates `/etc/cstation` with subdirectories
 2. **Ansible Configuration**: Copies playbooks, roles, inventory, and templates
-3. **Container Profiles**: Copies Docker container configurations
+3. **Service Profiles**: Copies server service configurations
 4. **Service Profiles**: Copies service deployment configurations
 5. **GitHub Integration**: Copies repository synchronization configs
 6. **Path Updates**: Updates `ansible.cfg` with absolute paths
@@ -142,4 +142,4 @@ sudo mv /tmp/cstation.backup.TIMESTAMP /etc/cstation
 
 - [`cstation server list`](server.md#list): List configured servers
 - [`cstation server rm`](server.md#remove): Remove servers (requires appropriate permissions)
-- [`cstation service docker ls`](../README.md): List available Docker service profiles
+- [`cstation service server ls`](../README.md): List available server service profiles

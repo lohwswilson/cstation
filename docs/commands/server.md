@@ -55,7 +55,7 @@ Check server status, health, and uptime using Ansible.
 
 **Options:**
 - `-i, --inventory` - Inventory file path (default: `/etc/cstation/ansible/inventory/hosts.yml`)
-- `--services` - Check common services status (docker, nginx, etc.)
+- `--services` - Check common services status (nginx, postgresql, etc.)
 - `--uptime/--no-uptime` - Include uptime information in status check (default: enabled)
 
 **Examples:**
