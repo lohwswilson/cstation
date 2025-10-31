@@ -24,6 +24,8 @@ dependencies = [
     "rich>=14.1.0",
     "pyyaml>=6.0",
     "ansible-lint>=25.9.2",
+    "psycopg2>=2.9.11",
+    "pydantic>=2.12.3",
 ]
 
 [project.optional-dependencies]
