@@ -1,0 +1,19 @@
+#! /usr/local/bin/ansible-playbook
+---
+    - hosts: all
+      become: true
+      
+      tasks:
+        # Create machine for provision
+        # Install all the packages
+        # - name: Prepare virtual host "{{ virtual_host }} configuration"
+        #   apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+        # Prepare the PW Configuration file
+        - name: Prepare TRAEFIK Configuration File - {{ virtual_host | replace('.','_') }}
+          template:
+            src: /opt/PW/PW_CS/templates/traefik_virtual_link.j2
+            dest: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/conf/{{ virtual_host }}.yaml
+            owner: '101'
+            group: '102'
+            mode: '0755'

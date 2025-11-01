@@ -1,0 +1,17 @@
+if [ -z "$1" ];
+then
+    echo "Please provide hostname and version for syncing PW_ADDONS files to DB Server"
+    echo
+    echo "./cs_rsync_addons [host] [version] [port]"
+    echo "./cs_rsync_addons sg01 3 8288"
+    echo ""
+    echo "[host] -> host, group of hosts ( from inventory definition )"
+    echo "[version] -> 2.0 - PW2 , 3.0 - PW3.0  3.5 - PW3.5"
+    echo "[port] -> 22 or 8288"
+    echo ""
+else
+    echo "Start Building Files to Sync PW_ADDONS.$2 to Docker"
+    echo "Syncing PW_ADDONS.$2 to server $1.synercatalyst.com:$3 "
+    find /opt/PW/PW_ADDONS.$2/ -name __pycache__ -type d -exec rm -rf {} + 
+    rsync -avzhe "ssh -p$3"  --copy-links --delete --exclude  '.*' /opt/PW/PW_ADDONS.$2/   root@$1.synercatalyst.com:/var/lib/perfectwork/PW_ADDONS.$2
+fi

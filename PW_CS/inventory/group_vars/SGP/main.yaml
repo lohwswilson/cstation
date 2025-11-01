@@ -1,0 +1,3 @@
+ansible_user: root
+ansible_port: 8288 
+postgresql_port: 1488

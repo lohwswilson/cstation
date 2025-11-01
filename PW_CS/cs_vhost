@@ -1,0 +1,20 @@
+if [ -z "$1" ];
+then
+    echo "Please provide information for configuring virtual host for Traefik"
+    echo "./cs_vhost [inventory] [function] [virtual_host] [virtual_polling_port] [container_name]/[link name in URL]" 
+    echo ""
+    echo "[inventory] -> host, group of hosts"
+    echo "[function] -> link, container, longpolling_dns, websocket_dns"
+    echo "[virtual_host] -> abc.perfectwork.app "
+    echo "[virtual_polling_port of the container ] -> 3327 or 0000 if not used"
+    echo "[link name in URL] -> http://us01.synercatalyst.com:8080"
+    echo "[container_name] -> SG01_SYNER_US01DB"
+    echo ""
+    echo "./cs_vhost sg02 websocket_dns beyonique.perfectwork.app 3327 SG02_PW2_SG02DB"
+    echo "./cs_vhost sg02 longpolling_dns beyonique.perfectwork.app 3327 SG02_PW2_SG02DB"
+    echo "./cs_vhost sg02 container beyonique.perfectwork.app 0000 SG02_PW2_SG02DB"
+    echo "./cs_vhost sg02 link beyonique.perfectwork.app 0000 SG02_PW2_SG02DB"
+else
+    echo "CHECKING VARIABLE : $1 "
+    ansible-playbook -l $1 ./ansible/vhost_$2.yaml --extra-vars "virtual_host=$3 virtual_polling_port=$4 container_name=$5 "
+fi

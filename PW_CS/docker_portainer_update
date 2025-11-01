@@ -1,0 +1,12 @@
+if [ -z "$1" ];
+then
+    echo "Update Portainer to latest version"
+    echo "./update_portainer_latest [inventory]"
+    echo ""
+    echo "[inventory] -> host, group of hosts"
+    echo ""
+else
+    echo "Update Portainer to latest version on $1 "
+    ansible-playbook ./ansible/docker_portainer_update.yaml --limit $1
+    echo ""
+fi

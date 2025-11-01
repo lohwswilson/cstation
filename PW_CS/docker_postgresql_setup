@@ -1,0 +1,12 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Docker Database Container"
+    echo "./postgresql_setup $HOST $DBNAME"
+    echo ""
+    echo "Example : ./postgresql_setup US01 US01_DB"
+    echo ""
+else
+    echo "Setting Docker Database Container on $1 "
+    ansible-playbook ./ansible/docker_postgresql_setup.yaml --extra-vars "@./$1/$2.yaml" 
+    echo ""
+fi

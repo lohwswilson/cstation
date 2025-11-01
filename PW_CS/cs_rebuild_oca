@@ -1,0 +1,13 @@
+if [ -z "$1" ];
+then
+    echo "Please provide Odoo version for getting the OCA files"
+    echo
+    echo "./cs_rebuild_oca [version]"
+    echo "./cs_rebuild_oca 4.0"
+    echo ""
+    echo "[version] -> 2.0 - PW2 , 3.0 - PW3.0  3.5 - PW3.5"
+    echo ""
+else
+    echo "Start Retrieving OCA files from OCA Github Repositories"
+    gitoo install-all --conf_file /opt/PW/PW_CS/config_files/pw_oca_addons_$1.yml --destination /opt/PW/PW_ADDONS.$1/OCA
+fi

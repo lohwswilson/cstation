@@ -1,0 +1,33 @@
+http:
+    routers:
+        pw_route:
+            rule: "Host(`{{ PW_domain_name }}`)"
+            tls: 
+                certresolver: 'le_resolver'
+            middlewares: 'pw_rate'
+            services: 'pw_nodes'
+    
+    middlewares:
+        pw_denyip:
+            plugin:
+                denyip:
+                    ipDenyList:
+                        - 127.0.0.1
+        pw_inflight:
+            inFlightReq:
+                amount: 20 
+        pw_rate:
+            rateLimit:
+                average: 10
+                period: 1s
+                burst: 30
+    services:
+        pw_nodes:
+            loadBalancer:
+                servers:
+                    - url: "http://sg07.synercatalyst.com:8069"
+                    - url: "http://sg07-01.synercatalyst.com:8069"
+                sticky:
+                    cookie: {}
+    
+    

@@ -1,0 +1,17 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Docker PerfectWORK Configuration Container"
+    echo "./cs_docker [host] [function] [Container Information]"
+    echo ""
+    echo "[./cs_docker sg01 perfectwork US01_SYNER_US01DB"
+    echo ""
+else
+    echo "Setting Docker Container for System :  $1 "
+    if [ -z "$3" ];
+    then
+        ansible-playbook -l $1 ./ansible/docker_$2.yaml
+    else
+        ansible-playbook -l $1 ./ansible/docker_$2.yaml --extra-vars "@./containers/$3.yaml" 
+    echo ""
+    fi
+fi

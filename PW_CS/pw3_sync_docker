@@ -1,0 +1,7 @@
+echo "Start Building Files to Sync to Docker"
+rsync -avzhe --delete --exclude  '.*' /Users/wsloh/pw/PW.3.0/  ./PW
+mv ./PW/odoo/addons/* ./PW/addons/
+rm -rf ./PW/odoo/addons
+mv ./PW/addons ./PW/odoo/
+rsync -avzhe "ssh -p22"  --delete --exclude  '.*'  ./PW/odoo/ root@sg06.synercatalyst.com:/var/lib/perfectwork/PW.3.0
+rm -rf ./PW

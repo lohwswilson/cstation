@@ -1,0 +1,23 @@
+if [ -z "$1" ];
+then
+    echo "Please provide hostname to sync development environment"
+    echo "Inclusive of PW_CS (Control Station) environment"
+    echo
+    echo "[host] -> host, group of hosts ( from inventory definition )"
+    echo
+    echo "./cs_rsync_dev_local_to_server [host] [version] [port]"
+    echo "./cs_rsync_dev_local_to_server sg01 4.0 8288"
+    echo
+else
+    echo "Start Sync perfectWORK $2 Development to server $1"
+    echo "------------------------------------------------"
+    echo "Sync PW $2 directories to $1"
+    rsync -avzhe "ssh -p$3"  --delete  --exclude .git /opt/PW/PW_CS/   root@$1.ansis.com.sg:/opt/PW/PW_CS
+    rsync -avzhe "ssh -p$3"  --delete  --exclude .git /opt/PW/documentation/   root@$1.ansis.com.sg:/opt/PW/documentation
+    rsync -avzhe "ssh -p$3"  --delete  --exclude .git /opt/PW/PW.$2/   root@$1.ansis.com.sg:/opt/PW/PW.$2
+    rsync -avzhe "ssh -p$3"  --delete  --exclude .git /opt/PW/PW_ADDONS.$2/   root@$1.ansis.com.sg:/opt/PW/PW_ADDONS.$2
+    # echo "-------------------------------------------------"
+    # echo "Sync all ansible codes to US01"
+    # rsync -avzhe "ssh -p$3"  --delete --exclude  '.*' /opt/PW_CS/   root@$1.synercatalyst.com:/opt/PW_CS
+    echo "Done - /opt/PW_CS will be installed via git command"
+fi

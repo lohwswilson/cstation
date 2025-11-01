@@ -1,0 +1,35 @@
+---
+    - hosts: all
+      become: yes
+      
+      tasks:
+        - name: Configure {{ docker_PW_network }} Network for Docker Container
+          docker_network:
+            name: "{{ docker_PW_network }}"
+  
+        - name: Configure {{inventory_hostname}} Jupyter Engine Container
+          docker_container:
+            name: "{{ JP_container_name }}"
+            image: "{{ JP_docker_image }}" # From hosts/main.yaml
+            state: started
+            restart_policy: always
+            restart: yes
+            user: "root"
+            volumes:
+                - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/notebook:/home/perfectwork"
+            networks:
+                - name: PW_NET
+            networks_cli_compatible: yes
+            ports:
+                - "{{ JP_port }}:8888" 
+            env:
+                NB_USER: "perfectwork"  
+                NB_UID: '101' 
+                HOME: '/home/perfectwork'
+                JUPYTER_TOKEN: 'abc'
+
+        - name: Change file permission for the "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/notebook:/home/perfectwork"
+          command: "{{ item }}"
+          with_items:
+            - chown -R 101:102 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/notebook
+            - chmod -R 766 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ PW_container_name }}/notebook

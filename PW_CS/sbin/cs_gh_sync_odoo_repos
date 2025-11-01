@@ -1,0 +1,10 @@
+gh repo sync willylohws/odoo -b 13.0
+gh repo sync willylohws/enterprise -b 13.0
+gh repo sync willylohws/odoo -b 14.0
+gh repo sync willylohws/enterprise -b 14.0
+gh repo sync willylohws/odoo -b 15.0
+gh repo sync willylohws/enterprise -b 15.0
+gh repo sync willylohws/odoo -b 16.0
+gh repo sync willylohws/enterprise -b 16.0
+gh repo sync willylohws/documentation -b 16.0
+gh repo sync willylohws/Flowise -b main

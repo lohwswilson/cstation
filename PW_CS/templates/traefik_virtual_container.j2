@@ -1,0 +1,11 @@
+http:
+  # Add the router
+  routers:
+    {{ virtual_host | replace('.','_') }}:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ container_name }}@docker
+      rule: Host(`{{ virtual_host }}`)
+      tls:
+        certResolver: le_resolver

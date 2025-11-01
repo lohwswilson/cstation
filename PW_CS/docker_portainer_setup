@@ -1,0 +1,12 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Portainer Container"
+    echo "./portainer_setup_host [inventory]"
+    echo ""
+    echo "[inventory] -> host, group of hosts"
+    echo ""
+else
+    echo "Setting Docker Database Container on $1 "
+    ansible-playbook ./ansible/docker_portainer_setup.yaml --limit $1
+    echo ""
+fi

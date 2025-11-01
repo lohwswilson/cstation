@@ -1,0 +1,12 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Docker PerfectWORK Configuration Container"
+    echo "./perfectwork_setup host [Container Information]"
+    echo ""
+    echo "[./perfectwork_setup US01 US01_PW3_US01DB"
+    echo ""
+else
+    echo "Setting Docker PerfectWORK Container for System :  $1 "
+    ansible-playbook ./ansible/docker_perfectwork_setup.yaml --extra-vars "@./$1/$2.yaml" 
+    echo ""
+fi

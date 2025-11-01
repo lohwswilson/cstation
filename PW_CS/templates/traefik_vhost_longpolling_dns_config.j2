@@ -1,0 +1,16 @@
+http:
+  # Add the router
+  routers:
+    {{ virtual_host }}_longpolling:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ virtual_host }}_longpolling_service
+      rule: Path(`/longpolling/poll`) && Host(`{{ virtual_host }}`)
+      tls:
+        certResolver: le_dns_resolver
+  services:
+    {{ virtual_host }}_longpolling_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{ virtual_host }}:{{ virtual_polling_port }}"

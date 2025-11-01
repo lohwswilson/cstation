@@ -1,0 +1,10 @@
+echo "Creating SSH Key for Control Station ... "
+echo ""
+echo "Store the key at the user home directory "
+cd
+ssh-keygen -t rsa
+cd /opt/PW_CS/pw_sys_sbin
+echo ""
+echo "NEXT STEP --> Setup Remote Host with SSH Key from Control Station"
+echo "EXECUTE COMMAND ->  ./03.control_station_setup_remote_host_with_SSH [remote_login] [SSH port]"
+echo ""

@@ -1,0 +1,42 @@
+version: '2.1'
+
+services:
+  nginx-mailcow:
+    expose:
+      - 8088
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nginx-mailcow.entrypoints=web
+      - traefik.http.routers.nginx-mailcow.entrypoints=websecure
+      - traefik.http.routers.nginx-mailcow.rule=HostRegexp(`{host:(autodiscover|autoconfig|webmail|mail|email).+}`)
+      - traefik.http.routers.nginx-mailcow.rule=Host(`${MAILCOW_HOSTNAME}`)
+      - traefik.http.routers.nginx-mailcow.tls=true
+      - traefik.http.routers.nginx-mailcow.tls.certresolver=le_resolver
+      # Uncomment to use wildcard cert:
+      # - traefik.http.routers.nginx-mailcow.tls.domains[0].main=example.com
+      # - traefik.http.routers.nginx-mailcow.tls.domains[0].sans=*.example.com
+      - traefik.http.routers.nginx-mailcow.service=nginx-mailcow
+      - traefik.http.services.nginx-mailcow.loadbalancer.server.port=8088
+      - traefik.docker.network=PW_NET
+    networks:
+      - PW_NET
+
+
+  certdumper:
+      image: humenius/traefik-certs-dumper
+      network_mode: none
+      command: --restart-containers mailcow_postfix-mailcow_1,mailcow_dovecot-mailcow_1,mailcow_nginx-mailcow_1
+      volumes:
+        - /var/lib/perfectwork/US01/CONTAINERS/US01_TRAEFIK/letsencrypt:/traefik:ro
+        - /var/run/docker.sock:/var/run/docker.sock:ro
+        - ./data/assets/ssl:/output:rw
+      environment:
+        - DOMAIN=${MAILCOW_HOSTNAME}
+        # If using wildcard certs instead of an explicit host cert,
+        # use following line instead with just the TLD so certdumper
+        # is able to find the cert.
+        # - DOMAIN=YourDomain.com
+
+networks:
+  PW_NET:
+    external: true

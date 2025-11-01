@@ -1,0 +1,35 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      #- name: Create {{ docker_PW_network }} network
+        # docker_network:
+        #  name: "{{ docker_PW_network}}"
+
+          # Prepare the PW Configuration file
+    
+      # Create the Docker Container for Application
+      - name: Configure NGINX for Caryllynch Container
+        docker_container:
+          name: CARYLLYNCH
+          image: nginx
+          state: started
+          restart: yes
+          restart_policy: always
+          volumes:
+              - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/CARYLLYNCH:/usr/share/nginx/html"
+          ports:
+              - 3391:80
+          env:
+              NGINX_HOST: caryllynch.com
+              NGINX_PORT: '80'
+          labels:
+              traefik.enable=true
+              traefik.http.routers.CARYLLYNCH.rule=Host(`caryllynch.com`)
+              traefik.http.routers.CARYLLYNCH.tls=true
+              traefik.http.routers.CARYLLYNCH.tls.certresolver=le_resolver
+              traefik.http.routers.CARYLLYNCH.service=CARYLLYNCH   
+              traefik.http.services.CARYLLYNCH.loadbalancer.server.port=80   
+              traefik.http.middlewares.CARYLLYNCH.compress=true
+  

@@ -1,0 +1,77 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      - name: Create PW_NET network
+        docker_network:
+          name: PW_NET
+
+      # - name: Install Both CAdvisor and NodeExporter Containers for Prometheus 
+      #  command: "{{ item }}"
+      #  with_items: 
+      #        - docker run -d --volume=/:/rootfs:ro --volume=/var/run:/var/run:ro --volume=/sys:/sys:ro --volume=/var/lib/docker/:/var/lib/docker:ro --volume=/dev/disk/:/dev/disk:ro --publish=8080:8080 --name={{ inventory_hostname|upper}}_CADVISOR google/cadvisor:latest
+      #        - docker run -d --name {{ inventory_hostname|upper}}_NODE_EXPORTER -p 9100:9100 prom/node-exporter
+
+      - name: Install CAdvisor Containers for Prometheus 
+        docker_container:
+          name: "{{ inventory_hostname|upper}}_CADVISOR"
+          image: google/cadvisor:latest
+          state: started
+          restart: yes
+          restart_policy: always
+          ports:
+            - 8080:8080
+          volumes:
+            - "/:/rootfs:ro"
+            - "/var/run:/var/run:ro"
+            - "/sys:/sys:ro"
+            - "/var/lib/docker/:/var/lib/docker:ro"
+            - "/dev/disk/:/dev/disk:ro"
+
+      - name: Install NodeExporter Containers for Prometheus 
+        docker_container:
+          name: "{{ inventory_hostname|upper}}_NODE_EXPORTER"
+          image: prom/node-exporter
+          state: started
+          restart: yes
+          restart_policy: always
+          ports:
+            - 9100:9100
+
+      - name: Configure PROMETHEUS Event Monitoring Container
+        docker_container:
+          name: "{{ inventory_hostname|upper }}_PROMETHEUS"
+          image: prom/prometheus
+          state: started
+          restart: yes
+          restart_policy: always
+          command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=5d'
+            - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+            - '--web.console.templates=/usr/share/prometheus/consoles'
+          volumes:
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_PROMETHEUS/etc/prometheus/:/etc/prometheus/"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_PROMETHEUS/data:/prometheus"           
+          ports:
+              - 9090:9090
+          user: root
+          networks:
+              - name: PW_NET
+          networks_cli_compatible: yes
+          labels:
+              traefik.enable=true
+              traefik.http.routers.{{ inventory_hostname|upper }}_PROMETHEUS.tls.certresolver=le_resolver
+              traefik.http.routers.{{ inventory_hostname|upper }}_PROMETHEUS.rule=Host(`prometheus.synercatalyst.com`)
+              traefik.http.routers.{{ inventory_hostname|upper }}_PROMETHEUS.service={{ inventory_hostname|upper }}_PROMETHEUS
+              traefik.http.services.{{ inventory_hostname|upper }}_PROMETHEUS.loadbalancer.server.port=9090
+        
+      - name: Change file permission for the "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_PROMETHEUS"
+        command: "{{ item }}"
+        with_items:
+            - chmod -R 766 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_PROMETHEUS
+
+
+           

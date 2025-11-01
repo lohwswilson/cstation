@@ -1,0 +1,35 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      #- name: Create {{ docker_PW_network }} network
+        # docker_network:
+        #  name: "{{ docker_PW_network}}"
+
+          # Prepare the PW Configuration file
+    
+      # Create the Docker Container for Application
+      - name: Configure NGINX for PW Documentation Container
+        docker_container:
+          name: PW_DOCS
+          image: nginx:latest
+          state: started
+          restart: yes
+          restart_policy: always
+          volumes:
+              - "/opt/PW/documentation/_build/html:/usr/share/nginx/html"
+          ports:
+              - 3399:80
+          env:
+              NGINX_HOST: docs.perfectwork.app
+              NGINX_PORT: '80'
+          labels:
+              traefik.enable=true
+              traefik.http.routers.PW_DOCS.rule=Host(`docs.perfectwork.app`)
+              traefik.http.routers.PW_DOCS.tls=true
+              traefik.http.routers.PW_DOCS.tls.certresolver=le_resolver
+              traefik.http.routers.PW_DOCS.service=PW_DOCS   
+              traefik.http.services.PW_DOCS.loadbalancer.server.port=80   
+              traefik.http.middlewares.PW_DOCS.compress=true
+  

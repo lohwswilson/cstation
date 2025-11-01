@@ -1,0 +1,28 @@
+if [ -z "$1" ];
+then
+    echo "Please provide hostname and version for syncing PW and  PW_ADDONS files to DB Server"
+    echo "This is only for Cluster Setup"
+    echo
+    echo "./cs_rsync_pw_and_addons [host] [version] [port]"
+    echo "./cs_rsync_pw_and_addons sg07-db 3.0 8288"
+    echo ""
+    echo "[host] -> host, group of hosts ( from inventory definition )"
+    echo "[version] -> 3.0 - PW.3.0,  4.0 - PW.4.0, 5.0 - PW.5.0, 6.0 - PW.6.0 "
+    echo "[port] -> 22 or 8288"
+    echo ""
+else
+    echo "Start Building Files to Sync to Docker"
+    rm -rf ./PW.$2
+    rsync -avzhe --delete --exclude  '.*' /opt/PW/PW.$2/  ./PW.$2
+    mv ./PW.$2/odoo/addons/* ./PW.$2/addons/
+    rm -rf ./PW.$2/odoo/addons
+    mv ./PW.$2/addons ./PW.$2/odoo/
+    find ./ -name __pycache__ -type d -exec rm -rf {} + 
+    echo "Syncing PW.$2 files to Server: $1.ansis.com.sg"
+    rsync -avzhe "ssh -p$3"  --delete --exclude  '.*'  ./PW.$2/odoo/ root@$1.ansis.com.sg:/var/lib/perfectwork/PW.$2
+    echo "Clearing $2 ... "
+    rm -rf ./PW.$2
+    echo "Syncing PW_ADDONS.$2 to server $1.ansis.com.sg"
+    find /opt/PW/PW_ADDONS.$2/ -name __pycache__ -type d -exec rm -rf {} + 
+    rsync -avzhe "ssh -p$3"  --copy-links --delete --exclude  '.*' /opt/PW/PW_ADDONS.$2/   root@$1.ansis.com.sg:/var/lib/perfectwork/PW_ADDONS.$2
+fi

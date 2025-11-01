@@ -1,0 +1,13 @@
+---
+    - hosts: all
+      become: yes
+  
+      tasks:
+
+        - name: Prepare PW Configuration File - /var/lib/odoo/pw.conf
+          template:
+            src: /opt/PW/PW_CS/templates/traefik_swarm.j2
+            dest: /var/lib/perfectwork/traefik_swarm.yaml
+            owner: '101'
+            group: '102'
+            mode: '0755'

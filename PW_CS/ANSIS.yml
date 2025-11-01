@@ -1,0 +1,40 @@
+ANSIS_SGP:
+  vars:
+    ansible_user: root
+    ansible_python_interpreter: /usr/bin/python3
+    # PostgreSQL Configuration
+    postgresql:
+      db_admin: "postgres"
+      db_password: "{{ vault_postgresql_password }}"
+      port: 1488
+    # Docker Configuration
+    docker:
+      network: "odoo_pw_network"
+  hosts:
+    sg05:
+      ansible_host: sg05.ansis.com.sg
+      traefik_container: SG05_TRAEFIK
+      portainer_container: SG05_PORTAINER
+      postgresql_container: SG05DB
+      postgresql:
+        docker_image: "postgres:16"
+        config_file: "postgresql.auto.conf_16GB.j2"
+    sg06:
+      ansible_host: sg06.ansis.com.sg
+      traefik_container: SG06_TRAEFIK
+      portainer_container: SG06_PORTAINER
+      postgresql_container: SG06DB
+      postgresql:
+        docker_image: "postgres:16"
+        config_file: "postgresql.auto.conf_16GB.j2"
+    de01:
+      ansible_host: de01.ansis.com.sg
+      traefik_container: DE01_TRAEFIK
+      portainer_container: DE01_PORTAINER
+      postgresql:
+        container_name: "DE01_DB"
+        docker_image: "postgres:16"
+        config_file: "postgresql.auto.conf_8GB_arm64.j2"
+        data_dir: "/var/lib/postgresql/DE01_DB/data"
+        config_dir: "/etc/postgresql/DE01_DB/"
+        db_password: "wai39kua"

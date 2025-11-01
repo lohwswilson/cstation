@@ -1,0 +1,14 @@
+---
+    # Define the customer information / configurations
+    #
+    #
+    
+    # Host Information
+
+    db_host: sg06db.synercatalyst.com
+    db_container_name: SG06DB_DB
+    postgresql_docker_image : postgres:14
+    postgresql_port: 1488
+    postgresql_db_admin: postgres
+    postgresql_db_password: wai39kua  # Password suffix
+    

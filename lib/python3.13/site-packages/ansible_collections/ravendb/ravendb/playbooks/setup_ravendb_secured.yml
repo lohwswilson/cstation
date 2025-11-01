@@ -1,0 +1,11 @@
+---
+- hosts: all
+  remote_user: root
+  roles:
+    - role: ravendb.ravendb.ravendb_node
+      vars:
+        ravendb_state: present
+        ravendb_version_minor: 6.2 #last stable
+        ravendb_secured_enabled: true
+        ravendb_license_file: "/home/user/security/license.json"
+        ravendb_setup_package: "/home/user/security/setup_package.zip"

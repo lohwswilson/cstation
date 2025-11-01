@@ -1,0 +1,46 @@
+SYC_USA:
+  hosts:
+    us01:
+      ansible_host: us01.synercatalyst.com
+      ansible_port: 8288
+      ansible_user: root
+      # Docker Configuration
+      docker:
+        network: "PW_NET"
+SYC_SGP:
+  vars:
+    ansible_user: root
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_port: 8288
+    # PostgreSQL Configuration
+    postgresql:
+      db_admin: "postgres"
+      db_password: "{{ vault_postgresql_password }}"
+      port: 1488
+    # Docker Configuration
+    docker:
+      network: "PW_NET"
+  hosts:
+    sg01:
+      ansible_host: sg01.synercatalyst.com
+      traefik_container: SG01_TRAEFIK
+      portainer_container: SG01_PORTAINER
+      postgresql_container: SG01_DB
+      traefik_pilot_token: '{{ vault_traefik_pilot_token_sg01 }}'
+      postgresql:
+        docker_image: "postgres:14"
+        version: 14
+    sg02:
+      ansible_host: sg02.synercatalyst.com
+      traefik_container: SG02_TRAEFIK
+      portainer_container: SG02_PORTAINER
+      postgresql_container: SG02_DB
+      traefik_pilot_token: '{{ vault_traefik_pilot_token_sg02 }}'
+      postgresql_docker_image: postgres:12
+    sg04:
+      ansible_host: sg04.synercatalyst.com
+      traefik_container: SG04_TRAEFIK
+      portainer_container: SG04_PORTAINER
+      postgresql_container: SG04_DB
+      postgresql_docker_image: postgres:15
+      postgresql_config_file: postgresql.auto.conf_16GB.j2

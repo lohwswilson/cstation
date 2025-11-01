@@ -1,0 +1,32 @@
+---
+    - name: Configure PgAdmin Container
+      hosts: all
+      become: true
+      
+      tasks:
+        
+        - name: Configure {{ inventory_hostname }} PgAdmin Container
+          docker_container:
+            name: "{{ inventory_hostname|upper }}_PGADMIN"
+            image: dpage/pgadmin4:latest # From hosts/main.yaml
+            state: started
+            restart_policy: always
+            restart: yes
+            volumes:
+                - /var/lib/perfectwork/{{ inventory_hostname|upper }}/DB/{{ inventory_hostname|upper }}_PGADMIN:/var/lib/pgadmin
+                - /tmp/servers.json:/pgadmin4/servers.json
+            networks:
+                - name: PW_NET
+            networks_cli_compatible: yes
+            ports:
+                - "5050:80"  # Using Port 5050
+            env:
+                PGADMIN_DEFAULT_EMAIL: pgadmin@synercatalyst.com  # From hosts/main.yaml
+                PGADMIN_DEFAULT_PASSWORD: Wengseng1@  # From hosts/main.yaml
+            labels:
+                traefik.enable=true
+                traefik.http.routers.{{ inventory_hostname|upper }}_PGADMIN.tls.certresolver=le_resolver
+                traefik.http.routers.{{ inventory_hostname|upper }}_PGADMIN.rule=Host(`pgadmin.synercatalyst.com`)
+                traefik.http.routers.{{ inventory_hostname|upper }}_PGADMIN.service={{ inventory_hostname|upper }}_PGADMIN
+                traefik.http.services.{{ inventory_hostname|upper }}_PGADMIN.loadbalancer.server.port=80            
+       

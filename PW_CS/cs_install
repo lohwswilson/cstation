@@ -1,0 +1,14 @@
+# Set the right parameters for Mac
+# Echo " Setting maxfile parameters for Mac "
+# sudo launchctl limit maxfiles unlimited
+
+# Install Ansible Control Station
+echo ""
+echo "Installing Ansible Control Station ....."
+echo ""
+pip3 install --upgrade ansible
+pip3 install --upgrade paramiko
+echo ""
+echo "NEXT STEP -> Create SSH Key at Control Station ( One Time Only )"
+echo "EXECUTE COMMAND ->  ./02.control_station_create_SSH_key"
+echo ""

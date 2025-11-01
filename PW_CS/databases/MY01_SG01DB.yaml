@@ -1,0 +1,38 @@
+---
+    # Define the customer information / configurations
+    #
+    #
+    
+    # Host Information
+
+    db_host: my01.synercatalyst.com
+    db_container_name: MY01_SG01DB
+    postgresql_docker_image : postgres:12
+    postgresql_port: 1488
+    postgresql_db_admin: postgres
+    postgresql_db_password: wai39kua  # Password suffix
+
+    # Replication user setup @ Master DB Server
+    #
+    #  su - postgres
+    #  createuser --replication -P -e replicator 
+    #  
+    master_database_server: SG01DB
+    slave_database_server: MY01_SG01DB
+    postgresql_replication_user: replicator
+    postgresql_replication_password: Asdf1234!
+
+    # Insert the pg_hba.conf @ master server to allow replication to slave server
+    #
+    #   host    replication     replicator      [slave_server_ip_address]/24     md5 
+    #
+    # After this need to enable 1488 port for DB connection
+
+
+    # Then on Standby server
+    #
+    # Stop the postgresql database
+    #
+    # remove all data in the /var/lib/postgresql/data
+    # 
+    

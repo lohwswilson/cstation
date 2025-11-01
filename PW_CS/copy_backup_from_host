@@ -1,0 +1,1 @@
+scp -P 8288 root@sg02.synercatalyst.com:/var/lib/perfectwork/SG02/CONTAINERS/SG02_AIM_SG02DB/backups/2020_07_04_13_40_07_aim.zip ./

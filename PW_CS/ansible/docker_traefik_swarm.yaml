@@ -1,0 +1,86 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      - name: Create Traefik labels's dictionary
+        set_fact:
+          my_labels: "{{ my_labels | default({}) | combine ({ item.key : item.value }) }}"
+        with_items:   
+          - { 'key': 'traefik.enable' , 'value': 'true'}
+          - { 'key': 'traefik.http.routers.{{ inventory_hostname|upper }}_TRAEFIK.service=' , 'value': '{{ inventory_hostname|upper }}_TRAEFIK'}
+          - { 'key': 'traefik.http.services.{{ inventory_hostname|upper }}_TRAEFIK.loadbalancer.server.port' , 'value': '8080'}
+          - { 'key': 'traefik.http.middlewares.{{ inventory_hostname|upper }}_TRAEFIK.compress' , 'value': 'true'}     
+  
+      - name: Configure TRAEFIK Reverse-Proxy Container for Docker Swarm
+        community.general.docker_swarm_service:
+          name: "{{ inventory_hostname|upper }}_TRAEFIK"
+          image: traefik:latest
+          state: present
+          restart_config:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 120s
+          replicas: 1
+          command:
+            - --api.insecure=true
+            - --entryPoints.web.address=:80
+            - --entryPoints.websecure.address=:443
+            - --entrypoints.web.http.redirections.entryPoint.to=websecure
+            - --entrypoints.web.http.redirections.entryPoint.scheme=https
+            - --serversTransport.forwardingTimeouts.dialTimeout=5s
+            - --providers.file.directory=/etc/traefik/conf
+            - --providers.file.watch=true
+            - --metrics.prometheus=true
+            - --metrics.prometheus.addEntryPointsLabels=true
+            - --metrics.prometheus.addServicesLabels=true
+            - --metrics.prometheus.buckets=0.1,0.3,1.2,5.0
+            - --providers.docker
+            - --providers.docker.watch
+            - --providers.docker.swarmMode=true
+            - --providers.docker.swarmModeRefreshSeconds=15s
+            - --providers.docker.exposedbydefault=false
+            - --certificatesresolvers.le_resolver.acme.tlschallenge=true
+            - --certificatesresolvers.le_resolver.acme.email=info@perfectwork.app
+            - --certificatesresolvers.le_resolver.acme.storage=/letsencrypt/acme.json
+            - --certificatesresolvers.le_dns_resolver.acme.dnschallenge=true
+            - --certificatesresolvers.le_dns_resolver.acme.dnschallenge.provider=cloudflare
+            - --certificatesresolvers.le_dns_resolver.acme.dnschallenge.delaybeforecheck=15
+            - --certificatesResolvers.le_dns_resolver.acme.dnsChallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+            - --certificatesresolvers.le_dns_resolver.acme.email=info@perfectwork.app
+            - --certificatesresolvers.le_dns_resolver.acme.storage=/letsencrypt/acme_dns.json
+            # middleware redirect
+            - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+            # global redirect to https
+            - traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)
+            - traefik.http.routers.redirs.entrypoints=web
+            - traefik.http.routers.redirs.middlewares=redirect-to-https
+          mounts:
+            - source: /var/run/docker.sock
+              target: /var/run/docker.sock:ro
+              type: bind
+            - source: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK
+              target: /etc/traefik
+              type: bind
+            - source: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/letsencrypt
+              target: /letsencrypt
+              type: bind
+            - source: /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_TRAEFIK/conf
+              target: /conf
+              type: bind
+          publish:
+            - published_port : "80"
+              target_port: "80"
+            - published_port : "443"
+              target_port: "443"
+            - published_port : "5000"
+              target_port: "5000"
+          env:
+            DHPARAM_GENERATION: 'false'
+            CF_API_EMAIL: syner.catalyst@gmail.com
+            CF_API_KEY: 923abedd02920ce74104a899309bec1434d0c    
+          labels: "{{ my_labels }}"
+          
+    
+  

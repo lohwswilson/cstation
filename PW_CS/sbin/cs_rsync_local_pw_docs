@@ -1,0 +1,14 @@
+if [ -z "$1" ];
+then
+    echo
+    echo "./cs_rsync_local_pw_docs [host] [port]"
+    echo "./cs_rsync_local_pw_and_addons us01 8288"
+    echo ""
+    echo "[host] -> host, group of hosts ( from inventory definition )"
+    echo "[port] -> SSH port for the server"
+    echo ""
+else
+    echo "Syncing files to Server: $1.synercatalyst.com"
+    rsync -avzhe "ssh -p$2"  --delete --exclude  '.*'  /opt/PW/documentation/ root@$1.synercatalyst.com:/opt/PW/documentation/
+    echo " Complete Syncing..."
+fi

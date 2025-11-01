@@ -1,0 +1,126 @@
+#! /usr/local/bin/ansible-playbook
+---
+  - hosts: all
+    become: true
+    
+    tasks:
+      # Create machine for provision
+      # Install all the packages
+      - name: Update apt-get repo and cache
+        apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+      - name: Upgrade all apt packages
+        apt: upgrade=dist force_apt_get=yes
+
+      - name: Check if a reboot is needed for Debian and Ubuntu boxes
+        register: reboot_required_file
+        stat: path=/var/run/reboot-required 
+
+      - name: Reboot the Debian or Ubuntu server
+        reboot:
+          msg: "Reboot initiated by Ansible due to kernel updates"
+          connect_timeout: 5
+          reboot_timeout: 300
+          pre_reboot_delay: 0
+          post_reboot_delay: 30
+          test_command: uptime
+        when: reboot_required_file.stat.exists
+
+      - name: Prepare the system packages for the installation
+        apt:
+          name: "{{ packages }}"
+          state: latest
+        vars:
+          packages:
+            - python3
+            - python3-pip
+            - wget
+            - ufw
+            - rsync
+
+      # - name: Prepare the system packages - {{ packages }} for the installation
+      #   pip:
+      #     name: "{{ packages }}"
+      #   vars:
+      #     packages:
+      #       - docker
+      #       - psycopg2-binary
+      
+      - name: Allow all access from RFC1918 networks to this host
+        ufw:
+          rule: allow
+          port: '{{ item }}'
+        loop:
+          - '8288'
+          - '9090'
+          - '9000'
+          - '9100'
+          - '8080'
+          - '2375'
+          - '2376'
+          - '2377'
+          - '80'
+          - '443'
+
+      - name: Restart_ufw
+        service:
+          name: ufw
+          state: restarted
+
+      # - name: Setup alternate SSH port
+      #   lineinfile:
+      #     dest: "/etc/ssh/sshd_config"
+      #     regexp: "^Port"
+      #     line: "Port 8288"
+      #   notify: "Restart_sshd"
+ 
+      # This portion of docker enginer and docker-compose installation need checking
+    #   - name: Install docker packages
+    #     apt:
+    #       name: ['apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common']
+    #       state: present
+    #       update_cache: yes
+    #     tags:
+    #       - docker
+
+    #   - name: Add Docker s official GPG key
+    #     apt_key:
+    #       url: https://download.docker.com/linux/ubuntu/gpg
+    #       state: present
+    #     tags:
+    #       - docker
+
+    #   - name: Verify that we have the key with the fingerprint
+    #     apt_key:
+    #       id: 0EBFCD88
+    #       state: present
+    #     tags:
+    #       - docker
+
+    #   - name: Set up the stable repository
+    #     apt_repository:
+    #       repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+    #       state: present
+    #       update_cache: yes
+    #     tags:
+    #       - docker
+
+    #   - name: Update apt packages
+    #     apt:
+    #       update_cache: yes
+    #     tags:
+    #       - docker
+
+    #   - name: Install docker
+    #     apt:
+    #       name: ['docker-ce','docker-compose','docker-ce-cli', 'containerd.io']
+    #       state: present
+    #       update_cache: yes
+    #     tags:
+    #       - docker
+      
+    # handlers:
+    #   - name: Restart_sshd
+    #     service:
+    #       name: sshd
+    #       state: restarted

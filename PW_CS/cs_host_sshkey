@@ -1,0 +1,15 @@
+if [ -z "$1" ];
+then
+    echo "Please enter the remote login and remote ssh port"
+    echo "./cs_host_sshkey  [remote_login]  [SSH port]"
+    echo "./cs_host_sshkey root@sg01.synercatalyst.com 8288"
+else
+    # STEP 1 : Login to client with user ( wsloh ) and generate a pair of public keys if you have not done so
+    # ssh-keygen -t rsa
+    #
+    # STEP 2 : Upload the public key from client to server
+    ssh-copy-id -p $2 $1 
+    #
+    # STEP 3 : Can test the remote login without password
+    cat ~/.ssh/id_rsa.pub | ssh $1 -p $2  'cat >> .ssh/authorized_keys'
+fi

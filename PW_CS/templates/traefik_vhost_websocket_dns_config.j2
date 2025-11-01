@@ -1,0 +1,16 @@
+http:
+  # Add the router
+  routers:
+    {{ virtual_host }}_websocket:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ virtual_host }}_websocket_service
+      rule: Path(`/websocket`) && Host(`{{ virtual_host }}`)
+      tls:
+        certResolver: le_dns_resolver
+  services:
+    {{ virtual_host }}_websocket_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{ virtual_host }}:{{ virtual_polling_port }}"

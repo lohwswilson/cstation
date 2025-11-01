@@ -1,0 +1,39 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      - name: Create PW_NET network
+        docker_network:
+          name: PW_NET
+
+      - name: Configure GRAFANA Data Visualization Container
+        docker_container:
+          name: "{{ inventory_hostname|upper }}_GRAFANA"
+          image: grafana/grafana
+          state: started
+          restart: yes
+          restart_policy: always
+          volumes:
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_GRAFANA/etc/grafana/:/etc/grafana/"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_GRAFANA/data:/var/lib/grafana/"           
+          networks:
+              - name: PW_NET
+          env:
+            GF_SECURITY_ADMIN_PASSWORD: Wengseng1@
+            GF_INSTALL_PLUGINS: grafana-piechart-panel
+            GF_PATHS_PROVISIONING: /var/lib/grafana/provisioning
+          user: "104"
+          networks_cli_compatible: yes
+          labels:
+              traefik.enable=true
+              traefik.http.routers.{{ inventory_hostname|upper }}_GRAFANA.tls.certresolver=le_resolver
+              traefik.http.routers.{{ inventory_hostname|upper }}_GRAFANA.rule=Host(`grafana.synercatalyst.com`)
+              traefik.http.routers.{{ inventory_hostname|upper }}_GRAFANA.service={{ inventory_hostname|upper }}_GRAFANA
+              traefik.http.services.{{ inventory_hostname|upper }}_GRAFANA.loadbalancer.server.port=3000             
+        
+      - name: Change file permission for the "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_GRAFANA"
+        command: "{{ item }}"
+        with_items:
+            - chown -R 104:102 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_GRAFANA/
+            - chmod -R 777 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_GRAFANA/

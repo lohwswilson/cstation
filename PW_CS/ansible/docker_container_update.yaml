@@ -1,0 +1,40 @@
+#! /usr/local/bin/ansible-playbook
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+        #  Update PORTAINER to latest version
+        - name: Stop the Portainer Container {{ portainer_container }}
+          docker_container:
+            name: "{{ portainer_container }}"
+            state: stopped
+        
+        - name: Remove {{ portainer_container }} Portainer Container
+          docker_container:
+            name: "{{ portainer_container }}"
+            state: absent
+
+        - name: Remove Portainer image
+          docker_image:
+            state: absent
+            name: portainer/portainer:latest
+            tag: latest
+          
+        - name: Pull Portainer Latest Image
+          docker_image:
+            name: portainer/portainer:latest
+            source: pull
+
+        - name: Create Portainer Container 
+          docker_container:
+            name: "{{ portainer_container }}"
+            image: portainer/portainer:latest
+            state: started
+            ports:
+              - "8000:8000"
+              - "9000:9000"
+            volumes:
+              - /var/run/docker.sock:/var/run/docker.sock
+              - portainer_data:/data
+      

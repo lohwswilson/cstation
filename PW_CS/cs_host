@@ -1,0 +1,13 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Docker Container"
+    echo "./cs_host [host] function"
+    echo "./cs_host sg01 setup_do"
+    echo ""
+    echo "[host] -> host, group of hosts"
+    echo "[functions] -> ansible playbooks"
+    echo ""
+else
+    echo "Setting System on $1 "
+    ansible-playbook -l $1 ./ansible/host_$2.yaml 
+fi

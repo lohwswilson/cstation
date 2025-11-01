@@ -1,0 +1,17 @@
+http:
+  # Add the router
+  routers:
+    {{ virtual_host | replace('.','_') }}:
+      entryPoints:
+      - web
+      - websecure
+      service:  {{ virtual_host | replace('.','_') }}_link
+      rule: Host(`{{ virtual_host }}`)
+      tls:
+        certResolver: le_resolver
+  services:
+    {{ virtual_host | replace('.','_') }}_link:
+      loadBalancer:
+        servers:
+          -  url: "{{ container_name }}"
+

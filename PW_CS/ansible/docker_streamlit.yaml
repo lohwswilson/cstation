@@ -1,0 +1,30 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      - name: Create PW_NET network
+        docker_network:
+          name: PW_NET
+
+      # - name: Install Both CAdvisor and NodeExporter Containers for Prometheus 
+      #  command: "{{ item }}"
+      #  with_items: 
+      #        - docker run -d --volume=/:/rootfs:ro --volume=/var/run:/var/run:ro --volume=/sys:/sys:ro --volume=/var/lib/docker/:/var/lib/docker:ro --volume=/dev/disk/:/dev/disk:ro --publish=8080:8080 --name={{ inventory_hostname|upper}}_CADVISOR google/cadvisor:latest
+      #        - docker run -d --name {{ inventory_hostname|upper}}_NODE_EXPORTER -p 9100:9100 prom/node-exporter
+
+      - name: Install Streamlit Docker Container 
+        docker_container:
+          name: "{{ inventory_hostname|upper}}_STREAMLIT"
+          image: synercatalyst/streamlit:latest
+          state: started
+          restart: yes
+          restart_policy: always
+          ports:
+            - 8600:8501
+          env:
+              OPENAI_API_KEY: "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"
+          volumes:
+            - "/var/lib/LLM/{{ inventory_hostname|upper }}/CONTAINERS/STREAMLIT/app:/app"
+
+           

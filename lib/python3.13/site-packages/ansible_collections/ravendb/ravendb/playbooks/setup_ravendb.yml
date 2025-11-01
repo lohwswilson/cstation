@@ -1,0 +1,10 @@
+---
+- hosts: all
+  remote_user: root
+  roles:
+    - role: ravendb.ravendb.ravendb_node
+      vars:
+          ravendb_state: present
+          ravendb_version_minor: 6.2
+          ravendb_hostname: "{{ ansible_host }}"
+          ravendb_license_file: "license.json"

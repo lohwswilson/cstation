@@ -1,0 +1,52 @@
+http:
+    
+    middlewares:
+        pw_denyip:
+            plugin:
+                denyip:
+                    ipDenyList:
+                        - 127.0.0.1
+        pw_fail2ban:
+            plugin:
+                fail2ban:
+                    blacklist:
+                        ip:
+                            - 128.1.1.1
+                    rules:
+                        action: ""
+                        actionAbuseipdb: ""
+                        backend: ""
+                        banaction: ""
+                        banactionAllports: ""
+                        bantime: 2m
+                        chain: ""
+                        destemail: ""
+                        enabled: true
+                        fail2banAgent: ""
+                        filter: ""
+                        findtime: 10m
+                        ignorecommand: ""
+                        logencoding: UTF-8
+                        maxretry: 50
+                        mode: ""
+                        mta: ""
+                        ports: 0:8000
+                        protocol: ""
+                        sender: ""
+                        urlregexp: ""
+                        usedns: ""
+                    whitelist:
+                        ip:
+                            - ::1
+                            - 127.0.0.1
+
+        pw_inflight:
+            inFlightReq:
+                amount: 20 
+        pw_rate:
+            rateLimit:
+                average: 10
+                period: 1s
+                burst: 30
+    
+    

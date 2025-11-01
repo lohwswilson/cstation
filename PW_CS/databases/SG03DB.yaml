@@ -1,0 +1,14 @@
+---
+    # Define the customer information / configurations
+    #
+    #
+    
+    # Host Information
+
+    db_host: sg03.synercatalyst.com
+    db_container_name: SG03DB
+    postgresql_docker_image : postgres:12
+    postgresql_port: 1488
+    postgresql_db_admin: postgres
+    postgresql_db_password: wai39kua  # Password suffix
+    

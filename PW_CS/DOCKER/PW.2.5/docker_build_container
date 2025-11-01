@@ -1,0 +1,4 @@
+rsync -avr /Users/wsloh/PW/PW.3.0/ --files-from=/Users/wsloh/pw/DOCKER/PW.3.0/pw_docker_files /Users/wsloh/pw/DOCKER/PW.3.0/PW
+find . -name __pycache__ -type d -exec rm -rf {} +
+docker image build -t synercatalyst/perfectwork:3.0.0 .
+docker push synercatalyst/perfectwork:3.0.0

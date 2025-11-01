@@ -1,0 +1,7 @@
+---
+- hosts: all
+  remote_user: root
+  roles:
+    - role: ravendb.ravendb.ravendb_node
+      vars:
+        ravendb_state: absent

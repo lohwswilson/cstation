@@ -1,0 +1,6 @@
+- url: https://github.com/CybroOdoo/CybroAddons.git
+  branch: 13.0
+  includes:
+    - base_accounting_kit
+    - base_account_budget
+    - dynamic_accounts_report

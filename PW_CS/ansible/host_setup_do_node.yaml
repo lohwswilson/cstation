@@ -1,0 +1,77 @@
+#! /usr/local/bin/ansible-playbook
+---
+  - hosts: all
+    become: true
+    
+    tasks:
+      # Create machine for provision for Digital Ocean Droplet
+      # Install all the packages
+      
+      - name: Prepare the system packages for Digital Ocean Droplet installation
+        apt:
+          name: "{{ packages }}"
+          state: latest
+        vars:
+          packages:
+            - python3
+            - python3-pip
+            - nfs-common
+            - wget
+            - rsync
+          
+      - name: Prepare the system packages - {{ packages }} for the installation
+        pip:
+          name: "{{ packages }}"
+        vars:
+          packages:
+            - docker
+            - psycopg2-binary
+ 
+      
+      - name: Allow all access from RFC1918 networks to this host
+        ufw:
+          rule: allow
+          port: '{{ item }}'
+        loop:
+          - '8288'
+          - '9090'
+          - '9000'
+          - '9100'
+          - '8080'
+          - '2375'
+          - '2376'
+          - '2377'
+          - '7946'
+          - '4789'
+          - '80'
+          - '443'
+
+      - name: Restart_ufw
+        service:
+          name: ufw
+          state: restarted
+
+      - name: Prepare Docker Log Rotation - /etc/docker/daemon.json
+        template:
+          src: /opt/PW/PW_CS/templates/docker_daemon.json.j2
+          dest: /etc/docker/daemon.json
+          owner: 'root'
+          group: 'root'
+          mode: '0755'
+
+      # Prepare the mount directory for NFS Server
+      - name: Create a directory /var/lib/perfectwork/VOLUMES
+        file:
+          path: /var/lib/perfectwork/VOLUMES
+          state: directory
+          owner: nobody
+          group: nogroup
+          mode: '0755'
+
+      - name: Mount {{ PW_db_host }} -  NFS Server
+        mount:
+          src: "{{ PW_db_host }}:/var/lib/perfectwork/VOLUMES"
+          path: /var/lib/perfectwork/VOLUMES
+          opts: rw,sync,noatime,noacl,nocto
+          state: mounted
+          fstype: nfs

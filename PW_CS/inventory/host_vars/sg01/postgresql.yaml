@@ -1,0 +1,5 @@
+postgresql_docker_image : postgres:14
+postgresql_port: 1488
+postgresql_db_admin: postgres
+postgresql_db_password: wai39kua
+postgresql_config_file: postgresql.auto.conf_8GB.j2

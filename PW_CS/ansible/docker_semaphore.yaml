@@ -1,0 +1,45 @@
+---
+  - hosts: all
+    become: yes
+
+    tasks:
+      - name: Create PW_NET network
+        docker_network:
+          name: PW_NET
+
+      - name: Configure Ansible Semaphore Container
+        docker_container:
+          name: "{{ inventory_hostname|upper }}_SEMAPHORE"
+          image: semaphoreui/semaphore:latest
+          state: started
+          restart: yes
+          restart_policy: always
+          ports:
+            - 3500:3000
+          volumes:
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_SEMAPHORE/etc/semaphore/:/etc/semaphore/"
+            - "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_SEMAPHORE/lib/semaphore/:/var/lib/semaphore"
+            - "/opt/PW/PW_CS:/opt/PW/PW_CS"
+          networks:
+              - name: PW_NET
+          env:
+            SEMAPHORE_DB_DIALECT: bolt
+            SEMAPHORE_ADMIN_PASSWORD: Wengseng1@
+            SEMAPHORE_ADMIN_NAME: admin
+            SEMAPHORE_ADMIN_EMAIL: admin@localhost
+            SEMAPHORE_ADMIN: admin
+            SEMAPHORE_PLAYBOOK_PATH: /opt/PW/PW_CS/ansible
+          networks_cli_compatible: yes
+          labels:
+              traefik.enable=true
+              traefik.http.routers.{{ inventory_hostname|upper }}_SEMAPHORE.tls.certresolver=le_resolver
+              traefik.http.routers.{{ inventory_hostname|upper }}_SEMAPHORE.rule=Host(`semaphore.synercatalyst.com`)
+              traefik.http.routers.{{ inventory_hostname|upper }}_SEMAPHORE.service={{ inventory_hostname|upper }}_SEMAPHORE
+              traefik.http.services.{{ inventory_hostname|upper }}_SEMAPHORE.loadbalancer.server.port=3000             
+        
+      - name: Change file permission for the "/var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_SEMAPHORE"
+        command: "{{ item }}"
+        with_items:
+            - chown -R 104:102 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_SEMAPHORE/
+            - chmod -R 777 /var/lib/perfectwork/{{ inventory_hostname|upper }}/CONTAINERS/{{ inventory_hostname|upper }}_SEMAPHORE/
+            - chmod -R 777 /opt/PW/PW_CS

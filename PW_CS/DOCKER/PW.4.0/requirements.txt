@@ -1,0 +1,6 @@
+odooly
+pw_cli
+pw_zoomus
+paramiko
+pysftp
+tzlocal

@@ -1,0 +1,5 @@
+# Change some of the icons of the modules
+# cp -r /PW/addons/* /usr/lib/python3/dist-packages/odoo/addons
+# cp -r /PW/odoo/addons/* /usr/lib/python3/dist-packages/odoo/addons
+# rm -rf /PW/addons
+# rm -rf /PW/flectra

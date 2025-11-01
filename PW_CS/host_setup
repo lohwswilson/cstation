@@ -1,0 +1,17 @@
+if [ -z "$1" ];
+then
+    echo "Please provide inventory for setting up Docker Container"
+    echo "./hosts/setup_host [inventory]"
+    echo ""
+    echo "[inventory] -> host, group of hosts"
+    echo ""
+else
+    echo "Setting System on $1 "
+    ansible-playbook  ./ansible/host_setup.yaml --limit $1
+    # ansible-playbook ./ansible/hosts/setup_docker.yaml --limit $1
+    # echo "Installing all Docker Containers on $1 "
+    # ansible-playbook ./ansible/hosts/setup_docker_images.yaml --limit $1
+    # echo ""
+    #echo "Now your system portainer is up and running "
+    # echo "http://$1:9000/ "   
+fi

@@ -1,0 +1,40 @@
+http:
+  # Add the router
+  routers:
+    {{ PW_domain_name }}_longpolling:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ PW_domain_name }}_longpolling_service
+      rule: Host(`{{ PW_domain_name }}`) && PathPrefix(`/longpolling`)
+      tls:
+        certResolver: le_resolver
+    {{ PW_2_domain_name }}_longpolling:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ PW_2_domain_name }}_longpolling_service
+      rule: Host(`{{ PW_2_domain_name }}`) && PathPrefix(`/longpolling`)
+      tls:
+        certResolver: le_resolver
+    {{ PW_3_domain_name }}_longpolling:
+      entryPoints:
+      - web
+      - websecure
+      service: {{ PW_3_domain_name }}_longpolling_service
+      rule: Host(`{{ PW_3_domain_name }}`) && PathPrefix(`/longpolling`)
+      tls:
+        certResolver: le_resolver
+  services:
+    {{ PW_domain_name }}_longpolling_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{PW_domain_name}}:{{ PW_polling_port }}"
+    {{ PW_2_domain_name }}_longpolling_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{PW_2_domain_name}}:{{ PW_polling_port }}"
+    {{ PW_3_domain_name }}_longpolling_service:
+      loadBalancer:
+        servers:
+          -  url: "http://{{PW_3_domain_name}}:{{ PW_polling_port }}"
