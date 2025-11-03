@@ -174,7 +174,7 @@ After installation, your configuration will be organized as follows:
 │   ├── servers/             # Server software profiles
 │   └── containers/          # Container profiles
 ├── github/
-│   └── repos.sync.yml       # GitHub repository sync config
+│   └── odoo_repos.sync.yml       # GitHub repository sync config
 └── app/
     └── config.yml           # Application configuration
 ```

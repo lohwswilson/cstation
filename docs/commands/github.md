@@ -46,7 +46,7 @@ cstation github repo sync my-project
 
 All GitHub configurations are stored in `/etc/cstation/github/`:
 
-- `repos.sync.yml` - Repository configuration file
+- `odoo_repos.sync.yml` - Repository configuration file
 - `repos.yml.example` - Example configuration template
 
 ### Repository Configuration Format
@@ -89,7 +89,7 @@ repositories:
 
 ## Repository Management Options
 
-- `--config, -c`: Configuration file path (default: /etc/cstation/github/repos.sync.yml)
+- `--config, -c`: Configuration file path (default: /etc/cstation/github/odoo_repos.sync.yml)
 - `--directory, -d`: Target directory for cloning
 - `--user, -u`: GitHub username (overrides config)
 

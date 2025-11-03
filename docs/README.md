@@ -266,7 +266,7 @@ CStation uses the following configuration structure in the `/etc/cstation/` dire
     ├── 16.0.oca.yml        # GitHub repositories configuration
     ├── 17.0.oca.yml        # GitHub repositories configuration
     ├── 18.0.oca.yml        # GitHub repositories configuration
-    └── repos.sync.yml      # Repository sync configuration
+    └── odoo_repos.sync.yml      # Repository sync configuration
 ```
 
 ## Development

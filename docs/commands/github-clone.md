@@ -59,7 +59,7 @@ cstation github repo clone Muk --config /etc/cstation/github/18.0.oca.yml --dire
 
 ## Command Options
 
-- `--config, -c`: GitHub repositories configuration file (default: /etc/cstation/github/repos.sync.yml)
+- `--config, -c`: GitHub repositories configuration file (default: /etc/cstation/github/odoo_repos.sync.yml)
 - `--directory, -d`: Target directory for cloning (default: current directory)
 - `--user, -u`: GitHub username (will use config if not provided)
 - `--help`: Show help message
