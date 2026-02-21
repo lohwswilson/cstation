@@ -98,6 +98,45 @@ cstation server list --detail
 cstation server list -i /path/to/inventory.yml
 ```
 
+### `cstation server pw <subcommand>`
+
+PerfectWork (PW) file synchronization utilities are now available under the `server` namespace.
+
+Subcommands:
+- `sync` — Sync PW files to a remote server for Docker container access
+- `status` — Check whether PW files are available on a remote server
+- `clean` — Remove local temporary PW sync files
+
+Common options:
+- `--port, -p` — SSH port (default: 22; for clusters you may use 8288)
+- `--dry-run, -n` — Show what would be synced without executing
+- `--verbose, -v` — Enable verbose output
+- `--exclude-cache/--include-cache` — Exclude `__pycache__` directories (default: exclude)
+
+Examples:
+
+```bash
+# Sync PW 3.0 files to host sg07-db (cluster port 8288)
+cstation server pw sync sg07-db 3.0 --port 8288
+
+# Dry-run sync for PW 18.0 to production-server
+cstation server pw sync production-server 18.0 --dry-run
+
+# Verbose sync for PW 5.0 to dev-server
+cstation server pw sync dev-server 5.0 --verbose
+
+# Check status of PW 3.0 files on sg07-db
+cstation server pw status sg07-db 3.0 --port 8288
+
+# Clean all local temporary PW sync files
+cstation server pw clean --all
+```
+
+Notes:
+- The `pw` command group was previously top-level (`cstation pw ...`) and has been moved under `server` as `cstation server pw ...` for consistency.
+- Sync operations prepare PW and PW_ADDONS files on the target server so Docker containers can access them.
+- You will be prompted for confirmation unless you use `--dry-run`.
+
 ## How it Works
 
 1. **Key Validation**: Checks if the specified SSH public key exists

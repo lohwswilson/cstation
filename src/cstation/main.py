@@ -16,7 +16,6 @@ from .commands.init.main import init_command
 from .commands.server.main import server_app
 from .commands.github.main import github_app
 from .commands.docker.main import docker_app
-from .commands.pw.main import app as pw_app
 
 
 # Initialize main Typer app
@@ -33,7 +32,6 @@ app.command(name="init")(init_command)
 app.add_typer(server_app)
 app.add_typer(github_app)
 app.add_typer(docker_app)
-app.add_typer(pw_app, name="pw")
 
 
 @app.callback()

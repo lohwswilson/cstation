@@ -218,3 +218,128 @@ This organization provides:
 - ✅ Secure secret management
 - ✅ Flexible environment management
 - ✅ Scalable configuration structure
+
+## CStation: PostgreSQL authentication policy and variables
+
+This section documents the recommended PostgreSQL authentication setup used by the CStation Docker playbook (etc/ansible/playbooks/docker/postgresql.yml) and the variables you should define in host_vars/group_vars.
+
+### Policy overview
+
+- Local connections (UNIX socket and localhost) use password-based authentication with scram-sha-256 for all users, including the postgres superuser.
+- Remote connections are disabled by default; if enabled, only explicitly whitelisted networks are allowed and must use scram-sha-256.
+- Catch-all rules are set to reject for both IPv4 and IPv6 to prevent unintended access.
+- Optional TLS: if ssl_enabled is true, remote rules render as hostssl; otherwise host.
+
+### Inventory variables
+
+Define these under host_vars/<host>.yml or group_vars:
+
+```yaml
+postgresql:
+  version: "18"                     # Docker image tag
+  container_name: "{{ inventory_hostname | upper }}_DB"
+  docker_image: "postgres:{{ postgresql.version }}"
+  port: 1488                         # Host port mapped to container 5432
+  db_admin: "postgres"              # Admin user
+  db_password: "<strong-secret>"    # Admin password (use Ansible Vault in production)
+  database: "postgres"              # Default DB for health checks
+  data_dir: "/var/lib/postgresql/{{ inventory_hostname | upper }}_DB/data"
+  config_dir: "/etc/postgresql/{{ inventory_hostname | upper }}_DB/"
+
+  # Authentication policy
+  local_auth_method: scram-sha-256   # Local socket and localhost
+  remote_auth_method: scram-sha-256  # Remote connections (if enabled)
+  ssl_enabled: "off"                 # "on" renders hostssl rules; "off" renders host
+  allow_remote_connections: true     # Enable remote access only for allowed networks
+  allowed_networks:
+    - "172.18.0.0/16"               # Whitelisted CIDR(s)
+```
+
+Example: sg07 host variables
+
+```yaml
+# etc/ansible/inventory/host_vars/sg07.yml
+postgresql:
+  version: "18"
+  container_name: "{{ inventory_hostname | upper }}_DB"
+  docker_image: "postgres:{{ postgresql.version }}"
+  port: 1488
+  db_admin: "postgres"
+  db_password: "wai39kua"           # Replace with your vault reference in production
+  database: "postgres"
+  data_dir: "/var/lib/postgresql/{{ inventory_hostname | upper }}_DB/data"
+  config_dir: "/etc/postgresql/{{ inventory_hostname | upper }}_DB/"
+  local_auth_method: scram-sha-256
+  remote_auth_method: scram-sha-256
+  ssl_enabled: "off"
+  allow_remote_connections: true
+  allowed_networks:
+    - "172.18.0.0/16"
+```
+
+### Rendered pg_hba.conf (effective rules)
+
+The template `etc/ansible/playbooks/docker/templates/postgresql/pg_hba.conf.j2` renders to:
+
+```
+local   all     postgres                        scram-sha-256
+local   all     all                             scram-sha-256
+host    all     all     127.0.0.1/32            scram-sha-256
+host    all     all     ::1/128                 scram-sha-256
+host    all     all     172.18.0.0/16           scram-sha-256   # only if allow_remote_connections=true
+host    all     all     0.0.0.0/0               reject
+host    all     all     ::/0                    reject
+```
+
+If `ssl_enabled: "on"`, the remote rules render as `hostssl` instead of `host`.
+
+### Deployment commands
+
+Run the Docker PostgreSQL playbook to (re)deploy configuration and container:
+
+```bash
+bin/ansible-playbook -i etc/ansible/inventory/hosts.yml \
+  etc/ansible/playbooks/docker/postgresql.yml -l sg07
+```
+
+Notes:
+- The playbook validates memory/disk and templates, deploys postgresql.conf, pg_hba.conf, and auto.conf, and recreates the container when configs change.
+- Health checks run via pg_isready using the configured admin user/password.
+
+### Verification tests
+
+From the SG07 host (inside container):
+
+```bash
+# TCP localhost with password
+docker exec SG07_DB env PGPASSWORD=<password> psql -h 127.0.0.1 -U postgres -d postgres \
+  -c "SELECT current_user, inet_server_addr();"
+
+# UNIX socket with password
+docker exec SG07_DB env PGPASSWORD=<password> psql -U postgres -d postgres \
+  -c "SELECT current_user;"
+```
+
+From the host (outside container):
+
+```bash
+psql -h localhost -p 1488 -U postgres -d postgres
+# Enter the password when prompted
+```
+
+### Password management and rotation
+
+- To set/rotate the postgres user password in the running container:
+
+```bash
+docker exec -u postgres -it SG07_DB psql -c "ALTER ROLE postgres WITH PASSWORD 'NEW_PASSWORD';"
+```
+
+- Update `postgresql.db_password` in `host_vars/<host>.yml` (ideally referencing an Ansible Vault variable in production).
+
+### Security hardening tips
+
+- Avoid `trust` or `peer` for production environments.
+- Keep catch-all rules as `reject` and only allow explicit networks.
+- Prefer `scram-sha-256` for both local and remote authentication.
+- Use `hostssl` when TLS is configured and required.

@@ -42,9 +42,9 @@ def sync_pw_files(
     so Docker containers can access them.
     
     Examples:
-        cstation pw sync sg07-db 3.0 --port 8288
-        cstation pw sync production-server 18.0 --dry-run
-        cstation pw sync dev-server 5.0 --verbose
+        cstation server pw sync sg07-db 3.0 --port 8288
+        cstation server pw sync production-server 18.0 --dry-run
+        cstation server pw sync dev-server 5.0 --verbose
     """
     
     # Validate version format (should be numeric)

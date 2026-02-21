@@ -194,22 +194,21 @@ class PWSync:
         self, local_path: Path, host: str, version: str, port: int, dry_run: bool, verbose: bool
     ) -> bool:
         """Sync prepared PW files to remote server."""
-        remote_path = f"root@{host}.ansis.com.sg:/var/lib/perfectwork/PW.{version}"
+        remote_host = get_remote_host(host)
+        remote_dir = get_remote_pw_path(version)
+        remote_path = f"root@{remote_host}:{remote_dir}"
         odoo_path = local_path / "odoo"
         
         if not odoo_path.exists():
             rprint(f"[red]Error:[/red] Odoo directory not found in {local_path}")
             return False
         
-        rsync_cmd = [
-            "rsync", "-avz", "--delete",
-            "--exclude", ".*",
-            f"-e", f"ssh -p{port}"
-        ]
-        
-        if dry_run:
-            rsync_cmd.append("--dry-run")
-        
+        # Ensure remote directory exists before rsync
+        if not self._ensure_remote_dir(remote_host, remote_dir, port, dry_run, verbose):
+            return False
+
+        # Build rsync command using common base options
+        rsync_cmd = get_rsync_command_base(port, dry_run)
         rsync_cmd.extend([f"{odoo_path}/", remote_path])
         
         if verbose or dry_run:
@@ -237,7 +236,9 @@ class PWSync:
     ) -> bool:
         """Sync PW_ADDONS to remote server."""
         source_path = Path(f"/opt/PW/PW_ADDONS.{version}")
-        remote_path = f"root@{host}.ansis.com.sg:/var/lib/perfectwork/PW_ADDONS.{version}"
+        remote_host = get_remote_host(host)
+        remote_dir = get_remote_addons_path(version)
+        remote_path = f"root@{remote_host}:{remote_dir}"
         
         if not source_path.exists():
             rprint(f"[red]Error:[/red] PW_ADDONS source path {source_path} does not exist")
@@ -247,15 +248,14 @@ class PWSync:
         if exclude_cache:
             self._clean_pycache(source_path, verbose)
         
-        rsync_cmd = [
-            "rsync", "-avz", "--copy-links", "--delete",
-            "--exclude", ".*",
-            f"-e", f"ssh -p{port}"
-        ]
-        
-        if dry_run:
-            rsync_cmd.append("--dry-run")
-        
+        # Ensure remote directory exists before rsync
+        if not self._ensure_remote_dir(remote_host, remote_dir, port, dry_run, verbose):
+            return False
+
+        # Build rsync command using common base options
+        rsync_cmd = get_rsync_command_base(port, dry_run)
+        # Keep --copy-links for addons sync to ensure symlinks are copied as files
+        rsync_cmd.insert(1, "--copy-links")
         rsync_cmd.extend([f"{source_path}/", remote_path])
         
         if verbose or dry_run:
@@ -283,6 +283,44 @@ class PWSync:
         temp_pw_path = self.temp_dir / f"PW.{version}"
         if temp_pw_path.exists():
             shutil.rmtree(temp_pw_path)
+
+    def _ensure_remote_dir(self, remote_host: str, remote_dir: str, port: int, dry_run: bool, verbose: bool) -> bool:
+        """Ensure the remote directory exists by creating it with mkdir -p over SSH.
+        
+        Args:
+            remote_host: Fully qualified remote host (e.g., sg07.ansis.com.sg)
+            remote_dir: Remote directory path to create
+            port: SSH port
+            dry_run: If True, only print the command without executing
+            verbose: If True, print additional logs
+        Returns:
+            bool: True if directory exists or was created successfully, False otherwise.
+        """
+        mkdir_cmd = [
+            "ssh", f"-p{port}", f"root@{remote_host}",
+            f"mkdir -p '{remote_dir}'"
+        ]
+
+        if verbose or dry_run:
+            rprint(f"[dim]Ensuring remote directory: {' '.join(mkdir_cmd)}[/dim]")
+
+        if dry_run:
+            # In dry-run, assume success
+            return True
+
+        try:
+            result = subprocess.run(mkdir_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                err = result.stderr.strip() or result.stdout.strip()
+                rprint(f"[red]Error ensuring remote directory {remote_dir}:[/red] {err}")
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            rprint(f"[red]Error:[/red] SSH to {remote_host} timed out while creating {remote_dir}")
+            return False
+        except Exception as e:
+            rprint(f"[red]Error creating remote directory {remote_dir}:[/red] {str(e)}")
+            return False
     
     def check_status(self, host: str, version: str, port: int) -> Optional[Dict[str, Any]]:
         """Check the status of PW files on remote server."""
