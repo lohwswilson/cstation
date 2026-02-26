@@ -1,0 +1,23 @@
+[project]
+name = "cstation-cli"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Loh W S, Wilson", email = "loh.wilson@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fabric>=3.2.2",
+    "pydantic>=2.12.3",
+    "pyyaml>=6.0.3",
+    "rich>=14.2.0",
+    "typer[all]>=0.20.0",
+]
+
+[project.scripts]
+cstation-cli = "cstation_cli.main:main"
+
+[build-system]
+requires = ["uv_build>=0.10.6,<0.11.0"]
+build-backend = "uv_build"
