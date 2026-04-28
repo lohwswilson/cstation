@@ -19,10 +19,17 @@ class SSHManager:
     Manages SSH connections and remote execution.
     """
     
-    def __init__(self, host: str, user: Optional[str] = None, key_filename: Optional[str] = None):
+    def __init__(
+        self,
+        host: str,
+        user: Optional[str] = None,
+        key_filename: Optional[str] = None,
+        port: Optional[int] = None,
+    ):
         self.host = host
         self.user = user
         self.key_filename = key_filename
+        self.port = port
         self._conn = None
 
     @property
@@ -31,6 +38,7 @@ class SSHManager:
             self._conn = Connection(
                 host=self.host,
                 user=self.user,
+                port=self.port,
                 connect_kwargs={"key_filename": self.key_filename} if self.key_filename else {}
             )
         return self._conn

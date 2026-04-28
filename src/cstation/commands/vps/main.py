@@ -1,0 +1,1046 @@
+#!/usr/bin/env python3
+"""
+VPS command module for CStation CLI
+"""
+
+from __future__ import annotations
+
+import json as jsonlib
+import os
+import re
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Optional
+
+import typer
+import yaml
+from rich import print as rprint
+from rich.console import Console
+from rich.table import Table
+
+from cstation.config import get_config
+from cstation.ssh import SSHManager
+from cstation.providers.hetzner import HetznerProvider
+from cstation.providers.vultr import VultrProvider
+from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
+
+
+console = Console()
+
+KEY_PACKAGES = [
+    "openssh-server",
+    "ufw",
+    "nftables",
+    "fail2ban",
+    "docker",
+    "docker.io",
+    "containerd",
+    "python3",
+    "rsync",
+    "curl",
+    "git",
+    "sudo",
+]
+
+
+class _CStationYamlDumper(yaml.SafeDumper):
+    pass
+
+
+def _yaml_represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.nodes.ScalarNode:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_CStationYamlDumper.add_representer(str, _yaml_represent_str)
+
+
+@dataclass(frozen=True)
+class _HttpResponse:
+    status_code: int
+    body: bytes
+
+    def json(self) -> Any:
+        if not self.body:
+            return {}
+        return jsonlib.loads(self.body.decode("utf-8"))
+
+
+class _HttpClient:
+    def get(self, url: str, *, headers: dict[str, str]) -> _HttpResponse:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req) as resp:  # noqa: S310
+                return _HttpResponse(status_code=resp.status, body=resp.read())
+        except urllib.error.HTTPError as e:
+            return _HttpResponse(status_code=int(e.code), body=e.read())
+
+    def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> _HttpResponse:
+        body = jsonlib.dumps(json).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            headers={**headers, "Content-Type": "application/json"},
+            data=body,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:  # noqa: S310
+                return _HttpResponse(status_code=resp.status, body=resp.read())
+        except urllib.error.HTTPError as e:
+            return _HttpResponse(status_code=int(e.code), body=e.read())
+
+    def delete(self, url: str, *, headers: dict[str, str]) -> _HttpResponse:
+        req = urllib.request.Request(url, headers=headers, method="DELETE")
+        try:
+            with urllib.request.urlopen(req) as resp:  # noqa: S310
+                return _HttpResponse(status_code=resp.status, body=resp.read())
+        except urllib.error.HTTPError as e:
+            return _HttpResponse(status_code=int(e.code), body=e.read())
+
+
+vps_app = typer.Typer(name="vps", help="VPS lifecycle management", invoke_without_command=True)
+
+
+def _strip_nulls(obj: Any) -> Any:
+    """Recursively remove keys with None values from dicts, and None items from lists."""
+    if isinstance(obj, dict):
+        return {k: _strip_nulls(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_strip_nulls(item) for item in obj if item is not None]
+    return obj
+
+
+def _parse_os_release(raw: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in raw.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        out[key.strip()] = value.strip().strip('"')
+    return out
+
+
+def _first_line(result: Any) -> str:
+    if not result or not getattr(result, "stdout", ""):
+        return ""
+    return result.stdout.strip().splitlines()[0].strip()
+
+
+def _detect_package_manager(ssh: SSHManager, os_id: str) -> str:
+    if os_id in ("ubuntu", "debian"):
+        return "apt"
+    if os_id in ("centos", "rhel", "fedora", "rocky", "almalinux"):
+        return "dnf"
+    if os_id in ("alpine",):
+        return "apk"
+    if _first_line(ssh.run("command -v apt-get")):
+        return "apt"
+    if _first_line(ssh.run("command -v dnf")):
+        return "dnf"
+    if _first_line(ssh.run("command -v yum")):
+        return "yum"
+    if _first_line(ssh.run("command -v apk")):
+        return "apk"
+    return "unknown"
+
+
+def _package_installed(ssh: SSHManager, mgr: str, name: str) -> bool:
+    if mgr == "apt":
+        return _first_line(ssh.run(f"dpkg -s {name} >/dev/null 2>&1; echo $?")) == "0"
+    if mgr in ("dnf", "yum"):
+        return _first_line(ssh.run(f"rpm -q {name} >/dev/null 2>&1; echo $?")) == "0"
+    if mgr == "apk":
+        return _first_line(ssh.run(f"apk info -e {name} >/dev/null 2>&1; echo $?")) == "0"
+    return False
+
+
+def _parse_lscpu(raw: str) -> dict[str, Any]:
+    """Parse lscpu output into structured fields."""
+    fields: dict[str, str] = {}
+    for line in raw.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip()] = value.strip()
+
+    def _int_or_none(key: str) -> Optional[int]:
+        v = fields.get(key, "")
+        if not v:
+            return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+
+    return {
+        "architecture": fields.get("Architecture"),
+        "vendor": fields.get("Vendor ID") or fields.get("BIOS Vendor ID"),
+        "model": fields.get("Model name") or fields.get("BIOS Model name"),
+        "vcpu": _int_or_none("CPU(s)"),
+        "cores_per_socket": _int_or_none("Core(s) per socket"),
+        "sockets": _int_or_none("Socket(s)"),
+        "threads_per_core": _int_or_none("Thread(s) per core"),
+    }
+
+
+def _parse_free_m(raw: str) -> dict[str, Any]:
+    """Parse free -m output into structured fields."""
+    lines = raw.strip().splitlines()
+    result: dict[str, Any] = {}
+
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        label = parts[0].rstrip(":")
+        if label == "Mem" and len(parts) >= 3:
+            try:
+                result["total_mb"] = int(parts[1])
+                result["used_mb"] = int(parts[2])
+                result["available_mb"] = int(parts[6]) if len(parts) > 6 else None
+            except (ValueError, IndexError):
+                pass
+        elif label == "Swap" and len(parts) >= 3:
+            try:
+                result["swap_total_mb"] = int(parts[1])
+                result["swap_used_mb"] = int(parts[2])
+            except (ValueError, IndexError):
+                pass
+
+    return result
+
+
+def _parse_lsblk_json(raw: str) -> list[dict[str, Any]]:
+    """Parse lsblk -b -J output into structured disk entries."""
+    try:
+        data = jsonlib.loads(raw) if raw else {}
+    except (jsonlib.JSONDecodeError, ValueError):
+        return []
+
+    devices = data.get("blockdevices", [])
+    result: list[dict[str, Any]] = []
+
+    def _size_gb(size_bytes: Any) -> Optional[float]:
+        if not isinstance(size_bytes, (int, float)) or isinstance(size_bytes, bool):
+            return None
+        return round(size_bytes / (1024**3), 1)
+
+    def _partition(entry: dict[str, Any]) -> dict[str, Any]:
+        mountpoints = entry.get("mountpoints", [])
+        mount = None
+        for mp in mountpoints:
+            if mp is not None:
+                mount = mp
+                break
+        if mount is None:
+            mount = entry.get("mountpoint")
+        child: dict[str, Any] = {
+            "name": entry.get("name"),
+            "size_gb": _size_gb(entry.get("size")),
+            "type": entry.get("type"),
+        }
+        if mount:
+            child["mountpoint"] = mount
+        return child
+
+    for dev in devices:
+        entry: dict[str, Any] = {
+            "name": dev.get("name"),
+            "size_gb": _size_gb(dev.get("size")),
+            "type": dev.get("type"),
+        }
+        mp = dev.get("mountpoint")
+        mps = dev.get("mountpoints", [])
+        for m in mps:
+            if m is not None:
+                mp = m
+                break
+        if mp:
+            entry["mountpoint"] = mp
+        children = dev.get("children", [])
+        if children:
+            entry["partitions"] = [_partition(c) for c in children]
+        result.append(entry)
+
+    return result
+
+
+def _parse_ip_addr_json(raw: str) -> list[dict[str, Any]]:
+    """Parse ip -j a output into structured interface list."""
+    try:
+        data = jsonlib.loads(raw) if raw else []
+    except (jsonlib.JSONDecodeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+
+    result: list[dict[str, Any]] = []
+    for iface in data:
+        if iface.get("ifname") == "lo":
+            continue
+        entry: dict[str, Any] = {
+            "name": iface.get("ifname"),
+            "state": iface.get("operstate"),
+            "mac": iface.get("address"),
+        }
+        addr_info = iface.get("addr_info", [])
+        for addr in addr_info:
+            family = addr.get("family")
+            if family == "inet" and not entry.get("ipv4"):
+                entry["ipv4"] = addr.get("local")
+                prefix = addr.get("prefixlen")
+                if prefix is not None:
+                    entry["ipv4_prefix"] = prefix
+            elif family == "inet6" and not entry.get("ipv6"):
+                addr_local = addr.get("local", "")
+                if not addr_local.startswith("fe80:"):
+                    entry["ipv6"] = addr_local
+                    prefix = addr.get("prefixlen")
+                    if prefix is not None:
+                        entry["ipv6_prefix"] = prefix
+        result.append(entry)
+
+    return result
+
+
+def _parse_ip_route(raw: str) -> list[dict[str, Any]]:
+    """Parse ip route output into structured route entries."""
+    result: list[dict[str, Any]] = []
+    for line in raw.strip().splitlines():
+        if not line.strip():
+            continue
+        parts = line.split()
+        entry: dict[str, Any] = {"destination": parts[0] if parts else None}
+        try:
+            via_idx = parts.index("via")
+            entry["via"] = parts[via_idx + 1] if via_idx + 1 < len(parts) else None
+        except ValueError:
+            pass
+        try:
+            dev_idx = parts.index("dev")
+            entry["dev"] = parts[dev_idx + 1] if dev_idx + 1 < len(parts) else None
+        except ValueError:
+            pass
+        result.append(entry)
+    return result
+
+
+def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
+    def _run_stdout(cmd: str) -> str:
+        result = ssh.run(cmd)
+        if not result or not getattr(result, "stdout", ""):
+            return ""
+        return str(result.stdout).rstrip()
+
+    os_release_text = _run_stdout("cat /etc/os-release")
+    os_release = _parse_os_release(os_release_text)
+
+    kernel = _first_line(ssh.run("uname -r"))
+    hostname = _first_line(ssh.run("hostname"))
+
+    lscpu_raw = _run_stdout("lscpu")
+    mem_raw = _run_stdout("free -m")
+    lsblk_raw = _run_stdout("lsblk -b -J")
+    ip_addr_raw = _run_stdout("ip -j a")
+    ip_route_raw = _run_stdout("ip route")
+
+    parsed_cpu = _parse_lscpu(lscpu_raw) if lscpu_raw else {}
+    parsed_memory = _parse_free_m(mem_raw) if mem_raw else {}
+    parsed_disks = _parse_lsblk_json(lsblk_raw) if lsblk_raw else []
+    parsed_interfaces = _parse_ip_addr_json(ip_addr_raw) if ip_addr_raw else []
+    parsed_routes = _parse_ip_route(ip_route_raw) if ip_route_raw else []
+
+    os_id = os_release.get("ID", "")
+    pkg_mgr = _detect_package_manager(ssh, os_id)
+    detected = [p for p in KEY_PACKAGES if _package_installed(ssh, pkg_mgr, p)]
+    missing = [p for p in KEY_PACKAGES if p not in detected]
+
+    return {
+        "os": {
+            "id": os_release.get("ID"),
+            "version": os_release.get("VERSION_ID"),
+            "pretty": os_release.get("PRETTY_NAME"),
+            "kernel": kernel,
+            "package_manager": pkg_mgr,
+        },
+        "cpu": parsed_cpu,
+        "memory": parsed_memory,
+        "disks": parsed_disks,
+        "network": {
+            "interfaces": parsed_interfaces,
+            "routes": parsed_routes,
+        },
+        "hostname": hostname,
+        "packages": {
+            "detected": detected,
+            "missing": missing,
+        },
+    }
+
+
+def _config_accounts(provider: str) -> dict[str, str]:
+    cfg = get_config()
+    accounts = cfg.get_config_value(f"vps.providers.{provider}.accounts", default=None)
+    if not accounts:
+        return {}
+    if not isinstance(accounts, dict):
+        raise typer.BadParameter(f"Invalid config: vps.providers.{provider}.accounts must be a mapping")
+
+    out: dict[str, str] = {}
+    for name, value in accounts.items():
+        if isinstance(value, str):
+            token = value
+        elif isinstance(value, dict):
+            token = value.get("token")
+        else:
+            token = None
+        if not isinstance(token, str) or not token.strip():
+            raise typer.BadParameter(f"Invalid config: missing token for {provider} account '{name}'")
+        out[str(name)] = token.strip()
+    return out
+
+
+def _default_provider() -> str:
+    cfg = get_config()
+    value = cfg.get_config_value("vps.default_provider", default="hetzner")
+    if not isinstance(value, str) or not value.strip():
+        return "hetzner"
+    return value.strip()
+
+
+def _configured_providers() -> list[str]:
+    cfg = get_config()
+    providers = cfg.get_config_value("vps.providers", default={}) or {}
+    if not isinstance(providers, dict):
+        return []
+    return [str(k) for k in providers.keys()]
+
+
+def _provider_from_token(provider: str, token: str) -> Any:
+    if provider == "hetzner":
+        return HetznerProvider(token=token, http=_HttpClient())
+    if provider == "vultr":
+        return VultrProvider(token=token, http=_HttpClient())
+    raise typer.BadParameter(f"Unsupported provider '{provider}'")
+
+
+def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[str], str]:
+    accounts = _config_accounts(provider)
+    if accounts:
+        if account is None:
+            if len(accounts) == 1:
+                (only_name, only_token), = accounts.items()
+                return only_name, only_token
+            raise typer.BadParameter(
+                f"Multiple {provider} accounts configured; use --account or prefix target with <account>:"
+            )
+        if account not in accounts:
+            raise typer.BadParameter(f"Unknown {provider} account '{account}'")
+        return account, accounts[account]
+
+    if provider == "hetzner":
+        token = os.getenv("HETZNER_TOKEN")
+        if token:
+            return None, token
+
+    raise typer.BadParameter(
+        f"Missing {provider} token; configure ~/.config/cstation/config.yml (vps.providers.{provider}.accounts)"
+    )
+
+
+def _provider(provider: str, account: Optional[str]) -> tuple[Optional[str], Any]:
+    resolved_account, token = _resolve_account(provider, account)
+    return resolved_account, _provider_from_token(provider, token)
+
+
+def _parse_target(target: str) -> tuple[Optional[str], Optional[str]]:
+    if target.isdigit():
+        return target, None
+    if re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", target):
+        return target, None
+    return None, target
+
+
+def _split_account_target(target: str) -> tuple[Optional[str], str]:
+    if ":" not in target:
+        return None, target
+    account, rest = target.split(":", 1)
+    if not account or not rest:
+        return None, target
+    return account, rest
+
+
+@vps_app.command("ls")
+def vps_ls(
+    provider: str = typer.Option("all"),
+    account: Optional[str] = typer.Option(None, "--account"),
+) -> None:
+    aggregate_mode = provider == "all" and account is None
+    auth_errors: list[str] = []
+    provider_errors: list[str] = []
+    rows: list[tuple[str, Optional[str], Any]] = []
+
+    providers = _configured_providers()
+    if not providers and os.getenv("HETZNER_TOKEN"):
+        providers = ["hetzner"]
+    if not providers:
+        console.print(
+            "[red]✗[/red] No VPS providers configured; set vps.providers in ~/.config/cstation/config.yml (or set HETZNER_TOKEN)"
+        )
+        raise typer.Exit(2)
+
+    if provider != "all" and provider not in providers:
+        if provider == "hetzner" and os.getenv("HETZNER_TOKEN"):
+            providers = ["hetzner"]
+        else:
+            raise typer.BadParameter(f"Unknown provider '{provider}'")
+
+    providers_to_list = providers if provider == "all" else [provider]
+    for p_name in providers_to_list:
+        accounts = _config_accounts(p_name)
+        if accounts:
+            if account is not None and account not in accounts:
+                raise typer.BadParameter(f"Unknown {p_name} account '{account}'")
+            for acct_name, token in accounts.items():
+                if account is not None and acct_name != account:
+                    continue
+                p = _provider_from_token(p_name, token)
+                try:
+                    for v in p.list_vps():
+                        rows.append((p_name, acct_name, v))
+                except ProviderAuthError as e:
+                    if not aggregate_mode:
+                        console.print(f"[red]✗[/red] {e}")
+                        raise typer.Exit(2)
+                    auth_errors.append(f"{p_name}/{acct_name}: {e}")
+                except ProviderError as e:
+                    if not aggregate_mode:
+                        console.print(f"[red]✗[/red] {e}")
+                        raise typer.Exit(1)
+                    provider_errors.append(f"{p_name}/{acct_name}: {e}")
+        else:
+            acct_name, p = _provider(p_name, account=None)
+            try:
+                for v in p.list_vps():
+                    rows.append((p_name, acct_name, v))
+            except ProviderAuthError as e:
+                if not aggregate_mode:
+                    console.print(f"[red]✗[/red] {e}")
+                    raise typer.Exit(2)
+                auth_errors.append(f"{p_name}: {e}")
+            except ProviderError as e:
+                if not aggregate_mode:
+                    console.print(f"[red]✗[/red] {e}")
+                    raise typer.Exit(1)
+                provider_errors.append(f"{p_name}: {e}")
+
+    if not rows:
+        if auth_errors:
+            for msg in auth_errors:
+                console.print(f"[red]✗[/red] {msg}")
+            raise typer.Exit(2)
+        if provider_errors:
+            for msg in provider_errors:
+                console.print(f"[red]✗[/red] {msg}")
+            raise typer.Exit(1)
+
+    table = Table(title="VPS")
+    distinct_providers = sorted({p for p, _, _ in rows})
+    show_provider = len(distinct_providers) > 1
+    show_account = any(acct is not None for _, acct, _ in rows)
+
+    if show_provider:
+        table.add_column("Provider")
+    if show_account:
+        table.add_column("Account")
+    table.add_column("ID", overflow="fold")
+    table.add_column("Name")
+    table.add_column("Region")
+    table.add_column("Status")
+    table.add_column("IPv4")
+    for provider_name, acct_name, v in rows:
+        if show_provider and acct_name:
+            id_value = v.id
+        elif show_provider and not acct_name:
+            id_value = v.id
+        elif show_account and acct_name:
+            id_value = f"{acct_name}:{v.id}"
+        else:
+            id_value = v.id
+
+        row: list[str] = []
+        if show_provider:
+            row.append(provider_name)
+        if show_account:
+            row.append(acct_name or "-")
+        row.extend([id_value, v.name, v.region or "-", v.status.value, v.ipv4 or "-"])
+        table.add_row(*row)
+    console.print(table)
+    for msg in auth_errors:
+        console.print(f"[yellow]![/yellow] {msg}")
+    for msg in provider_errors:
+        console.print(f"[yellow]![/yellow] {msg}")
+
+
+@vps_app.command("status")
+def vps_status(
+    target: str,
+    provider: Optional[str] = typer.Option(None, "--provider"),
+    account: Optional[str] = typer.Option(None, "--account"),
+) -> None:
+    target_provider, rest = (target.split("/", 1) + [None])[:2] if "/" in target else (None, target)
+    if target_provider is not None and provider is not None and target_provider != provider:
+        raise typer.BadParameter("Conflicting provider selection: both --provider and <provider>/<target> were provided")
+    effective_provider = (target_provider or provider or _default_provider()).strip()
+
+    target_account, raw_target = _split_account_target(rest)
+    if target_account is not None and account is not None and target_account != account:
+        raise typer.BadParameter("Conflicting account selection: both --account and <account>:<target> were provided")
+    effective_account = target_account or account
+
+    id_, name = _parse_target(raw_target)
+    try:
+        _, p = _provider(effective_provider, effective_account)
+        v = p.get_vps(id=id_, name=name)
+    except ProviderNotFoundError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(3)
+    except ProviderAuthError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(2)
+    except ProviderError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(1)
+
+    table = Table(title="VPS Status")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("ID", v.id)
+    table.add_row("Name", v.name)
+    if v.region is not None:
+        table.add_row("Region", v.region)
+    table.add_row("Status", v.status.value)
+    if v.ipv4 is not None:
+        table.add_row("IPv4", v.ipv4)
+    if v.ipv6 is not None:
+        table.add_row("IPv6", v.ipv6)
+    if v.vcpu is not None:
+        table.add_row("vCPU", str(v.vcpu))
+    if v.memory_mb is not None:
+        table.add_row("Memory (MB)", str(v.memory_mb))
+    if v.disk_gb is not None:
+        table.add_row("Disk (GB)", str(v.disk_gb))
+    if v.bandwidth_gb is not None:
+        table.add_row("Bandwidth (GB)", str(v.bandwidth_gb))
+    if v.plan is not None:
+        table.add_row("Plan", v.plan)
+    console.print(table)
+
+
+def _load_vps_config(path: Path) -> dict[str, Any]:
+    """Load and validate a VPS config YAML."""
+    if not path.exists():
+        console.print(f"[red]✗[/red] Config file not found: {path}")
+        raise typer.Exit(6)
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        console.print(f"[red]✗[/red] Invalid config: expected mapping at top level")
+        raise typer.Exit(6)
+    if data.get("apiVersion") != "cstation/v1":
+        console.print(f"[red]✗[/red] Unsupported apiVersion: {data.get('apiVersion')}")
+        raise typer.Exit(6)
+    if data.get("kind") != "VPS":
+        console.print(f"[red]✗[/red] Unexpected kind: {data.get('kind')}")
+        raise typer.Exit(6)
+    return data
+
+
+def _ssh_from_config(data: dict[str, Any]) -> SSHManager:
+    """Build an SSHManager from a VPS config's access section."""
+    access = data.get("access", {})
+    host = access.get("host")
+    if not host:
+        console.print("[red]✗[/red] Config missing access.host")
+        raise typer.Exit(6)
+    return SSHManager(
+        host=host,
+        user=access.get("user", "root"),
+        port=access.get("port", 22),
+        key_filename=access.get("key"),
+    )
+
+
+def _apply_packages(ssh: SSHManager, baseline: dict[str, Any], pkg_mgr: str, *, dry_run: bool = False) -> list[str]:
+    """Install missing packages. Returns list of packages installed/skipped."""
+    desired = baseline.get("packages", [])
+    if not desired:
+        console.print("  [dim]packages: none specified[/dim]")
+        return []
+
+    installed_on_host = [p for p in desired if _package_installed(ssh, pkg_mgr, p)]
+    missing = [p for p in desired if p not in installed_on_host]
+
+    if not missing:
+        console.print(f"  [green]✓[/green] packages: all {len(desired)} already installed")
+        return []
+
+    console.print(f"  [yellow]⟳[/yellow] packages: {', '.join(missing)} need installation")
+    if dry_run:
+        for p in missing:
+            console.print(f"    [dim]would install: {p}[/dim]")
+        return missing
+
+    # Build install command based on package manager
+    if pkg_mgr == "apt":
+        cmd = f"apt-get update -qq && apt-get install -y -qq {' '.join(missing)}"
+    elif pkg_mgr in ("dnf", "yum"):
+        cmd = f"{pkg_mgr} install -y {' '.join(missing)}"
+    elif pkg_mgr == "apk":
+        cmd = f"apk add {' '.join(missing)}"
+    else:
+        console.print(f"  [red]✗[/red] packages: unsupported package manager '{pkg_mgr}'")
+        return []
+
+    result = ssh.run(cmd, sudo=True)
+    if result and getattr(result, "exited", 0) == 0:
+        console.print(f"  [green]✓[/green] packages: installed {', '.join(missing)}")
+    else:
+        stderr = getattr(result, "stderr", "") or ""
+        console.print(f"  [red]✗[/red] packages: install failed{': ' + stderr.strip() if stderr else ''}")
+
+    return missing
+
+
+def _apply_sshd(ssh: SSHManager, sshd_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    """Configure SSH daemon. Returns True if changes were made."""
+    changes: list[str] = []
+
+    # Disable password authentication
+    if sshd_config.get("disable_password_auth"):
+        result = ssh.run("grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null || true", sudo=True)
+        already_set = result and getattr(result, "stdout", "").strip() not in ("", "0")
+        if already_set:
+            console.print("  [green]✓[/green] sshd: password auth already disabled")
+        else:
+            changes.append("disable password authentication")
+            if dry_run:
+                console.print("    [dim]would set PasswordAuthentication no in /etc/ssh/sshd_config[/dim]")
+            else:
+                ssh.run("sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config", sudo=True)
+                # Also ensure it's not overridden in sshd_config.d
+                ssh.run("mkdir -p /etc/ssh/sshd_config.d && echo 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/disable-password.conf", sudo=True)
+                ssh.run("systemctl reload sshd || systemctl reload ssh", sudo=True)
+                console.print("  [green]✓[/green] sshd: password auth disabled, sshd reloaded")
+
+    return len(changes) > 0
+
+
+def _apply_firewall(ssh: SSHManager, fw_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    """Configure firewall. Returns True if changes were made."""
+    mode = fw_config.get("mode", "ufw")
+    allow_rules = fw_config.get("allow", [])
+
+    if mode != "ufw":
+        console.print(f"  [yellow]![/yellow] firewall: mode '{mode}' not yet supported, skipping")
+        return False
+
+    # Check if ufw is active
+    result = ssh.run("ufw status", sudo=True)
+    status_output = getattr(result, "stdout", "") or ""
+    is_active = "Status: active" in status_output
+
+    changes = False
+
+    if not is_active:
+        console.print("  [yellow]⟳[/yellow] firewall: ufw is inactive")
+        if dry_run:
+            console.print("    [dim]would enable ufw with default deny[/dim]")
+            return True
+        # Ensure SSH is allowed before enabling (prevent lockout)
+        ssh.run("ufw allow 22/tcp", sudo=True)
+        for rule in allow_rules:
+            if rule != "22/tcp":
+                ssh.run(f"ufw allow {rule}", sudo=True)
+        ssh.run("ufw --force enable", sudo=True)
+        console.print("  [green]✓[/green] firewall: ufw enabled with default deny")
+        changes = True
+    else:
+        # ufw is active, check rules
+        missing_rules: list[str] = []
+        for rule in allow_rules:
+            # Check if rule exists (normalize port/proto format)
+            check = ssh.run(f"ufw status | grep -c '{rule}'", sudo=True)
+            count = _first_line(check)
+            if not count or count == "0":
+                missing_rules.append(rule)
+
+        if missing_rules:
+            console.print(f"  [yellow]⟳[/yellow] firewall: missing rules: {', '.join(missing_rules)}")
+            if dry_run:
+                for rule in missing_rules:
+                    console.print(f"    [dim]would allow: {rule}[/dim]")
+                return True
+            for rule in missing_rules:
+                ssh.run(f"ufw allow {rule}", sudo=True)
+            console.print(f"  [green]✓[/green] firewall: added rules {', '.join(missing_rules)}")
+            changes = True
+        else:
+            console.print(f"  [green]✓[/green] firewall: ufw active, all rules present")
+
+    # Ensure default deny
+    if not dry_run:
+        result = ssh.run("ufw status verbose | grep 'Default:'", sudo=True)
+        default_out = getattr(result, "stdout", "") or ""
+        if "deny (incoming)" not in default_out.lower() and "deny" not in default_out.lower():
+            ssh.run("ufw default deny incoming", sudo=True)
+            ssh.run("ufw default allow outgoing", sudo=True)
+            console.print("  [green]✓[/green] firewall: set default deny incoming")
+            changes = True
+
+    return changes
+
+
+@vps_app.command("plan")
+def vps_plan(
+    config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
+) -> None:
+    """
+    Dry-run: show what would be applied to the VPS without making changes.
+
+    Reads the VPS config and compares declared state against actual state,
+    printing a summary of actions that `apply` would perform.
+    """
+    data = _load_vps_config(config)
+    identity = data.get("identity", {})
+    name = identity.get("name", config.stem)
+    console.print(f"\n[bold]VPS Plan: {name}[/bold] [dim]({config})[/dim]\n")
+
+    ssh = _ssh_from_config(data)
+    baseline = data.get("os", {}).get("baseline", {})
+
+    # Detect package manager from facts
+    pkg_mgr = data.get("facts", {}).get("os", {}).get("package_manager")
+    if not pkg_mgr:
+        os_id = data.get("facts", {}).get("os", {}).get("id", "")
+        pkg_mgr = _detect_package_manager(ssh, os_id)
+
+    console.print("[bold]Phase 1: Packages[/bold]")
+    _apply_packages(ssh, baseline, pkg_mgr, dry_run=True)
+
+    console.print("\n[bold]Phase 2: SSH Daemon[/bold]")
+    sshd_cfg = baseline.get("sshd", {})
+    if not sshd_cfg:
+        console.print("  [dim]sshd: no configuration specified[/dim]")
+    else:
+        _apply_sshd(ssh, sshd_cfg, dry_run=True)
+
+    console.print("\n[bold]Phase 3: Firewall[/bold]")
+    fw_cfg = baseline.get("firewall", {})
+    if not fw_cfg:
+        console.print("  [dim]firewall: no configuration specified[/dim]")
+    else:
+        _apply_firewall(ssh, fw_cfg, dry_run=True)
+
+    console.print("\n[dim]Run 'cstation vps apply <config>' to execute these changes.[/dim]")
+
+
+@vps_app.command("apply")
+def vps_apply(
+    config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: packages, sshd, firewall"),
+) -> None:
+    """
+    Apply VPS configuration from YAML: install packages, configure sshd, configure firewall.
+
+    Reads the VPS config and applies the os.baseline section, making the
+    actual server match the declared state. Use 'plan' first to preview changes.
+
+    Examples:
+      cstation vps plan config/vps/prod_hel1_eu01.yaml
+      cstation vps apply config/vps/prod_hel1_eu01.yaml
+      cstation vps apply config/vps/prod_hel1_eu01.yaml --phase packages
+    """
+    data = _load_vps_config(config)
+    identity = data.get("identity", {})
+    name = identity.get("name", config.stem)
+    console.print(f"\n[bold]VPS Apply: {name}[/bold] [dim]({config})[/dim]\n")
+
+    ssh = _ssh_from_config(data)
+    baseline = data.get("os", {}).get("baseline", {})
+
+    # Detect package manager from facts
+    pkg_mgr = data.get("facts", {}).get("os", {}).get("package_manager")
+    if not pkg_mgr:
+        os_id = data.get("facts", {}).get("os", {}).get("id", "")
+        pkg_mgr = _detect_package_manager(ssh, os_id)
+
+    # Confirmation
+    if not yes:
+        console.print("[yellow]⚠[/yellow] This will modify the remote server. Changes:")
+        phases_to_run = []
+        if phase is None or phase == "packages":
+            pkgs = baseline.get("packages", [])
+            if pkgs:
+                phases_to_run.append(f"  packages: install {', '.join(pkgs)} (if missing)")
+        if phase is None or phase == "sshd":
+            sshd_cfg = baseline.get("sshd", {})
+            if sshd_cfg.get("disable_password_auth"):
+                phases_to_run.append("  sshd: disable password authentication")
+        if phase is None or phase == "firewall":
+            fw_cfg = baseline.get("firewall", {})
+            if fw_cfg:
+                phases_to_run.append(f"  firewall: configure {fw_cfg.get('mode', 'ufw')}, allow {fw_cfg.get('allow', [])}")
+
+        if not phases_to_run:
+            console.print("[dim]No changes to apply.[/dim]")
+            raise typer.Exit(0)
+
+        for line in phases_to_run:
+            console.print(line)
+
+        confirm = typer.confirm("\nProceed?", default=False)
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+        console.print()
+
+    # Phase 1: Packages
+    if phase is None or phase == "packages":
+        console.print("[bold]Phase 1: Packages[/bold]")
+        _apply_packages(ssh, baseline, pkg_mgr, dry_run=False)
+        console.print()
+
+    # Phase 2: SSH Daemon
+    if phase is None or phase == "sshd":
+        console.print("[bold]Phase 2: SSH Daemon[/bold]")
+        sshd_cfg = baseline.get("sshd", {})
+        if not sshd_cfg:
+            console.print("  [dim]sshd: no configuration specified[/dim]")
+        else:
+            _apply_sshd(ssh, sshd_cfg, dry_run=False)
+        console.print()
+
+    # Phase 3: Firewall
+    if phase is None or phase == "firewall":
+        console.print("[bold]Phase 3: Firewall[/bold]")
+        fw_cfg = baseline.get("firewall", {})
+        if not fw_cfg:
+            console.print("  [dim]firewall: no configuration specified[/dim]")
+        else:
+            _apply_firewall(ssh, fw_cfg, dry_run=False)
+        console.print()
+
+    console.print(f"[green]✓[/green] Apply complete for [bold]{name}[/bold]")
+
+
+@vps_app.command("init")
+def vps_init(
+    target: str = typer.Argument(..., help="Target in the form <provider>/<account>:<id>"),
+    stage: str = typer.Option("prod", "--stage"),
+    out: Optional[Path] = typer.Option(None, "--out", help="Output YAML path"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing output"),
+    user: str = typer.Option("root", "--user"),
+    port: int = typer.Option(22, "--port"),
+    key: Optional[Path] = typer.Option(None, "--key", help="SSH private key"),
+) -> None:
+    """
+    Initialize a per-VPS config from provider metadata + SSH facts.
+
+    Examples:
+      cstation vps init hetzner/ANSIS:123456
+      cstation vps init vultr/MAIN:9b2f... --stage prod
+      cstation vps init hetzner/ANSIS:123456 --out config/vps/prod_hel1_sg05.yaml
+    """
+    if "/" not in target:
+        raise typer.BadParameter("Target must be <provider>/<account>:<id>")
+    provider_name, rest = target.split("/", 1)
+    account_name, raw_target = _split_account_target(rest)
+    if account_name is None:
+        raise typer.BadParameter("Target must include account: <provider>/<account>:<id>")
+    id_, name = _parse_target(raw_target)
+    if not id_:
+        raise typer.BadParameter("Target must include VPS id after <account>:")
+
+    output_path = out
+    if output_path is not None and output_path.exists() and not force:
+        console.print(f"[red]✗[/red] Output file already exists: {output_path}")
+        raise typer.Exit(5)
+
+    try:
+        _, provider = _provider(provider_name, account_name)
+        vps = provider.get_vps(id=id_, name=name)
+    except ProviderNotFoundError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(3)
+    except ProviderAuthError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(2)
+    except ProviderError as e:
+        console.print(f"[red]✗[/red] {e}")
+        raise typer.Exit(1)
+
+    resolved_name = vps.name
+    resolved_region = vps.region or "unknown"
+    output_path = output_path or Path("config") / "vps" / f"{stage}_{resolved_region}_{resolved_name}.yaml"
+
+    if output_path.exists() and not force:
+        console.print(f"[red]✗[/red] Output file already exists: {output_path}")
+        raise typer.Exit(5)
+
+    host = vps.ipv4 or vps.ipv6
+    if not host:
+        console.print("[red]✗[/red] VPS has no reachable IP address")
+        raise typer.Exit(4)
+
+    ssh = SSHManager(host=host, user=user, key_filename=str(key) if key else None, port=port)
+    facts = _collect_facts(ssh)
+
+    # Build access dict, omitting null key
+    access: dict[str, Any] = {
+        "host": host,
+        "user": user,
+        "port": port,
+    }
+    if key:
+        access["key"] = str(key)
+
+    # os.baseline: suggest missing packages for install
+    missing_packages = facts.get("packages", {}).get("missing", [])
+    baseline_packages = [p for p in missing_packages if p in ("fail2ban", "docker.io", "containerd", "ufw", "nftables")]
+
+    payload = {
+        "apiVersion": "cstation/v1",
+        "kind": "VPS",
+        "identity": {
+            "name": resolved_name,
+            "stage": stage,
+            "region": resolved_region,
+        },
+        "access": access,
+        "facts": facts,
+        "os": {
+            "baseline": {
+                "packages": baseline_packages,
+                "sshd": {"disable_password_auth": True},
+                "firewall": {"mode": "ufw", "allow": ["22/tcp"]},
+            }
+        },
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    clean_payload = _strip_nulls(payload)
+    with output_path.open("w", encoding="utf-8") as f:
+        yaml.dump(clean_payload, f, sort_keys=False, Dumper=_CStationYamlDumper)
+
+    console.print(f"[green]✓[/green] Wrote {output_path}")
+
+
+@vps_app.callback()
+def vps_callback(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        rprint(ctx.get_help())
+        raise typer.Exit(0)

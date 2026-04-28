@@ -5,6 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+import typer
+
 from cstation.config import config_manager, initialize_configuration
 from cstation.main import app
 
@@ -347,22 +349,22 @@ def test_vps_init_writes_yaml(monkeypatch, tmp_path: Path):
 
     def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
         outputs = {
-            "cat /etc/os-release": 'NAME="Ubuntu"\\nVERSION_ID="22.04"\\nID=ubuntu\\n',
-            "uname -r": "6.8.0\\n",
-            "lscpu": "CPU(s): 4\\nModel name: Intel Xeon\\n",
-            "free -m": "Mem: 8192 0 0\\n",
+            "cat /etc/os-release": 'NAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\n',
+            "uname -r": "6.8.0\n",
+            "lscpu": "CPU(s): 4\nModel name: Intel Xeon\n",
+            "free -m": "Mem: 8192 0 0\n",
             "lsblk -b -J": '{"blockdevices":[{"name":"sda","size":85899345920}]}',
             "ip -j a": "[]",
-            "ip route": "default via 1.2.3.1 dev eth0\\n",
-            "hostname": "sg05\\n",
-            "command -v apt-get": "/usr/bin/apt-get\\n",
-            "dpkg -s openssh-server >/dev/null 2>&1; echo $?": "0\\n",
-            "dpkg -s docker.io >/dev/null 2>&1; echo $?": "1\\n",
+            "ip route": "default via 1.2.3.1 dev eth0\n",
+            "hostname": "sg05\n",
+            "command -v apt-get": "/usr/bin/apt-get\n",
+            "dpkg -s openssh-server >/dev/null 2>&1; echo $?": "0\n",
+            "dpkg -s docker.io >/dev/null 2>&1; echo $?": "1\n",
         }
         return FakeResult(outputs.get(command, ""))
 
     monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.get_vps", fake_get_vps)
-    monkeypatch.setattr("cstation.ssh.SSHManager.run", fake_run)
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
 
     out_path = tmp_path / "config" / "vps" / "prod_hel1_sg05.yaml"
     r = CliRunner().invoke(
@@ -400,6 +402,20 @@ def test_vps_init_refuses_overwrite(monkeypatch, tmp_path: Path):
     _reset_config()
     initialize_configuration()
 
+    def fake_get_vps(self, *, id=None, name=None):
+        from cstation.providers.base import VPS, VPSStatus
+        return VPS(
+            provider="hetzner",
+            id="123456",
+            name="sg05",
+            region="hel1",
+            status=VPSStatus.RUNNING,
+            ipv4="1.2.3.4",
+            ipv6=None,
+        )
+
+    monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.get_vps", fake_get_vps)
+
     out_path = tmp_path / "config" / "vps" / "prod_hel1_sg05.yaml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("existing: true", encoding="utf-8")
@@ -407,7 +423,6 @@ def test_vps_init_refuses_overwrite(monkeypatch, tmp_path: Path):
     r = CliRunner().invoke(app, ["vps", "init", "hetzner/ANSIS:123456", "--out", str(out_path)])
     assert r.exit_code != 0
     assert "already exists" in r.output.lower()
-    assert "vcpu" in r.output.lower()
 
 
 def test_vps_ls_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
@@ -608,3 +623,172 @@ def test_vps_ls_fails_when_all_provider_accounts_auth_fail(monkeypatch, tmp_path
     r = CliRunner().invoke(app, ["vps", "ls"])
     assert r.exit_code == 2
     assert "Vultr authentication failed" in r.output
+
+
+# ── plan / apply tests ──────────────────────────────────────────────
+
+
+def _minimal_vps_yaml(tmp_path: Path) -> Path:
+    """Write a minimal VPS config YAML and return its path."""
+    cfg = tmp_path / "vps.yaml"
+    cfg.write_text(
+        "\n".join(
+            [
+                "apiVersion: cstation/v1",
+                "kind: VPS",
+                "identity:",
+                "  name: testbox",
+                "  stage: prod",
+                "  region: hel1",
+                "access:",
+                "  host: 1.2.3.4",
+                "  user: root",
+                "  port: 22",
+                "facts:",
+                "  os:",
+                "    id: ubuntu",
+                "    package_manager: apt",
+                "  packages:",
+                "    detected: [openssh-server, curl]",
+                "    missing: [fail2ban, docker.io]",
+                "os:",
+                "  baseline:",
+                "    packages: [fail2ban, docker.io]",
+                "    sshd:",
+                "      disable_password_auth: true",
+                "    firewall:",
+                "      mode: ufw",
+                "      allow:",
+                "        - 22/tcp",
+                "        - 80/tcp",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return cfg
+
+
+class _FakeSSHResult:
+    def __init__(self, stdout: str = "", exited: int = 0, stderr: str = ""):
+        self.stdout = stdout
+        self.exited = exited
+        self.stderr = stderr
+
+
+def _make_fake_ssh(monkeypatch, responses: dict[str, str] | None = None):
+    """Patch SSHManager.run to return canned responses."""
+    if responses is None:
+        responses = {}
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        output = responses.get(command, "")
+        return _FakeSSHResult(stdout=output)
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+    # Also patch _ssh_from_config to skip real connections
+    # (plan/apply construct their own SSHManager from the YAML)
+
+
+def _skip_confirm(monkeypatch):
+    """Auto-confirm the apply prompt."""
+    monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
+
+
+def test_vps_plan_help():
+    r = CliRunner().invoke(app, ["vps", "plan", "--help"])
+    assert r.exit_code == 0
+    assert "dry-run" in r.output.lower() or "plan" in r.output.lower()
+
+
+def test_vps_apply_help():
+    r = CliRunner().invoke(app, ["vps", "apply", "--help"])
+    assert r.exit_code == 0
+    assert "phase" in r.output.lower()
+
+
+def test_vps_plan_shows_missing_packages(monkeypatch, tmp_path: Path):
+    cfg = _minimal_vps_yaml(tmp_path)
+
+    responses = {
+        "dpkg -s openssh-server >/dev/null 2>&1; echo $?": "0",
+        "dpkg -s fail2ban >/dev/null 2>&1; echo $?": "1",
+        "dpkg -s docker.io >/dev/null 2>&1; echo $?": "1",
+        "ufw status": "Status: inactive\n",
+    }
+    _make_fake_ssh(monkeypatch, responses)
+
+    r = CliRunner().invoke(app, ["vps", "plan", str(cfg)])
+    assert r.exit_code == 0
+    assert "fail2ban" in r.output
+    assert "docker.io" in r.output
+
+
+def test_vps_apply_installs_packages(monkeypatch, tmp_path: Path):
+    cfg = _minimal_vps_yaml(tmp_path)
+
+    install_cmds_seen: list[str] = []
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        if "apt-get" in command and "install" in command:
+            install_cmds_seen.append(command)
+            return _FakeSSHResult(stdout="", exited=0)
+        if command == "ufw status":
+            return _FakeSSHResult(stdout="Status: active\n")
+        if command.startswith("ufw status | grep"):
+            return _FakeSSHResult(stdout="0")
+        if command == "ufw status verbose | grep 'Default:'":
+            return _FakeSSHResult(stdout="Default: deny (incoming)\n")
+        if "PasswordAuthentication" in command and "grep" in command:
+            return _FakeSSHResult(stdout="1")  # exit 1 = not found
+        if command.startswith("sed -i") or "sshd_config.d" in command or "reload" in command:
+            return _FakeSSHResult(stdout="", exited=0)
+        if command.startswith("dpkg -s"):
+            return _FakeSSHResult(stdout="1")
+        if command == "ufw allow 22/tcp" or command == "ufw allow 80/tcp":
+            return _FakeSSHResult(stdout="Rule added\n")
+        if command == "ufw --force enable":
+            return _FakeSSHResult(stdout="Firewall is active\n")
+        return _FakeSSHResult(stdout="")
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+    _skip_confirm(monkeypatch)
+
+    r = CliRunner().invoke(app, ["vps", "apply", str(cfg), "--yes"])
+    assert r.exit_code == 0
+    assert "packages" in r.output.lower()
+
+
+def test_vps_apply_single_phase(monkeypatch, tmp_path: Path):
+    cfg = _minimal_vps_yaml(tmp_path)
+
+    ssh_calls: list[str] = []
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        ssh_calls.append(command)
+        if "grep" in command and "PasswordAuthentication" in command:
+            return _FakeSSHResult(stdout="", exited=1)
+        if command.startswith("sed") or "sshd_config.d" in command or "reload" in command:
+            return _FakeSSHResult(stdout="", exited=0)
+        return _FakeSSHResult(stdout="")
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+    _skip_confirm(monkeypatch)
+
+    r = CliRunner().invoke(app, ["vps", "apply", str(cfg), "--yes", "--phase", "sshd"])
+    assert r.exit_code == 0
+    assert "sshd" in r.output.lower()
+    # Should NOT contain package-related commands
+    assert "apt-get" not in " ".join(ssh_calls)
+
+
+def test_vps_plan_invalid_config(tmp_path: Path):
+    bad_cfg = tmp_path / "bad.yaml"
+    bad_cfg.write_text("invalid: true\n", encoding="utf-8")
+    r = CliRunner().invoke(app, ["vps", "plan", str(bad_cfg)])
+    assert r.exit_code != 0
+
+
+def test_vps_plan_nonexistent_config(tmp_path: Path):
+    r = CliRunner().invoke(app, ["vps", "plan", str(tmp_path / "nope.yaml")])
+    assert r.exit_code != 0

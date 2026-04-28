@@ -15,6 +15,70 @@ from rich.console import Console
 
 console = Console()
 
+def _parse_dotenv_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and ((value[0] == value[-1] == '"') or (value[0] == value[-1] == "'")):
+        return value[1:-1]
+    return value
+
+
+def _parse_dotenv_lines(content: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        out[key] = _parse_dotenv_value(value)
+    return out
+
+
+def _find_project_root(start: Path) -> Optional[Path]:
+    p = start.resolve()
+    for candidate in [p, *p.parents]:
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+    return None
+
+
+def _system_dotenv_path() -> Optional[Path]:
+    if sys.platform.startswith("win"):
+        appdata = os.environ.get("APPDATA")
+        if not appdata:
+            return None
+        return Path(appdata) / "cstation" / ".env"
+    return Path.home() / ".config" / "cstation" / ".env"
+
+
+def load_dotenv() -> None:
+    initial_keys = set(os.environ.keys())
+
+    dotenv_paths: list[Path] = []
+    system_env = _system_dotenv_path()
+    if system_env is not None:
+        dotenv_paths.append(system_env)
+
+    project_root = _find_project_root(Path.cwd())
+    if project_root is not None:
+        dotenv_paths.append(project_root / ".env")
+
+    for path in dotenv_paths:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for key, value in _parse_dotenv_lines(content).items():
+            if key in initial_keys:
+                continue
+            os.environ[key] = value
+
 
 class ConfigurationError(Exception):
     """Custom exception for configuration-related errors"""
@@ -195,27 +259,19 @@ class ConfigManager:
         ansible_cfg = self.find_ansible_config()
         if ansible_cfg:
             return str(ansible_cfg)
-        
-        # Fallback: try to create a default path
-        search_paths = self.get_config_search_paths()
-        if search_paths:
-            default_path = search_paths[0] / "ansible" / "ansible.cfg"
-            console.print(f"[yellow]⚠[/yellow] No ansible.cfg found, using default path: {default_path}")
-            return str(default_path)
-        
-        raise ConfigurationError("No ansible.cfg found and cannot determine default path")
+
+        raise ConfigurationError("No ansible.cfg found")
     
     def setup_ansible_environment(self) -> None:
         """
         Set up the ANSIBLE_CONFIG environment variable.
         """
-        try:
-            ansible_config_path = self.get_ansible_config_path()
-            os.environ['ANSIBLE_CONFIG'] = ansible_config_path
-            console.print(f"[green]✓[/green] Set ANSIBLE_CONFIG to: {ansible_config_path}")
-        except ConfigurationError as e:
-            console.print(f"[red]✗[/red] Failed to set ANSIBLE_CONFIG: {e}")
-            # Don't raise here, let the application continue with default behavior
+        ansible_cfg = self.find_ansible_config()
+        if not ansible_cfg:
+            return
+
+        os.environ["ANSIBLE_CONFIG"] = str(ansible_cfg)
+        console.print(f"[green]✓[/green] Set ANSIBLE_CONFIG to: {ansible_cfg}")
     
     def get_config_value(self, key: str, default: Any = None) -> Any:
         """
@@ -250,12 +306,6 @@ class ConfigManager:
         # Check if any configuration was loaded
         if not self.config_data and not self.config_sources:
             issues.append("No configuration files found in any search path")
-        
-        # Check Ansible configuration
-        try:
-            self.get_ansible_config_path()
-        except ConfigurationError as e:
-            issues.append(f"Ansible configuration issue: {e}")
         
         return issues
     
@@ -298,6 +348,7 @@ def initialize_configuration() -> ConfigManager:
         Configured ConfigManager instance
     """
     try:
+        load_dotenv()
         config_manager.load_configuration()
         config_manager.setup_ansible_environment()
         return config_manager

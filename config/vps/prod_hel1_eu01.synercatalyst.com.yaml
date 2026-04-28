@@ -1,0 +1,99 @@
+apiVersion: cstation/v1
+kind: VPS
+identity:
+  name: eu01.synercatalyst.com
+  stage: prod
+  region: hel1
+access:
+  host: 37.27.218.255
+  user: root
+  port: 22
+facts:
+  os:
+    id: ubuntu
+    version: '24.04'
+    pretty: Ubuntu 24.04.3 LTS
+    kernel: 6.8.0-90-generic
+    package_manager: apt
+  cpu:
+    architecture: aarch64
+    vendor: ARM
+    model: Neoverse-N1
+    vcpu: 4
+    cores_per_socket: 4
+    sockets: 1
+    threads_per_core: 1
+  memory:
+    total_mb: 7730
+    used_mb: 344
+    available_mb: 7385
+    swap_total_mb: 0
+    swap_used_mb: 0
+  disks:
+  - name: sda
+    size_gb: 76.3
+    type: disk
+    partitions:
+    - name: sda1
+      size_gb: 76.0
+      type: part
+      mountpoint: /
+    - name: sda14
+      size_gb: 0.0
+      type: part
+    - name: sda15
+      size_gb: 0.2
+      type: part
+      mountpoint: /boot/efi
+  - name: sr0
+    size_gb: 1.0
+    type: rom
+  network:
+    interfaces:
+    - name: eth0
+      state: UP
+      mac: 92:00:07:a4:c8:ef
+      ipv4: 37.27.218.255
+      ipv4_prefix: 32
+      ipv6: 2a01:4f9:c014:760a::1
+      ipv6_prefix: 64
+    routes:
+    - destination: default
+      via: 172.31.1.1
+      dev: eth0
+    - destination: 172.31.1.1
+      dev: eth0
+    - destination: 185.12.64.1
+      via: 172.31.1.1
+      dev: eth0
+    - destination: 185.12.64.2
+      via: 172.31.1.1
+      dev: eth0
+  hostname: EU01
+  packages:
+    detected:
+    - openssh-server
+    - ufw
+    - nftables
+    - python3
+    - rsync
+    - curl
+    - git
+    - sudo
+    missing:
+    - fail2ban
+    - docker
+    - docker.io
+    - containerd
+os:
+  baseline:
+    packages:
+    - fail2ban
+    - docker.io
+    - containerd
+    sshd:
+      disable_password_auth: true
+    firewall:
+      mode: ufw
+      allow:
+      - 22/tcp
