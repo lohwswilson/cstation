@@ -1,102 +1,45 @@
 # CStation - Infrastructure Management CLI
 
-🚀 A powerful DevOps CLI tool for managing infrastructure using Ansible, built with Python 3.13, Typer, and uv.
+A DevOps CLI tool for managing infrastructure, VPS lifecycle, and deployments. Built with Python 3.13, Typer, and uv.
 
-## Table of Contents
+## Prerequisites
 
-- [Features](#features)
-- [Installation](#installation)
-  - [Prerequisites](#prerequisites)
-  - [Development Installation](#development-installation)
-  - [Production Installation](#production-installation)
-  - [Verification](#verification)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-  - [Basic Commands](#basic-commands)
-  - [Server Management](#server-management)
-  - [GitHub Management](#github-management)
-  - [Docker Services](#docker-services)
-- [Available Docker Services](#available-docker-services)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Troubleshooting](#troubleshooting)
-
-## Features
-
-- **Server Management**: SSH key setup, status monitoring, host listing, and remote server administration
-- **GitHub Management**: Repository management and SSH key setup for GitHub access
-- **Project Initialization**: Scaffold new infrastructure projects with best practices
-- **Rich CLI Interface**: Beautiful, colored output with progress indicators
-- **Modern Python**: Built with Python 3.13 and modern tooling
-- **Modular Architecture**: Clean, maintainable code structure with proper packaging
+- Python 3.13+
+- [uv](https://docs.astral.sh/uv/) package manager
 
 ## Installation
 
-### Prerequisites
-
-- Python 3.13+
-- [uv](https://docs.astral.sh/uv/) package manager (recommended) or pip
-- Ansible (for server management features)
-
-### Development Installation
-
-For development work, install CStation in editable mode:
-
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd cstation
-
-# Create and activate virtual environment with uv
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install in editable mode
 uv pip install -e .
 
-# Verify installation
-cstation --help
+# Verify
+uv run cstation --help
 ```
 
-### Production Installation
-
-For production use, install directly from the package:
+Install with test dependencies:
 
 ```bash
-# Using uv (recommended)
-uv pip install cstation
-
-# Or using pip
-pip install cstation
-```
-
-### Verification
-
-After installation, verify that CStation is working correctly:
-
-```bash
-# Check version
-cstation version
-
-# View available commands
-cstation --help
-
-# Test from any directory
-cd /tmp
-cstation version
+uv pip install -e ".[test]"
 ```
 
 ## Quick Start
 
 ```bash
-# Initialize system configuration (root ownership)
+# Initialize system configuration
 sudo cstation init
 
 # Initialize with user ownership (allows editing without sudo)
 sudo cstation init --developer
 
-# Restore root ownership after developer mode
-sudo cstation init
+# List VPS instances
+uv run cstation vps ls
+
+# Initialize a VPS config from a Hetzner server
+uv run cstation vps init hetzner/myaccount:123456
 ```
 
 ## Usage
@@ -104,241 +47,170 @@ sudo cstation init
 ### Basic Commands
 
 ```bash
-# Show version information
-cstation version
-
-# Initialize configuration
-cstation init
-
-# Get help for any command
-cstation <command> --help
+cstation version              # Show version
+cstation init                 # Initialize configuration
+cstation <command> --help     # Get help for any command
 ```
+
+### VPS Management
+
+```bash
+# List VPS instances across all configured providers
+cstation vps ls
+cstation vps ls --provider hetzner
+
+# Show VPS status (supports provider/account:id format)
+cstation vps status hetzner/myaccount:123456
+cstation vps status myaccount:123456
+
+# Initialize a per-VPS config from provider metadata + SSH facts
+cstation vps init hetzner/myaccount:123456
+cstation vps init hetzner/myaccount:123456 --out config/vps/sg05.yaml
+
+# Dry-run: preview what would be applied
+cstation vps plan config/vps/sg05.yaml
+
+# Apply VPS configuration (upgrade, packages, shell, terminal, sshd, firewall)
+cstation vps apply config/vps/sg05.yaml
+cstation vps apply config/vps/sg05.yaml --yes
+cstation vps apply config/vps/sg05.yaml --phase packages
+```
+
+VPS command targets use the format `<provider>/<account>:<id>`. Examples:
+- `hetzner/myaccount:123456` — Hetzner server by numeric ID
+- `vultr/main:3431427c-9755-4064-903e-7a3e8bc82791` — Vultr instance by UUID
 
 ### Server Management
 
 ```bash
-# List available servers
-cstation server ls
-
-# Check server status
-cstation server status <hostname>
-
-# Setup SSH key authentication
-cstation server ssh <hostname>
-
-# List available playbooks
-cstation server code
-
-# Execute playbook on target
-cstation server push <playbook> <target>
-
-# Remove server from inventory
-cstation server rm <hostname>
+cstation server ls              # List servers
+cstation server status <host>   # Check server status
+cstation server ssh <host>     # Setup SSH key authentication
+cstation server push <playbook> <target>  # Execute playbook
+cstation server rm <host>      # Remove server from inventory
 ```
 
 ### GitHub Management
 
 ```bash
-# GitHub repository operations
 cstation github --help
-
-# Setup GitHub SSH keys
-cstation github ssh
+cstation github ssh             # Setup GitHub SSH keys
+cstation github repo            # Repository operations
 ```
 
-### Docker Services
+### Docker Management
 
 ```bash
-# Service management
-cstation service --help
-
-# Docker service operations
-cstation service docker --help
+cstation docker --help
 ```
-
-## Available Docker Services
-
-CStation supports management of various Docker services for infrastructure needs. Use `cstation service --help` for detailed information.
 
 ## Configuration
 
-CStation stores its configuration in `/etc/cstation/` by default. The configuration includes:
+CStation loads configuration from these locations (highest precedence first):
 
-- Ansible configuration files
-- Inventory files
-- Playbooks and roles
-- SSH keys and certificates
+1. `./etc/` — project-local
+2. `/etc/cstation/` — system-wide
+3. `~/.config/cstation/` — user-level
+
+Provider tokens for VPS commands are configured in `~/.config/cstation/config.yaml`:
+
+```yaml
+vps:
+  default_provider: hetzner
+  providers:
+    hetzner:
+      accounts:
+        personal:
+          token: "your-hetzner-token"
+        work:
+          token: "your-work-hetzner-token"
+    vultr:
+      accounts:
+        main:
+          token: "your-vultr-token"
+```
+
+VPS init writes per-VPS config files to `config/vps/<name>.yaml` by default (e.g. `config/vps/sg05.yaml`).
 
 ## Development
+
+```bash
+# Run all tests
+uv run pytest -q
+
+# Run a specific test
+uv run pytest -q tests/commands/test_vps_cli.py::test_vps_init_writes_yaml
+
+# Run CLI directly
+uv run cstation vps ls
+```
 
 ### Project Structure
 
 ```
-cstation/
-├── src/                     # Source code directory
-│   └── cstation/            # Main package
-│       ├── __init__.py      # Package initialization
-│       ├── main.py          # CLI entry point
-│       ├── config.py        # Configuration management
-│       └── commands/        # Command modules
-│           ├── version/     # Version command
-│           ├── init/        # Initialization command
-│           ├── server/      # Server management
-│           ├── github/      # GitHub operations
-│           └── service/     # Service management
-├── tests/                   # Test suite
-├── docs/                    # Documentation
-├── pyproject.toml          # Package configuration
-├── requirements-dev.txt    # Development dependencies
-└── README.md               # This file
+src/cstation/
+├── main.py              # CLI entry point (Typer app)
+├── config.py            # Configuration management (ConfigManager)
+├── ssh.py               # SSH remote execution (Fabric wrapper)
+├── inventory.py         # Inventory management
+├── commands/
+│   ├── version/         # Version command
+│   ├── init/            # Initialization command
+│   ├── server/          # Ansible-based server management
+│   ├── github/          # GitHub repository operations
+│   ├── docker/          # Docker management
+│   ├── vps/             # VPS lifecycle (ls, status, init, plan, apply)
+│   ├── pw/              # PerfectWork operations
+│   └── sync/            # Sync management
+├── providers/
+│   ├── base.py          # VPSProvider protocol + VPS/VPSStatus models
+│   ├── hetzner.py       # Hetzner Cloud adapter
+│   ├── vultr.py         # Vultr adapter
+│   └── errors.py        # Provider exceptions
+tests/
+├── commands/
+│   └── test_vps_cli.py  # VPS CLI integration tests
+├── providers/
+│   ├── test_models.py   # Provider model tests
+│   ├── test_hetzner.py  # Hetzner adapter tests
+│   └── test_vultr.py    # Vultr adapter tests
+config/
+└── vps/                 # Per-VPS config YAML files
 ```
 
-**Directory Structure Conventions:**
+### Adding a New Command Group
 
-- **`src/`**: Contains all source code following Python packaging best practices
-- **`src/cstation/`**: Main package with clear separation from project root
-- **`tests/`**: Test suite with same structure as source code
-- **`docs/`**: Comprehensive documentation and guides
-- **`pyproject.toml`**: Modern Python packaging configuration
-- **`requirements-dev.txt`**: Development-specific dependencies
+1. Create `src/cstation/commands/<group>/__init__.py` (empty)
+2. Create `src/cstation/commands/<group>/main.py` with a Typer app
+3. Register in `src/cstation/main.py`:
+   ```python
+   from cstation.commands.<group>.main import <group>_app
+   app.add_typer(<group>_app, name="<group>")
+   ```
 
-This structure follows the **src-layout** pattern, which:
-- Prevents accidental imports from the project directory
-- Ensures proper package installation testing
-- Provides clear separation between source code and project files
-- Follows modern Python packaging standards
+### Adding a New Provider
 
-### Setting up Development Environment
-
-```bash
-# Clone and setup
-git clone <repository-url>
-cd cstation
-
-# Create virtual environment
-uv venv
-
-# Activate environment
-source .venv/bin/activate
-
-# Install in editable mode with dev dependencies
-uv pip install -e ".[test]"
-
-# Run tests
-pytest
-
-# Run specific test
-pytest tests/test_config.py
-```
-
-### Making Changes
-
-1. Make your changes to the code
-2. Test locally: `cstation --help`
-3. Run tests: `pytest`
-4. The editable installation will reflect changes immediately
+1. Create `src/cstation/providers/<name>.py` implementing `VPSProvider` protocol from `base.py`
+2. Add to `_provider_from_token()` in `src/cstation/commands/vps/main.py`
 
 ## Troubleshooting
 
-### Common Installation Issues
+### No VPS providers configured
 
-#### Command Not Found After Installation
+Set provider tokens in `~/.config/cstation/config.yaml` (see Configuration above) or set `HETZNER_TOKEN` environment variable.
 
-**Problem**: `cstation: command not found` after installation
-
-**Solutions**:
-
-1. **Virtual Environment**: Ensure your virtual environment is activated:
-   ```bash
-   source .venv/bin/activate
-   which cstation  # Should show path in .venv/bin/
-   ```
-
-2. **Global Installation**: For global access, install in your system Python:
-   ```bash
-   # Using uv globally
-   uv pip install --system cstation
-   
-   # Or using pip
-   pip install --user cstation
-   ```
-
-3. **PATH Issues**: Add the installation directory to your PATH:
-   ```bash
-   # Add to ~/.bashrc or ~/.zshrc
-   export PATH="$HOME/.local/bin:$PATH"
-   ```
-
-#### Import Errors
-
-**Problem**: `ModuleNotFoundError` when running commands
-
-**Solutions**:
-
-1. **Reinstall in editable mode**:
-   ```bash
-   uv pip uninstall cstation
-   uv pip install -e .
-   ```
-
-2. **Check Python path**:
-   ```bash
-   python -c "import cstation; print(cstation.__file__)"
-   ```
-
-#### Permission Errors
-
-**Problem**: Permission denied when running `cstation init`
-
-**Solution**: Use sudo for system-wide configuration:
-```bash
-sudo cstation init
-```
-
-#### Ansible Not Found
-
-**Problem**: Ansible commands fail
-
-**Solution**: Install Ansible:
-```bash
-uv pip install ansible
-# or
-pip install ansible
-```
-
-### Getting Help
-
-1. **Check command help**: `cstation <command> --help`
-2. **Verify installation**: `cstation version`
-3. **Check logs**: Look in `/etc/cstation/logs/` (if configured)
-4. **Test in clean environment**: Create a new virtual environment and test
-
-### Development Troubleshooting
-
-#### Editable Installation Not Working
+### Command not found
 
 ```bash
-# Uninstall and reinstall
-uv pip uninstall cstation
+# Reinstall in editable mode
 uv pip install -e .
-
-# Verify
-python -c "import cstation; print(cstation.__file__)"
+uv run cstation --help
 ```
 
-#### Tests Failing
+### Tests failing
 
 ```bash
-# Install test dependencies
+# Ensure test dependencies are installed
 uv pip install -e ".[test]"
-
-# Run with verbose output
-pytest -v
-
-# Run specific test file
-pytest tests/test_config.py -v
+uv run pytest -q
 ```
-
----
-
-**Note**: This CLI tool is designed for DevOps professionals and requires proper understanding of Ansible, Docker, and infrastructure management concepts.

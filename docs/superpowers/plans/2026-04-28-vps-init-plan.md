@@ -2,7 +2,7 @@
  
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
  
-**Goal:** Add `cstation vps init <provider>/<account>:<id>` to fetch provider metadata + SSH facts and write `config/vps/<stage>_<region>_<name>.yaml`, refusing overwrite unless `--force`.
+**Goal:** Add `cstation vps init <provider>/<account>:<id>` to fetch provider metadata + SSH facts and write `config/vps/<name>.yaml`, refusing overwrite unless `--force`.
  
 **Architecture:** Extend the existing `vps` command module with an `init` subcommand that resolves provider/account, fetches VPS metadata via providers, uses `SSHManager` for read-only facts, and serializes a YAML skeleton via `pyyaml`. Keep parsing/helpers in the `vps` module for now to match existing patterns.
  
@@ -96,10 +96,10 @@ def test_vps_init_writes_yaml(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.get_vps", fake_get_vps)
     monkeypatch.setattr("cstation.ssh.SSHManager.run", fake_run)
  
-    out_path = tmp_path / "config" / "vps" / "prod_hel1_sg05.yaml"
+    out_path = tmp_path / "config" / "vps" / "sg05.yaml"
     r = CliRunner().invoke(
         app,
-        ["vps", "init", "hetzner/ANSIS:123456", "--stage", "prod", "--out", str(out_path)],
+        ["vps", "init", "hetzner/ANSIS:123456", "--out", str(out_path)],
     )
     assert r.exit_code == 0
     assert out_path.exists()
@@ -135,10 +135,10 @@ def test_vps_init_refuses_overwrite(monkeypatch, tmp_path: Path):
     _reset_config()
     initialize_configuration()
  
-    out_path = tmp_path / "config" / "vps" / "prod_hel1_sg05.yaml"
+    out_path = tmp_path / "config" / "vps" / "sg05.yaml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("existing: true", encoding="utf-8")
- 
+
     r = CliRunner().invoke(app, ["vps", "init", "hetzner/ANSIS:123456", "--out", str(out_path)])
     assert r.exit_code != 0
     assert "already exists" in r.output.lower()
@@ -295,7 +295,7 @@ def vps_init(
     Examples:
       cstation vps init hetzner/ANSIS:123456
       cstation vps init vultr/MAIN:9b2f... --stage prod
-      cstation vps init hetzner/ANSIS:123456 --out config/vps/prod_hel1_sg05.yaml
+      cstation vps init hetzner/ANSIS:123456 --out config/vps/sg05.yaml
     """
     if "/" not in target:
         raise typer.BadParameter("Target must be <provider>/<account>:<id>")
@@ -312,7 +312,7 @@ def vps_init(
  
     resolved_name = vps.name
     resolved_region = vps.region or "unknown"
-    output_path = out or Path("config") / "vps" / f"{stage}_{resolved_region}_{resolved_name}.yaml"
+    output_path = out or Path("config") / "vps" / f"{resolved_name}.yaml"
  
     if output_path.exists() and not force:
         console.print(f"[red]✗[/red] Output file already exists: {output_path}")

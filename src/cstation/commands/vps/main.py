@@ -37,6 +37,7 @@ KEY_PACKAGES = [
     "docker",
     "docker.io",
     "containerd",
+    "docker-compose-v2",
     "python3",
     "rsync",
     "curl",
@@ -714,6 +715,122 @@ def _apply_packages(ssh: SSHManager, baseline: dict[str, Any], pkg_mgr: str, *, 
     return missing
 
 
+def _apply_upgrade_all(ssh: SSHManager, baseline: dict[str, Any], pkg_mgr: str, *, dry_run: bool = False) -> bool:
+    if not baseline.get("upgrade_all"):
+        console.print("  [dim]upgrade: not requested[/dim]")
+        return False
+
+    if pkg_mgr == "apt":
+        cmd = "apt-get update -qq && apt-get upgrade -y -qq"
+    elif pkg_mgr in ("dnf", "yum"):
+        cmd = f"{pkg_mgr} upgrade -y"
+    elif pkg_mgr == "apk":
+        cmd = "apk update && apk upgrade"
+    else:
+        console.print(f"  [red]✗[/red] upgrade: unsupported package manager '{pkg_mgr}'")
+        return False
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] upgrade: would upgrade all packages")
+        return True
+
+    result = ssh.run(cmd, sudo=True)
+    if result and getattr(result, "exited", 0) == 0:
+        console.print(f"  [green]✓[/green] upgrade: all packages upgraded")
+        return True
+    stderr = getattr(result, "stderr", "") or ""
+    console.print(f"  [red]✗[/red] upgrade: failed{': ' + stderr.strip() if stderr else ''}")
+    return False
+
+
+def _apply_shell(ssh: SSHManager, baseline: dict[str, Any], *, dry_run: bool = False) -> bool:
+    shell = baseline.get("shell")
+    if not shell:
+        console.print("  [dim]shell: not configured[/dim]")
+        return False
+
+    valid_shells = {"zsh": "/usr/bin/zsh", "bash": "/bin/bash", "fish": "/usr/bin/fish"}
+    if shell not in valid_shells:
+        console.print(f"  [red]✗[/red] shell: unsupported shell '{shell}'")
+        return False
+
+    target_path = valid_shells[shell]
+
+    result = ssh.run(f"command -v {shell}", hide=True)
+    if not result or not getattr(result, "stdout", "").strip():
+        if dry_run:
+            console.print(f"  [yellow]⟳[/yellow] shell: would install {shell}")
+            console.print(f"  [yellow]⟳[/yellow] shell: would set default shell to {target_path}")
+            return True
+        install_result = ssh.run(f"apt-get install -y -qq {shell}", sudo=True)
+        if not install_result or getattr(install_result, "exited", 0) != 0:
+            console.print(f"  [red]✗[/red] shell: failed to install {shell}")
+            return False
+        console.print(f"  [green]✓[/green] shell: installed {shell}")
+    else:
+        if dry_run:
+            console.print(f"  [green]✓[/green] shell: {shell} already installed")
+        else:
+            console.print(f"  [green]✓[/green] shell: {shell} already installed")
+
+    access_user = None
+    if dry_run:
+        access_user = "root"
+    else:
+        access_user = "root"
+
+    result = ssh.run(f"getent passwd {access_user}", hide=True)
+    if result:
+        last_field = (getattr(result, "stdout", "") or "").strip().split(":")[-1]
+        if last_field == target_path:
+            if dry_run:
+                console.print(f"  [green]✓[/green] shell: {access_user} already uses {shell}")
+            else:
+                console.print(f"  [green]✓[/green] shell: {access_user} already uses {shell}")
+            return True
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] shell: would set {access_user} default shell to {target_path}")
+        return True
+
+    ssh.run(f"usermod -s {target_path} {access_user}", sudo=True)
+    console.print(f"  [green]✓[/green] shell: set {access_user} default shell to {target_path}")
+    return True
+
+
+def _apply_terminal(ssh: SSHManager, baseline: dict[str, Any], *, dry_run: bool = False) -> bool:
+    terminal = baseline.get("terminal")
+    if not terminal:
+        console.print("  [dim]terminal: not configured[/dim]")
+        return False
+
+    result = ssh.run("cat /etc/environment", hide=True, sudo=False)
+    current = getattr(result, "stdout", "") or ""
+
+    for line in current.splitlines():
+        if line.strip().startswith("TERM="):
+            current_term = line.strip().split("=", 1)[1].strip('"').strip("'")
+            if current_term == terminal:
+                if dry_run:
+                    console.print(f"  [green]✓[/green] terminal: TERM already set to {terminal}")
+                else:
+                    console.print(f"  [green]✓[/green] terminal: TERM already set to {terminal}")
+                return True
+            break
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] terminal: would set TERM={terminal} in /etc/environment")
+        return True
+
+    entry = f"TERM={terminal}"
+    if current.strip():
+        ssh.run(f'bash -c \'echo "{entry}" >> /etc/environment\'', hide=True)
+    else:
+        ssh.run(f'bash -c \'echo "{entry}" > /etc/environment\'', hide=True)
+    console.print(f"  [green]✓[/green] terminal: set TERM={terminal} in /etc/environment")
+    return True
+
+
 def _apply_sshd(ssh: SSHManager, sshd_config: dict[str, Any], *, dry_run: bool = False) -> bool:
     """Configure SSH daemon. Returns True if changes were made."""
     changes: list[str] = []
@@ -803,6 +920,269 @@ def _apply_firewall(ssh: SSHManager, fw_config: dict[str, Any], *, dry_run: bool
     return changes
 
 
+def _apply_swap(ssh: SSHManager, swap_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    size_gb = swap_config.get("size_gb")
+    if not size_gb:
+        console.print("  [dim]swap: not configured[/dim]")
+        return False
+
+    result = ssh.run("swapon --show --noheadings 2>/dev/null", sudo=True)
+    swap_active = bool(result and getattr(result, "stdout", "").strip())
+    if swap_active:
+        console.print("  [green]✓[/green] swap: already active")
+        return False
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] swap: would create {size_gb}GB swap file")
+        return True
+
+    ssh.run(f"fallocate -l {size_gb}G /swapfile", sudo=True)
+    ssh.run("chmod 600 /swapfile", sudo=True)
+    ssh.run("mkswap /swapfile", sudo=True)
+    ssh.run("swapon /swapfile", sudo=True)
+
+    fstab_result = ssh.run("grep -c '/swapfile' /etc/fstab 2>/dev/null || true", sudo=True)
+    fstab_has_entry = fstab_result and getattr(fstab_result, "stdout", "").strip() not in ("", "0")
+    if not fstab_has_entry:
+        ssh.run("bash -c 'echo \"/swapfile none swap sw 0 0\" >> /etc/fstab'", sudo=True)
+
+    console.print(f"  [green]✓[/green] swap: created {size_gb}GB swap file and enabled")
+    return True
+
+
+def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    if not tuning_config and not journald_config:
+        console.print("  [dim]tuning: not configured[/dim]")
+        return False
+
+    changes = False
+
+    if tuning_config:
+        CONF_PATH = "/etc/sysctl.d/99-cstation.conf"
+        param_to_sysctl = {
+            "vm_swappiness": "vm.swappiness",
+            "vm_overcommit_memory": "vm.overcommit_memory",
+            "net_ipv4_tcp_max_syn_backlog": "net.ipv4.tcp_max_syn_backlog",
+            "fs_inotify_max_user_watches": "fs.inotify.max_user_watches",
+            "net_ipv4_tcp_keepalive_time": "net.ipv4.tcp_keepalive_time",
+        }
+
+        needed: dict[str, Any] = {}
+        for yaml_key, sysctl_key in param_to_sysctl.items():
+            desired = tuning_config.get(yaml_key)
+            if desired is None:
+                continue
+            current_result = ssh.run(f"sysctl -n {sysctl_key} 2>/dev/null", hide=True)
+            current_val = getattr(current_result, "stdout", "").strip() if current_result else ""
+            if current_val != str(desired):
+                needed[sysctl_key] = desired
+
+        if not needed:
+            console.print("  [green]✓[/green] tuning: all sysctl params already set")
+        else:
+            for key, val in needed.items():
+                if dry_run:
+                    console.print(f"  [yellow]⟳[/yellow] tuning: would set {key}={val}")
+                else:
+                    console.print(f"  [yellow]⟳[/yellow] tuning: setting {key}={val}")
+            if not dry_run:
+                lines = [f"{k} = {v}" for k, v in needed.items()]
+                conf_content = "\n".join(lines) + "\n"
+                ssh.run(f"bash -c 'cat > {CONF_PATH} << \"CSYSCTL\"\n{conf_content}CSYSCTL'", sudo=True)
+                ssh.run("sysctl --system", sudo=True, hide=True)
+                console.print("  [green]✓[/green] tuning: sysctl params applied")
+            changes = True
+
+    if journald_config:
+        JOURNALD_DIR = "/etc/systemd/journald.conf.d"
+        JOURNALD_PATH = f"{JOURNALD_DIR}/99-cstation.conf"
+        current_result = ssh.run(f"cat {JOURNALD_PATH} 2>/dev/null", hide=True, sudo=True)
+        current_content = getattr(current_result, "stdout", "").strip() if current_result else ""
+
+        desired_lines: list[str] = ["[Journal]"]
+        max_use = journald_config.get("system_max_use")
+        if max_use:
+            desired_lines.append(f"SystemMaxUse={max_use}")
+        fwd = journald_config.get("forward_to_syslog")
+        if fwd is not None:
+            desired_lines.append(f"ForwardToSyslog={'yes' if fwd else 'no'}")
+        desired_content = "\n".join(desired_lines)
+
+        if current_content == desired_content:
+            console.print("  [green]✓[/green] tuning: journald already configured")
+        else:
+            if dry_run:
+                console.print(f"  [yellow]⟳[/yellow] tuning: would write {JOURNALD_PATH}")
+            else:
+                ssh.run(f"mkdir -p {JOURNALD_DIR}", sudo=True)
+                ssh.run(f"bash -c 'cat > {JOURNALD_PATH} << \"CJOURNAL\"\n{desired_content}\nCJOURNAL'", sudo=True)
+                ssh.run("systemctl restart systemd-journald", sudo=True)
+                console.print(f"  [green]✓[/green] tuning: journald configured and restarted")
+            changes = True
+
+    return changes
+
+
+def _apply_fail2ban(ssh: SSHManager, f2b_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    if not f2b_config:
+        console.print("  [dim]fail2ban: not configured[/dim]")
+        return False
+
+    JAIL_PATH = "/etc/fail2ban/jail.local"
+    bantime = f2b_config.get("bantime", "10m")
+    findtime = f2b_config.get("findtime", "10m")
+    maxretry = f2b_config.get("maxretry", 5)
+
+    desired_content = (
+        f"[DEFAULT]\n"
+        f"bantime = {bantime}\n"
+        f"findtime = {findtime}\n"
+        f"maxretry = {maxretry}\n"
+        f"banaction = nftables\n"
+        f"backend = systemd\n\n"
+        f"[sshd]\n"
+        f"enabled = true\n"
+    )
+
+    current_result = ssh.run(f"cat {JAIL_PATH} 2>/dev/null", hide=True, sudo=True)
+    current_content = getattr(current_result, "stdout", "") if current_result else ""
+
+    if current_content.strip() == desired_content.strip():
+        console.print("  [green]✓[/green] fail2ban: jail.local already configured")
+        return False
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] fail2ban: would write {JAIL_PATH}")
+        console.print(f"    [dim]bantime={bantime}, findtime={findtime}, maxretry={maxretry}[/dim]")
+        return True
+
+    ssh.run(f"bash -c 'cat > {JAIL_PATH} << \"CF2B\"\n{desired_content}CF2B'", sudo=True)
+    ssh.run("systemctl restart fail2ban", sudo=True)
+    console.print(f"  [green]✓[/green] fail2ban: jail.local written and restarted")
+    return True
+
+
+def _apply_hostname(ssh: SSHManager, hostname: Optional[str], *, dry_run: bool = False) -> bool:
+    if not hostname:
+        console.print("  [dim]hostname: not configured[/dim]")
+        return False
+
+    current_result = ssh.run("hostname", hide=True)
+    current = getattr(current_result, "stdout", "").strip() if current_result else ""
+
+    if current == hostname:
+        console.print(f"  [green]✓[/green] hostname: already set to {hostname}")
+        return False
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] hostname: would set to {hostname} (currently {current})")
+        return True
+
+    ssh.run(f"hostnamectl set-hostname {hostname}", sudo=True)
+    console.print(f"  [green]✓[/green] hostname: set to {hostname}")
+    return True
+
+
+def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+    if not daemon_config:
+        console.print("  [dim]docker_daemon: not configured[/dim]")
+        return False
+
+    DAEMON_JSON_PATH = "/etc/docker/daemon.json"
+    current_result = ssh.run(f"cat {DAEMON_JSON_PATH} 2>/dev/null", hide=True, sudo=True)
+    current_content = getattr(current_result, "stdout", "").strip() if current_result else ""
+
+    desired_json = {}
+    log_driver = daemon_config.get("log_driver")
+    if log_driver:
+        desired_json["log-driver"] = log_driver
+    log_opts = daemon_config.get("log_opts", {})
+    if log_opts:
+        desired_json["log-opts"] = {k.replace("_", "-"): v for k, v in log_opts.items()}
+    storage_driver = daemon_config.get("storage_driver")
+    if storage_driver:
+        desired_json["storage-driver"] = storage_driver
+    if daemon_config.get("live_restore") is not None:
+        desired_json["live-restore"] = daemon_config["live_restore"]
+    if daemon_config.get("iptables") is not None:
+        desired_json["iptables"] = daemon_config["iptables"]
+    ulimits = daemon_config.get("default_ulimits", {})
+    if ulimits:
+        desired_json["default-ulimits"] = {name: {"Hard": val, "Soft": val} for name, val in ulimits.items()}
+
+    desired_content = jsonlib.dumps(desired_json, indent=2)
+
+    if current_content == desired_content:
+        console.print("  [green]✓[/green] docker_daemon: daemon.json already configured")
+        return False
+
+    if dry_run:
+        console.print(f"  [yellow]⟳[/yellow] docker_daemon: would write {DAEMON_JSON_PATH}")
+        for key in desired_json:
+            console.print(f"    [dim]{key}: {desired_json[key]}[/dim]")
+        return True
+
+    ssh.run(f"mkdir -p /etc/docker", sudo=True)
+    ssh.run(f"bash -c 'cat > {DAEMON_JSON_PATH} << \"CDAEMON\"\n{desired_content}\nCDAEMON'", sudo=True)
+    ssh.run("systemctl restart docker", sudo=True)
+    console.print(f"  [green]✓[/green] docker_daemon: daemon.json written and docker restarted")
+    return True
+
+
+def _apply_docker_networks(ssh: SSHManager, networks: list[str], *, dry_run: bool = False) -> bool:
+    if not networks:
+        console.print("  [dim]docker_networks: none configured[/dim]")
+        return False
+
+    result = ssh.run("docker network ls --format '{{.Name}}'", hide=True)
+    existing = set()
+    if result and getattr(result, "stdout", "").strip():
+        existing = {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
+
+    missing = [n for n in networks if n not in existing]
+
+    if not missing:
+        console.print(f"  [green]✓[/green] docker_networks: all networks exist ({', '.join(networks)})")
+        return False
+
+    if dry_run:
+        for n in missing:
+            console.print(f"  [yellow]⟳[/yellow] docker_networks: would create network {n}")
+        return True
+
+    for n in missing:
+        ssh.run(f"docker network create {n}", sudo=True)
+        console.print(f"  [green]✓[/green] docker_networks: created network {n}")
+    return True
+
+
+def _apply_docker_directories(ssh: SSHManager, directories: list[str], *, dry_run: bool = False) -> bool:
+    if not directories:
+        console.print("  [dim]docker_directories: none configured[/dim]")
+        return False
+
+    missing = []
+    for d in directories:
+        result = ssh.run(f"test -d {d} && echo exists || echo missing", hide=True)
+        status = getattr(result, "stdout", "").strip() if result else "missing"
+        if status != "exists":
+            missing.append(d)
+
+    if not missing:
+        console.print(f"  [green]✓[/green] docker_directories: all directories exist")
+        return False
+
+    if dry_run:
+        for d in missing:
+            console.print(f"  [yellow]⟳[/yellow] docker_directories: would create {d}")
+        return True
+
+    for d in missing:
+        ssh.run(f"mkdir -p {d}", sudo=True)
+        console.print(f"  [green]✓[/green] docker_directories: created {d}")
+    return True
+
+
 @vps_app.command("plan")
 def vps_plan(
     config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
@@ -820,6 +1200,7 @@ def vps_plan(
 
     ssh = _ssh_from_config(data)
     baseline = data.get("os", {}).get("baseline", {})
+    docker_config = data.get("docker", {})
 
     # Detect package manager from facts
     pkg_mgr = data.get("facts", {}).get("os", {}).get("package_manager")
@@ -827,22 +1208,52 @@ def vps_plan(
         os_id = data.get("facts", {}).get("os", {}).get("id", "")
         pkg_mgr = _detect_package_manager(ssh, os_id)
 
-    console.print("[bold]Phase 1: Packages[/bold]")
+    console.print("[bold]Phase 1: Upgrade All Packages[/bold]")
+    _apply_upgrade_all(ssh, baseline, pkg_mgr, dry_run=True)
+
+    console.print("\n[bold]Phase 2: Packages[/bold]")
     _apply_packages(ssh, baseline, pkg_mgr, dry_run=True)
 
-    console.print("\n[bold]Phase 2: SSH Daemon[/bold]")
+    console.print("\n[bold]Phase 3: Shell[/bold]")
+    _apply_shell(ssh, baseline, dry_run=True)
+
+    console.print("\n[bold]Phase 4: Terminal[/bold]")
+    _apply_terminal(ssh, baseline, dry_run=True)
+
+    console.print("\n[bold]Phase 5: SSH Daemon[/bold]")
     sshd_cfg = baseline.get("sshd", {})
     if not sshd_cfg:
         console.print("  [dim]sshd: no configuration specified[/dim]")
     else:
         _apply_sshd(ssh, sshd_cfg, dry_run=True)
 
-    console.print("\n[bold]Phase 3: Firewall[/bold]")
+    console.print("\n[bold]Phase 6: Firewall[/bold]")
     fw_cfg = baseline.get("firewall", {})
     if not fw_cfg:
         console.print("  [dim]firewall: no configuration specified[/dim]")
     else:
         _apply_firewall(ssh, fw_cfg, dry_run=True)
+
+    console.print("\n[bold]Phase 7: Swap[/bold]")
+    _apply_swap(ssh, baseline.get("swap", {}), dry_run=True)
+
+    console.print("\n[bold]Phase 8: Kernel Tuning + Journald[/bold]")
+    _apply_tuning(ssh, baseline.get("tuning", {}), data.get("os", {}).get("journald", {}), dry_run=True)
+
+    console.print("\n[bold]Phase 9: Fail2Ban[/bold]")
+    _apply_fail2ban(ssh, baseline.get("fail2ban", {}), dry_run=True)
+
+    console.print("\n[bold]Phase 10: Hostname[/bold]")
+    _apply_hostname(ssh, data.get("os", {}).get("hostname"), dry_run=True)
+
+    console.print("\n[bold]Phase 11: Docker Daemon[/bold]")
+    _apply_docker_daemon(ssh, docker_config.get("daemon", {}), dry_run=True)
+
+    console.print("\n[bold]Phase 12: Docker Networks[/bold]")
+    _apply_docker_networks(ssh, docker_config.get("networks", []), dry_run=True)
+
+    console.print("\n[bold]Phase 13: Docker Directories[/bold]")
+    _apply_docker_directories(ssh, docker_config.get("directories", []), dry_run=True)
 
     console.print("\n[dim]Run 'cstation vps apply <config>' to execute these changes.[/dim]")
 
@@ -851,18 +1262,19 @@ def vps_plan(
 def vps_apply(
     config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: packages, sshd, firewall"),
+    phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: upgrade_all, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories"),
 ) -> None:
     """
-    Apply VPS configuration from YAML: install packages, configure sshd, configure firewall.
+    Apply VPS configuration from YAML: install packages, configure sshd, configure firewall, set up swap, tuning, Docker.
 
-    Reads the VPS config and applies the os.baseline section, making the
+    Reads the VPS config and applies the os.baseline, os, and docker sections, making the
     actual server match the declared state. Use 'plan' first to preview changes.
 
     Examples:
-      cstation vps plan config/vps/prod_hel1_eu01.yaml
-      cstation vps apply config/vps/prod_hel1_eu01.yaml
-      cstation vps apply config/vps/prod_hel1_eu01.yaml --phase packages
+      cstation vps plan config/vps/eu01.yaml
+      cstation vps apply config/vps/eu01.yaml
+      cstation vps apply config/vps/eu01.yaml --phase packages
+      cstation vps apply config/vps/eu01.yaml --phase docker_daemon
     """
     data = _load_vps_config(config)
     identity = data.get("identity", {})
@@ -871,6 +1283,7 @@ def vps_apply(
 
     ssh = _ssh_from_config(data)
     baseline = data.get("os", {}).get("baseline", {})
+    docker_config = data.get("docker", {})
 
     # Detect package manager from facts
     pkg_mgr = data.get("facts", {}).get("os", {}).get("package_manager")
@@ -882,10 +1295,21 @@ def vps_apply(
     if not yes:
         console.print("[yellow]⚠[/yellow] This will modify the remote server. Changes:")
         phases_to_run = []
+        if phase is None or phase == "upgrade_all":
+            if baseline.get("upgrade_all"):
+                phases_to_run.append("  upgrade_all: upgrade all installed packages")
         if phase is None or phase == "packages":
             pkgs = baseline.get("packages", [])
             if pkgs:
                 phases_to_run.append(f"  packages: install {', '.join(pkgs)} (if missing)")
+        if phase is None or phase == "shell":
+            shell = baseline.get("shell")
+            if shell:
+                phases_to_run.append(f"  shell: set default shell to {shell}")
+        if phase is None or phase == "terminal":
+            terminal = baseline.get("terminal")
+            if terminal:
+                phases_to_run.append(f"  terminal: set TERM={terminal} in /etc/environment")
         if phase is None or phase == "sshd":
             sshd_cfg = baseline.get("sshd", {})
             if sshd_cfg.get("disable_password_auth"):
@@ -894,6 +1318,35 @@ def vps_apply(
             fw_cfg = baseline.get("firewall", {})
             if fw_cfg:
                 phases_to_run.append(f"  firewall: configure {fw_cfg.get('mode', 'ufw')}, allow {fw_cfg.get('allow', [])}")
+        if phase is None or phase == "swap":
+            swap_cfg = baseline.get("swap", {})
+            if swap_cfg.get("size_gb"):
+                phases_to_run.append(f"  swap: create {swap_cfg['size_gb']}GB swap file")
+        if phase is None or phase == "tuning":
+            tuning_cfg = baseline.get("tuning", {})
+            journald_cfg = data.get("os", {}).get("journald", {})
+            if tuning_cfg or journald_cfg:
+                phases_to_run.append("  tuning: configure kernel sysctl + journald")
+        if phase is None or phase == "fail2ban":
+            f2b_cfg = baseline.get("fail2ban", {})
+            if f2b_cfg:
+                phases_to_run.append("  fail2ban: configure jail.local")
+        if phase is None or phase == "hostname":
+            hostname_cfg = data.get("os", {}).get("hostname")
+            if hostname_cfg:
+                phases_to_run.append(f"  hostname: set to {hostname_cfg}")
+        if phase is None or phase == "docker_daemon":
+            daemon_cfg = docker_config.get("daemon", {})
+            if daemon_cfg:
+                phases_to_run.append("  docker_daemon: configure /etc/docker/daemon.json")
+        if phase is None or phase == "docker_networks":
+            nets = docker_config.get("networks", [])
+            if nets:
+                phases_to_run.append(f"  docker_networks: create {', '.join(nets)}")
+        if phase is None or phase == "docker_directories":
+            dirs = docker_config.get("directories", [])
+            if dirs:
+                phases_to_run.append(f"  docker_directories: create {', '.join(dirs)}")
 
         if not phases_to_run:
             console.print("[dim]No changes to apply.[/dim]")
@@ -908,15 +1361,33 @@ def vps_apply(
             raise typer.Exit(0)
         console.print()
 
-    # Phase 1: Packages
+    # Phase 1: Upgrade All Packages
+    if phase is None or phase == "upgrade_all":
+        console.print("[bold]Phase 1: Upgrade All Packages[/bold]")
+        _apply_upgrade_all(ssh, baseline, pkg_mgr, dry_run=False)
+        console.print()
+
+    # Phase 2: Packages
     if phase is None or phase == "packages":
-        console.print("[bold]Phase 1: Packages[/bold]")
+        console.print("[bold]Phase 2: Packages[/bold]")
         _apply_packages(ssh, baseline, pkg_mgr, dry_run=False)
         console.print()
 
-    # Phase 2: SSH Daemon
+    # Phase 3: Shell
+    if phase is None or phase == "shell":
+        console.print("[bold]Phase 3: Shell[/bold]")
+        _apply_shell(ssh, baseline, dry_run=False)
+        console.print()
+
+    # Phase 4: Terminal
+    if phase is None or phase == "terminal":
+        console.print("[bold]Phase 4: Terminal[/bold]")
+        _apply_terminal(ssh, baseline, dry_run=False)
+        console.print()
+
+    # Phase 5: SSH Daemon
     if phase is None or phase == "sshd":
-        console.print("[bold]Phase 2: SSH Daemon[/bold]")
+        console.print("[bold]Phase 5: SSH Daemon[/bold]")
         sshd_cfg = baseline.get("sshd", {})
         if not sshd_cfg:
             console.print("  [dim]sshd: no configuration specified[/dim]")
@@ -924,14 +1395,56 @@ def vps_apply(
             _apply_sshd(ssh, sshd_cfg, dry_run=False)
         console.print()
 
-    # Phase 3: Firewall
+    # Phase 6: Firewall
     if phase is None or phase == "firewall":
-        console.print("[bold]Phase 3: Firewall[/bold]")
+        console.print("[bold]Phase 6: Firewall[/bold]")
         fw_cfg = baseline.get("firewall", {})
         if not fw_cfg:
             console.print("  [dim]firewall: no configuration specified[/dim]")
         else:
             _apply_firewall(ssh, fw_cfg, dry_run=False)
+        console.print()
+
+    # Phase 7: Swap
+    if phase is None or phase == "swap":
+        console.print("[bold]Phase 7: Swap[/bold]")
+        _apply_swap(ssh, baseline.get("swap", {}), dry_run=False)
+        console.print()
+
+    # Phase 8: Kernel Tuning + Journald
+    if phase is None or phase == "tuning":
+        console.print("[bold]Phase 8: Kernel Tuning + Journald[/bold]")
+        _apply_tuning(ssh, baseline.get("tuning", {}), data.get("os", {}).get("journald", {}), dry_run=False)
+        console.print()
+
+    # Phase 9: Fail2Ban
+    if phase is None or phase == "fail2ban":
+        console.print("[bold]Phase 9: Fail2Ban[/bold]")
+        _apply_fail2ban(ssh, baseline.get("fail2ban", {}), dry_run=False)
+        console.print()
+
+    # Phase 10: Hostname
+    if phase is None or phase == "hostname":
+        console.print("[bold]Phase 10: Hostname[/bold]")
+        _apply_hostname(ssh, data.get("os", {}).get("hostname"), dry_run=False)
+        console.print()
+
+    # Phase 11: Docker Daemon
+    if phase is None or phase == "docker_daemon":
+        console.print("[bold]Phase 11: Docker Daemon[/bold]")
+        _apply_docker_daemon(ssh, docker_config.get("daemon", {}), dry_run=False)
+        console.print()
+
+    # Phase 12: Docker Networks
+    if phase is None or phase == "docker_networks":
+        console.print("[bold]Phase 12: Docker Networks[/bold]")
+        _apply_docker_networks(ssh, docker_config.get("networks", []), dry_run=False)
+        console.print()
+
+    # Phase 13: Docker Directories
+    if phase is None or phase == "docker_directories":
+        console.print("[bold]Phase 13: Docker Directories[/bold]")
+        _apply_docker_directories(ssh, docker_config.get("directories", []), dry_run=False)
         console.print()
 
     console.print(f"[green]✓[/green] Apply complete for [bold]{name}[/bold]")
@@ -952,8 +1465,8 @@ def vps_init(
 
     Examples:
       cstation vps init hetzner/ANSIS:123456
-      cstation vps init vultr/MAIN:9b2f... --stage prod
-      cstation vps init hetzner/ANSIS:123456 --out config/vps/prod_hel1_sg05.yaml
+      cstation vps init vultr/MAIN:9b2f...
+      cstation vps init hetzner/ANSIS:123456 --out config/vps/sg05.yaml
     """
     if "/" not in target:
         raise typer.BadParameter("Target must be <provider>/<account>:<id>")
@@ -985,7 +1498,7 @@ def vps_init(
 
     resolved_name = vps.name
     resolved_region = vps.region or "unknown"
-    output_path = output_path or Path("config") / "vps" / f"{stage}_{resolved_region}_{resolved_name}.yaml"
+    output_path = output_path or Path("config") / "vps" / f"{resolved_name}.yaml"
 
     if output_path.exists() and not force:
         console.print(f"[red]✗[/red] Output file already exists: {output_path}")

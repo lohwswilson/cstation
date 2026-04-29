@@ -33,7 +33,7 @@ This design replaces legacy Ansible/PW_CS usage by introducing a stable schema, 
 
 ## Repository Layout
 
-- `config/vps/<stage>_<region>_<vps_name>.yaml` (entry point; one file per VPS, flat for easy sorting)
+- `config/vps/<vps_name>.yaml` (entry point; one file per VPS, flat for easy sorting)
 - `artifacts/*.yml` (git-based artifacts, docker-image artifacts)
 - `common/components/*.yml` (shared component defaults, referenced by vps configs)
 
@@ -112,7 +112,7 @@ Top level:
 
 MVP commands:
 
-- `cstation vps init <provider>/<account>:<id> [--stage prod] [--out config/vps/<stage>_<region>_<vps_name>.yaml] [--force] [--user root] [--port 22] [--key <ssh_key>]`
+- `cstation vps init <provider>/<account>:<id> [--out config/vps/<vps_name>.yaml] [--force] [--user root] [--port 22] [--key <ssh_key>]`
 - `cstation vps plan <vps.yml>`
 - `cstation vps apply <vps.yml>` (interactive)
 - `cstation vps doctor <vps.yml>`
@@ -133,13 +133,13 @@ Behavior:
 - Target is provider-based: `<provider>/<account>:<id>`
 - `stage` is user-provided, defaulting to `prod`
 - `name` and `region` are inferred from provider metadata
-- Output path defaults to `config/vps/<stage>_<region>_<name>.yaml`
+- Output path defaults to `config/vps/<name>.yaml`
 - Refuses to overwrite existing files unless `--force`
 
 CLI examples:
 - `cstation vps init hetzner/ANSIS:123456`
 - `cstation vps init vultr/MAIN:9b2f... --stage prod`
-- `cstation vps init hetzner/ANSIS:123456 --out config/vps/prod_hel1_sg05.yaml`
+- `cstation vps init hetzner/ANSIS:123456 --out config/vps/sg05.yaml`
 
 OS facts captured (key set only):
 - OS release + kernel

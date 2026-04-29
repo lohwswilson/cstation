@@ -86,14 +86,57 @@ facts:
     - docker.io
     - containerd
 os:
+  hostname: eu01.synercatalyst.com
   baseline:
+    upgrade_all: true
     packages:
     - fail2ban
     - docker.io
     - containerd
+    - docker-compose-v2
+    - zsh
+    shell: zsh
+    terminal: xterm-256color
+    swap:
+      size_gb: 4
+    tuning:
+      vm_swappiness: 10
+      vm_overcommit_memory: 1
+      net_ipv4_tcp_max_syn_backlog: 1024
+      fs_inotify_max_user_watches: 524288
+      net_ipv4_tcp_keepalive_time: 600
     sshd:
       disable_password_auth: true
+    fail2ban:
+      bantime: 1h
+      findtime: 10m
+      maxretry: 5
     firewall:
       mode: ufw
       allow:
       - 22/tcp
+      - 80/tcp
+      - 443/tcp
+      - 25/tcp
+      - 465/tcp
+      - 587/tcp
+      - 993/tcp
+      - 995/tcp
+  journald:
+    system_max_use: 500M
+    forward_to_syslog: false
+docker:
+  daemon:
+    log_driver: json-file
+    log_opts:
+      max_size: 10m
+      max_file: "3"
+    storage_driver: overlay2
+    live_restore: true
+    iptables: true
+    default_ulimits:
+      nofile: 65536
+  networks:
+  - PW_NET
+  directories:
+  - /var/lib/perfectwork

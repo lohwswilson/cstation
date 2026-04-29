@@ -5,7 +5,7 @@
 **Goal:** Add a minimal Hetzner Cloud VPS provisioning workflow under `cstation vps` (create/list/status/delete) with safe authentication handling and tests.
 
 **Update (Declarative Direction):**
-- Per-VPS config entry file naming: `config/vps/<stage>_<region>_<vps_name>.yaml`
+- Per-VPS config entry file naming: `config/vps/<vps_name>.yaml`
 - Proposed command: `cstation vps init <provider>/<account>:<id>` (provider metadata + SSH read-only facts → write per-VPS YAML; refuses overwrite unless `--force`)
 - `stage` is user-provided (default `prod`); `name`/`region` inferred from provider metadata
 - Example: `cstation vps init hetzner/ANSIS:123456`
