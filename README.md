@@ -1,6 +1,6 @@
 # CStation - Infrastructure Management CLI
 
-A DevOps CLI tool for managing infrastructure, VPS lifecycle, and deployments. Built with Python 3.13, Typer, and uv.
+A DevOps CLI tool for managing VPS infrastructure, Docker container services, and deployments. Built with Python 3.13, Typer, and uv.
 
 ## Prerequisites
 
@@ -16,14 +16,11 @@ cd cstation
 # Install in editable mode
 uv pip install -e .
 
+# Install with test dependencies
+uv pip install -e ".[test]"
+
 # Verify
 uv run cstation --help
-```
-
-Install with test dependencies:
-
-```bash
-uv pip install -e ".[test]"
 ```
 
 ## Quick Start
@@ -54,6 +51,8 @@ cstation <command> --help     # Get help for any command
 
 ### VPS Management
 
+VPS commands manage OS + Docker infrastructure on remote servers.
+
 ```bash
 # List VPS instances across all configured providers
 cstation vps ls
@@ -65,29 +64,37 @@ cstation vps status myaccount:123456
 
 # Initialize a per-VPS config from provider metadata + SSH facts
 cstation vps init hetzner/myaccount:123456
-cstation vps init hetzner/myaccount:123456 --out config/vps/sg05.yaml
 
 # Dry-run: preview what would be applied
-cstation vps plan config/vps/sg05.yaml
+cstation vps plan eu01.synercatalyst.com
 
-# Apply VPS configuration (upgrade, packages, shell, terminal, sshd, firewall)
-cstation vps apply config/vps/sg05.yaml
-cstation vps apply config/vps/sg05.yaml --yes
-cstation vps apply config/vps/sg05.yaml --phase packages
+# Apply VPS configuration (13 phases: upgrade, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories)
+cstation vps apply eu01.synercatalyst.com
+cstation vps apply eu01.synercatalyst.com --yes
+cstation vps apply eu01.synercatalyst.com --phase packages
 ```
 
 VPS command targets use the format `<provider>/<account>:<id>`. Examples:
 - `hetzner/myaccount:123456` — Hetzner server by numeric ID
 - `vultr/main:3431427c-9755-4064-903e-7a3e8bc82791` — Vultr instance by UUID
 
-### Server Management
+### Docker Service Management
+
+Docker commands manage container deployment on VPS servers where `cstation vps apply` has already been run.
 
 ```bash
-cstation server ls              # List servers
-cstation server status <host>   # Check server status
-cstation server ssh <host>     # Setup SSH key authentication
-cstation server push <playbook> <target>  # Execute playbook
-cstation server rm <host>      # Remove server from inventory
+# Plan: dry-run to see what would change
+cstation docker plan eu01.synercatalyst.com
+cstation docker plan eu01.synercatalyst.com --service traefik
+
+# Apply: deploy all enabled services
+cstation docker apply eu01.synercatalyst.com
+cstation docker apply eu01.synercatalyst.com --service traefik
+cstation docker apply eu01.synercatalyst.com --yes
+cstation docker apply eu01.synercatalyst.com --prune
+
+# Status: show container state on VPS
+cstation docker status eu01.synercatalyst.com
 ```
 
 ### GitHub Management
@@ -96,12 +103,6 @@ cstation server rm <host>      # Remove server from inventory
 cstation github --help
 cstation github ssh             # Setup GitHub SSH keys
 cstation github repo            # Repository operations
-```
-
-### Docker Management
-
-```bash
-cstation docker --help
 ```
 
 ## Configuration
@@ -130,7 +131,76 @@ vps:
           token: "your-vultr-token"
 ```
 
-VPS init writes per-VPS config files to `config/vps/<name>.yaml` by default (e.g. `config/vps/sg05.yaml`).
+## VPS Config Structure
+
+Each VPS has its own directory under `config/vps/` containing a main `vps.yaml` and optional fragment files:
+
+```
+config/vps/
+├── eu01.synercatalyst.com/
+│   ├── vps.yaml              ← identity, access, facts, os, docker infrastructure
+│   ├── traefik.yaml          ← kind: Container
+│   ├── portainer.yaml        ← kind: Container
+│   └── mailcow.yaml          ← kind: Stack (enabled: false)
+├── sg07.ansis.com.sg/
+│   ├── vps.yaml
+│   └── ...
+```
+
+- `vps.yaml` — read by `cstation vps` commands (infrastructure only)
+- Fragment files (`*.yaml` except `vps.yaml`) — read by `cstation docker` commands (container deployment)
+
+### Fragment: kind: Container
+
+Cstation generates the compose file from the fragment config:
+
+```yaml
+apiVersion: cstation/v1
+kind: Container
+name: traefik
+enabled: true
+image: traefik:latest
+network: PW_NET
+ports: [...]
+volumes: [...]
+env: {...}          # non-secret config → compose environment
+env_file: .env      # secrets loaded from .env file on VPS
+secrets: [...]      # secret key names → .env on VPS only (NOT committed)
+restart_policy: unless-stopped
+static_config: {...}  # optional, service-specific
+```
+
+### Fragment: kind: Stack
+
+Cstation clones a git repo and patches it:
+
+```yaml
+apiVersion: cstation/v1
+kind: Stack
+name: mailcow
+enabled: false
+git_repo: "https://github.com/mailcow/mailcow-dockerized"
+git_branch: master
+git_dir: /opt/mailcow
+network: PW_NET
+env: {...}
+```
+
+### Secrets
+
+- **Non-secret config** → fragment `env` section (committed to git, written as compose `environment`)
+- **Secrets** → fragment `secrets` section lists key names; values go in `.env` on VPS only (NOT committed)
+- On first `docker apply`: cstation writes a `.env` template with placeholder values. SSH into the VPS to set real values.
+- On subsequent applies: cstation preserves existing `.env` files.
+
+## Command Separation
+
+| Command | Scope | Reads | Does NOT do |
+|---------|-------|-------|-------------|
+| `cstation vps apply` | OS + Docker infrastructure (phases 1-13) | `vps.yaml` only | Deploy any containers |
+| `cstation docker apply` | Deploy container services | `vps.yaml` (for SSH) + fragment files | Touch OS/Docker infrastructure |
+
+Dependency: `vps apply` must run first (installs Docker, creates `PW_NET`). Then `docker apply` deploys containers.
 
 ## Development
 
@@ -152,30 +222,34 @@ src/cstation/
 ├── main.py              # CLI entry point (Typer app)
 ├── config.py            # Configuration management (ConfigManager)
 ├── ssh.py               # SSH remote execution (Fabric wrapper)
-├── inventory.py         # Inventory management
 ├── commands/
 │   ├── version/         # Version command
 │   ├── init/            # Initialization command
-│   ├── server/          # Ansible-based server management
 │   ├── github/          # GitHub repository operations
-│   ├── docker/          # Docker management
+│   ├── docker/
+│   │   ├── main.py      # Docker commands: plan, apply, status
+│   │   ├── services/    # Service classes (TraefikService, PortainerService, etc.)
+│   │   └── compose/     # Compose file rendering, .env writer
 │   ├── vps/             # VPS lifecycle (ls, status, init, plan, apply)
 │   ├── pw/              # PerfectWork operations
 │   └── sync/            # Sync management
 ├── providers/
 │   ├── base.py          # VPSProvider protocol + VPS/VPSStatus models
 │   ├── hetzner.py       # Hetzner Cloud adapter
-│   ├── vultr.py         # Vultr adapter
-│   └── errors.py        # Provider exceptions
+│   └── vultr.py         # Vultr adapter
 tests/
 ├── commands/
-│   └── test_vps_cli.py  # VPS CLI integration tests
+│   ├── test_vps_cli.py  # VPS CLI integration tests
+│   └── test_docker_cli.py  # Docker CLI tests
 ├── providers/
-│   ├── test_models.py   # Provider model tests
 │   ├── test_hetzner.py  # Hetzner adapter tests
 │   └── test_vultr.py    # Vultr adapter tests
 config/
-└── vps/                 # Per-VPS config YAML files
+└── vps/                 # Per-VPS config directories
+    └── <vps-name>/
+        ├── vps.yaml
+        ├── traefik.yaml
+        └── ...
 ```
 
 ### Adding a New Command Group
@@ -197,12 +271,11 @@ config/
 
 ### No VPS providers configured
 
-Set provider tokens in `~/.config/cstation/config.yaml` (see Configuration above) or set `HETZNER_TOKEN` environment variable.
+Set provider tokens in `~/.config/cstation/config.yaml` or set `HETZNER_TOKEN` environment variable.
 
 ### Command not found
 
 ```bash
-# Reinstall in editable mode
 uv pip install -e .
 uv run cstation --help
 ```
@@ -210,7 +283,6 @@ uv run cstation --help
 ### Tests failing
 
 ```bash
-# Ensure test dependencies are installed
 uv pip install -e ".[test]"
 uv run pytest -q
 ```

@@ -48,9 +48,11 @@ Implement `cstation docker plan/apply/status` for Traefik + Portainer on eu01.sy
 ### 2c. Implement TraefikService
 - `src/cstation/commands/docker/services/traefik.py`
 - Extends `ImageService`
-- Generates `docker-compose.yml` from fragment config
+- Generates `docker-compose.yml` from fragment config (with `env_file: .env` for secrets)
 - Generates `/var/lib/traefik/etc/traefik.yml` from `static_config`
-- Creates subdirectories: `etc/`, `conf/`, `letsencrypt/`
+- Creates subdirectories: `etc/`, `conf/`, `letsencrypt/`, `logs/`
+- Writes `.env` secrets template on first apply (preserves existing `.env` on re-apply)
+- Plan warns if secrets contain placeholder values
 
 ### 2d. Implement PortainerService
 - `src/cstation/commands/docker/services/portainer.py`
@@ -122,23 +124,37 @@ uv run cstation docker plan eu01.synercatalyst.com --service traefik
 # 3. Apply Traefik
 uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes
 
-# 4. Verify Traefik running
-ssh root@37.27.218.255 "docker compose -f /var/lib/traefik/docker-compose.yml ps"
-ssh root@37.27.218.255 "curl -s http://localhost:8080/api/rawdata"
+# 4. Set Cloudflare secrets on VPS
+ssh root@37.27.218.255 "vi /var/lib/traefik/.env"
+# Set CF_API_EMAIL and CF_API_KEY to real values
 
-# 5. Plan Portainer
+# 5. Restart Traefik to pick up secrets
+ssh root@37.27.218.255 "cd /var/lib/traefik && docker compose restart"
+
+# 6. Verify Traefik running
+ssh root@37.27.218.255 "docker compose -f /var/lib/traefik/docker-compose.yml ps"
+
+# 7. Verify Traefik API (via SSH tunnel — no insecure dashboard)
+ssh -L 8080:localhost:8080 root@37.27.218.255
+# Then on local machine: curl -s http://localhost:8080/api/rawdata
+
+# 8. Verify HTTPS redirect
+curl -s -o /dev/null -w "%{http_code}" http://37.27.218.255
+# Should return 301 (redirect to HTTPS)
+
+# 9. Plan Portainer
 uv run cstation docker plan eu01.synercatalyst.com --service portainer
 
-# 6. Apply Portainer
+# 10. Apply Portainer
 uv run cstation docker apply eu01.synercatalyst.com --service portainer --yes
 
-# 7. Verify Portainer running
+# 11. Verify Portainer running
 ssh root@37.27.218.255 "docker compose -f /var/lib/portainer/docker-compose.yml ps"
 
-# 8. Full status
+# 12. Full status
 uv run cstation docker status eu01.synercatalyst.com
 
-# 9. Re-apply (idempotency check — should show "already configured")
+# 13. Re-apply (idempotency check — should show "already configured")
 uv run cstation docker apply eu01.synercatalyst.com --yes
 ```
 

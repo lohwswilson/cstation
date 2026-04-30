@@ -79,7 +79,7 @@ os:
   baseline: { upgrade_all, packages, shell, terminal, swap, tuning, sshd, fail2ban, firewall }
   journald: { system_max_use, forward_to_syslog }
 docker:
-  daemon: { log_driver, log_opts, storage_driver, live_restore, iptables, default_ulimits }
+  daemon: { log_driver, log_opts, storage_driver, live_restore, iptables }
   networks: [PW_NET]
   directories: [/var/lib/perfectwork]
 ```
@@ -95,10 +95,13 @@ kind: Container
 name: traefik
 enabled: true
 image: traefik:latest
+container_name: EU01_traefik
 network: PW_NET
 ports: [...]
 volumes: [...]
-env: {...}
+env: {...}          # non-secret config → compose environment
+env_file: .env      # secrets loaded from .env file on VPS
+secrets: [...]      # secret key names → .env on VPS only (NOT committed)
 restart_policy: unless-stopped
 static_config: {...}  # optional, service-specific
 ```

@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from cstation.ssh import SSHManager
+from cstation.config import get_vps_secrets
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 from .services.registry import get_service, available_services
 from .services import TraefikService, PortainerService  # noqa: F401 — auto-register
@@ -46,7 +47,7 @@ def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list
     return fragments
 
 
-def _preflight_check(ssh: SSHManager) -> bool:
+def _preflight_check(ssh: SSHManager, vps_data: dict) -> bool:
     result = ssh.run("docker info >/dev/null 2>&1 && echo ok || echo missing", hide=True, sudo=True)
     status = getattr(result, "stdout", "").strip() if result else "missing"
     if status != "ok":
@@ -57,8 +58,9 @@ def _preflight_check(ssh: SSHManager) -> bool:
     networks = set()
     if result and getattr(result, "stdout", "").strip():
         networks = {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
-    if "PW_NET" not in networks:
-        console.print("[red]✗[/red] Docker network PW_NET does not exist on the VPS.")
+    required_network = (vps_data.get("docker", {}).get("networks") or ["PW_NET"])[0]
+    if required_network not in networks:
+        console.print(f"[red]✗[/red] Docker network {required_network} does not exist on the VPS.")
         console.print("[dim]Run 'cstation vps apply <vps>' first.[/dim]")
         return False
     return True
@@ -90,6 +92,17 @@ def _get_service_instance(name: str, kind: str):
         return svc
 
 
+def _resolve_secrets(vps_name: str, fragments: list) -> list:
+    resolved_fragments = []
+    for name, data, status in fragments:
+        if status == "enabled" and data.get("secrets"):
+            secrets = get_vps_secrets(vps_name, name)
+            if secrets:
+                data = {**data, "_resolved_secrets": secrets}
+        resolved_fragments.append((name, data, status))
+    return resolved_fragments
+
+
 @docker_app.command("plan")
 def docker_plan(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
@@ -97,17 +110,18 @@ def docker_plan(
 ) -> None:
     """Dry-run: show what would change for container services."""
     vps_dir = _resolve_vps_dir(Path(vps))
-    _load_vps_config(vps_dir)
+    vps_data = _load_vps_config(vps_dir)
 
     identity_name = vps_dir.name
     console.print(f"\n[bold]Docker Plan: {identity_name}[/bold] [dim]({vps_dir}/)[/dim]\n")
 
-    ssh = _ssh_from_config(_load_vps_config(vps_dir))
+    ssh = _ssh_from_config(vps_data)
 
-    if not _preflight_check(ssh):
+    if not _preflight_check(ssh, vps_data):
         raise typer.Exit(1)
 
     fragments = _load_fragments(vps_dir, service)
+    fragments = _resolve_secrets(identity_name, fragments)
     if not fragments:
         console.print("[dim]No enabled container fragments found.[/dim]")
         raise typer.Exit(0)
@@ -156,10 +170,11 @@ def docker_apply(
 
     ssh = _ssh_from_config(vps_data)
 
-    if not _preflight_check(ssh):
+    if not _preflight_check(ssh, vps_data):
         raise typer.Exit(1)
 
     fragments = _load_fragments(vps_dir, service)
+    fragments = _resolve_secrets(identity_name, fragments)
     if not fragments:
         console.print("[dim]No enabled container fragments found.[/dim]")
         raise typer.Exit(0)

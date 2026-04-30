@@ -85,6 +85,13 @@ class ConfigurationError(Exception):
     pass
 
 
+def get_vps_secrets(vps_name: str, service_name: str) -> dict[str, str]:
+    try:
+        return config_manager.config_data["vps"]["secrets"][vps_name][service_name]
+    except (KeyError, TypeError):
+        return {}
+
+
 class ConfigManager:
     """
     Configuration manager that handles multiple configuration sources

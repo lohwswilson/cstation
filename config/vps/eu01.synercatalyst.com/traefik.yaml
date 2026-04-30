@@ -3,45 +3,100 @@ kind: Container
 name: traefik
 enabled: true
 image: traefik:latest
+container_name: EU01_traefik
 network: PW_NET
 ports:
   - "80:80"
   - "443:443"
-  - "8080:8080"
-  - "25:25"
-  - "465:465"
-  - "587:587"
-  - "993:993"
-  - "995:995"
 volumes:
   - /var/run/docker.sock:/var/run/docker.sock:ro
   - /var/lib/traefik/letsencrypt:/letsencrypt
   - /var/lib/traefik/conf:/etc/traefik/conf
   - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro
+  - /var/lib/traefik/logs:/etc/traefik/logs
+env_file: .env
+env:
+  DHPARAM_GENERATION: "false"
+secrets:
+  - CF_API_EMAIL
+  - CF_API_KEY
 restart_policy: unless-stopped
+command:
+  - --configFile=/etc/traefik/traefik.yml
+subdirs:
+  - etc
+  - conf
+  - letsencrypt
+  - logs
 static_config:
+  global:
+    checknewversion: false
+    sendanonymoususage: false
   entryPoints:
-    web: ":80"
-    websecure: ":443"
-    smtp: ":25"
-    submissions: ":465"
-    submission: ":587"
-    imaps: ":993"
-    pop3s: ":995"
+    web:
+      address: ":80"
+      http:
+        redirections:
+          entryPoint:
+            to: websecure
+            scheme: https
+            permanent: true
+      forwardedHeaders:
+        insecure: true
+    websecure:
+      address: ":443"
+      forwardedHeaders:
+        insecure: true
   providers:
     docker:
       endpoint: "unix:///var/run/docker.sock"
       exposedByDefault: false
       network: PW_NET
+      watch: true
     file:
       directory: "/etc/traefik/conf"
       watch: true
   certificatesResolvers:
     le_resolver:
       acme:
-        email: "admin@synercatalyst.com"
+        email: "syner.catalyst@gmail.com"
         storage: "/letsencrypt/acme.json"
+        caServer: "https://acme-v02.api.letsencrypt.org/directory"
+        keyType: EC256
         tlsChallenge: {}
+    le_dns_resolver:
+      acme:
+        email: "syner.catalyst@gmail.com"
+        storage: "/letsencrypt/acme_dns.json"
+        caServer: "https://acme-v02.api.letsencrypt.org/directory"
+        keyType: EC256
+        dnsChallenge:
+          provider: cloudflare
+          delayBeforeCheck: 15s
+          resolvers:
+            - "1.1.1.1:53"
+            - "1.0.0.1:53"
   api:
     dashboard: true
-    insecure: true
+  log:
+    level: INFO
+    filePath: "/etc/traefik/logs/traefik.log"
+    format: json
+  accessLog:
+    filePath: "/etc/traefik/logs/access.log"
+    format: json
+    bufferingSize: 100
+  metrics:
+    prometheus:
+      addEntryPointsLabels: true
+      addServicesLabels: true
+traefik:
+  http:
+    routers:
+      traefik-dashboard:
+        rule: "Host(`traefik.eu01.synercatalyst.com`)"
+        entryPoints:
+          - websecure
+        service: api@internal
+        tls:
+          certResolver: le_dns_resolver

@@ -118,10 +118,14 @@ os:
       - 80/tcp
       - 443/tcp
       - 25/tcp
+      - 110/tcp
       - 465/tcp
       - 587/tcp
       - 993/tcp
       - 995/tcp
+      - 4190/tcp
+      - 8000/tcp
+      - 9000/tcp
   journald:
     system_max_use: 500M
     forward_to_syslog: false
@@ -134,8 +138,6 @@ docker:
     storage_driver: overlay2
     live_restore: true
     iptables: true
-    default_ulimits:
-      nofile: 65536
   networks:
   - PW_NET
   directories:

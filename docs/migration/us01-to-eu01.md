@@ -1,177 +1,191 @@
-# Migration: us01 → eu01 (Mailcow Email)
+# Migration: us01 → eu01 (Email)
 
-**Source:** us01.synercatalyst.com (still serving traffic)  
-**Target:** eu01.synercatalyst.com (37.27.218.255, Hetzner HEL1, ARM64, 4vCPU, 8GB RAM, 76GB disk)  
-**Services:** Mailcow email, Traefik, Portainer  
-**Email domains:** 4-10 domains  
-**Traefik routing:** All traffic (including Mailcow) through Traefik
+**Source:** us01.synercatalyst.com (209.182.236.52:8288, still serving traffic)
+**Target:** eu01.synercatalyst.com (37.27.218.255, Hetzner HEL1, ARM64, 4vCPU, 8GB RAM, 76GB disk)
+**Services:** Stalwart Mail Server, Traefik, Portainer
+**Email domains:** 7 domains, 18 mailboxes, ~13GB total
+**Email server:** Stalwart v0.16 (replacing Mailcow on us01)
+**Traefik routing:** HTTPS only (admin UI, JMAP). SMTP/IMAP bound directly by Stalwart.
 
 ---
 
-## Phase A: Prepare eu01 via cstation vps
+## Phase A: Prepare eu01 via cstation vps ✅ COMPLETE
 
-- [x] Edit `config/vps/eu01.synercatalyst.com.yaml` — verify firewall ports include: 22, 80, 443, 25, 465, 587, 993, 995
-- [x] Edit `config/vps/eu01.synercatalyst.com.yaml` — verify `os.baseline` has: `upgrade_all: true`, `shell: zsh`, `terminal: xterm-256color`
-- [x] `uv run cstation vps plan config/vps/eu01.synercatalyst.com.yaml`
-- [x] Review plan output — confirm all 6 phases look correct
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml`
-- [x] Verify: `ssh root@37.27.218.255 "ufw status"` — active with all 8 ports (22, 80, 443, 25, 465, 587, 993, 995)
-- [x] Verify: `ssh root@37.27.218.255 "grep PasswordAuthentication /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf"` — `no`
-- [x] Verify: `ssh root@37.27.218.255 "dpkg -s fail2ban docker.io containerd zsh | grep Status"` — all `install ok installed`
-- [x] Verify: `ssh root@37.27.218.255 "echo $SHELL && echo $TERM"` — `/usr/bin/zsh` and `xterm-256color`
+- [x] All 6 baseline phases applied and verified
 
-## Phase B: System optimization + Docker + Hostname (via `cstation vps apply`)
+## Phase B: System optimization + Docker + Hostname ✅ COMPLETE
 
-All Phase B settings are now declarative in `config/vps/eu01.synercatalyst.com.yaml` and applied via `cstation vps apply` (phases 7-13).
+- [x] All 7 optimization phases (7-13) applied and verified
+- [x] Idempotent re-apply confirmed
 
-> The YAML now includes: `os.baseline.swap`, `os.baseline.tuning`, `os.baseline.fail2ban`, `os.hostname`, `os.journald`, `docker.daemon`, `docker.networks`, `docker.directories`.
->
-> Previously these were manual SSH steps. They are now CLI phases.
+## Phase C: Deploy Traefik + Portainer on eu01 ✅ COMPLETE
 
-### Plan first
-- [x] `uv run cstation vps plan config/vps/eu01.synercatalyst.com.yaml` — review phases 7-13
+- [x] Traefik deployed via `cstation docker apply`
+- [x] Portainer deployed via `cstation docker apply`
+- [x] Cloudflare secrets written from config.yaml
+- [x] HTTPS redirect verified (301)
+- [x] Traefik dashboard accessible via SSH tunnel
 
-### Apply all Phase B changes
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --yes`
+## Phase D: Deploy Stalwart on eu01 (email migration)
 
-### Or apply individual phases
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase swap`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase tuning`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase fail2ban`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase hostname`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase docker_daemon`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase docker_networks`
-- [x] `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --phase docker_directories`
+> Replaces Mailcow (21 containers, 4GB+ RAM) with Stalwart (single container, 1-2GB RAM).
+> Detailed spec: `docs/superpowers/specs/2026-04-30-email-migration-stalwart-design.md`
+> Detailed plan: `docs/superpowers/plans/2026-04-30-email-migration-phase-d.md`
 
-### Verification
-- [x] Swap: `ssh root@37.27.218.255 "swapon --show && sysctl vm.swappiness"` — 4G swap, swappiness=10
-- [x] Sysctl: `ssh root@37.27.218.255 "sysctl vm.swappiness vm.overcommit_memory net.ipv4.tcp_max_syn_backlog fs.inotify.max_user_watches net.ipv4.tcp_keepalive_time"` — 10, 1, 1024, 524288, 600
-- [x] Journald: `ssh root@37.27.218.255 "cat /etc/systemd/journald.conf.d/99-cstation.conf"` — SystemMaxUse=500M, ForwardToSyslog=no
-- [x] Fail2ban: `ssh root@37.27.218.255 "fail2ban-client status sshd"` — jail active
-- [x] Hostname: `ssh root@37.27.218.255 "hostname"` — eu01.synercatalyst.com
-- [x] Docker daemon: `ssh root@37.27.218.255 "cat /etc/docker/daemon.json && docker compose version"` — daemon.json correct, Compose v2.40.3
-- [x] Docker networks: `ssh root@37.27.218.255 "docker network ls | grep PW_NET"` — present
-- [x] Directories: `ssh root@37.27.218.255 "ls -ld /var/lib/perfectwork"` — exists
-- [x] Idempotency: `uv run cstation vps apply config/vps/eu01.synercatalyst.com.yaml --yes` — re-apply shows all phases already configured
+### D.1: Update cstation code
+- [ ] Create `src/cstation/commands/docker/services/stalwart.py` (StalwartService)
+- [ ] Add StalwartService import to `__init__.py`
+- [ ] Create `config/vps/eu01.synercatalyst.com/stalwart.yaml`
+- [ ] Modify `config/vps/eu01.synercatalyst.com/traefik.yaml` — remove SMTP/IMAP ports, remove entrypoints
+- [ ] Delete `config/vps/eu01.synercatalyst.com/mailcow.yaml`
+- [ ] Modify `config/vps/eu01.synercatalyst.com/vps.yaml` — add 110/tcp, 4190/tcp to firewall
+- [ ] Add stalwart secrets to `~/.config/cstation/config.yaml`
+- [ ] Write tests for StalwartService
+- [ ] `uv run pytest -q` — all tests pass
 
-## Phase C: Deploy Traefik on eu01
+### D.2: Re-deploy Traefik (remove mail ports)
+- [ ] `uv run cstation vps apply eu01.synercatalyst.com --phase firewall` — add ports
+- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service traefik` — verify
+- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes`
+- [ ] Verify: Traefik running with HTTP ports only (80, 443, 8000, 9000, 9443)
 
-- [ ] Create Traefik config directory: `ssh root@37.27.218.255 "mkdir -p /var/lib/traefik/eu01/{letsencrypt,conf,logs,etc}"`
-- [ ] Write Traefik static config (`/var/lib/traefik/eu01/etc/traefik.yml`) with entrypoints: `web` (80), `websecure` (443), `smtp` (25), `submissions` (465), `submission` (587), `imaps` (993), `pop3s` (995)
-- [ ] Write Traefik static config — enable Lets Encrypt (ACME) with `le_resolver`, Docker provider, and file provider watching `/var/lib/traefik/eu01/conf/`
-- [ ] Deploy Traefik container on PW_NET with Docker socket mounted read-only
-- [ ] Verify API: `ssh root@37.27.218.255 "curl -s http://localhost:8080/api/rawdata"` — should return JSON
-- [ ] Verify HTTPS: `curl -s https://37.27.218.255` — should hit Traefik (404 or default backend)
+### D.3: Deploy Stalwart on eu01
+- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service stalwart`
+- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
+- [ ] Verify: `docker ps | grep stalwart` — running
+- [ ] Verify: Stalwart listening on ports 25, 465, 587, 993, 995, 110, 4190
+- [ ] Get bootstrap credentials from docker logs
 
-## Phase D: Deploy Mailcow on eu01 (routed through Traefik)
+### D.4: Configure Stalwart (Setup Wizard)
+- [ ] SSH tunnel: `ssh -L 8080:localhost:8080 root@37.27.218.255`
+- [ ] Open `http://localhost:8080/admin`
+- [ ] Step 1: Hostname=`mail.perfectwork.app`, Domain=`synercatalyst.com`, ACME=No (configure later), DKIM=Yes
+- [ ] Step 2: Storage=RocksDB (default)
+- [ ] Step 3: Directory=Internal (default)
+- [ ] Step 4: Logging=Console (Docker)
+- [ ] Step 5: DNS=Manual
+- [ ] Save admin credentials
+- [ ] `docker restart EU01_stalwart`
 
-- [ ] Clone: `ssh root@37.27.218.255 "git clone https://github.com/mailcow/mailcow-dockerized /opt/mailcow"`
-- [ ] Generate config: `ssh root@37.27.218.255 "cd /opt/mailcow && ./generate_config.sh"`
-- [ ] Edit `mailcow.conf` — set `SKIP_LETS_ENCRYPT=y`, `SKIP_NGINX=y`, `HTTP_PORT=8082`, `HTTPS_PORT=8443`
-- [ ] Configure Mailcow to use PW_NET network
-- [ ] Write Traefik dynamic config for Mailcow HTTP routes: admin UI + SOGo → internal port 8082/8443
-- [ ] Write Traefik dynamic config for Mailcow TCP routes: 25/465/587 → Postfix, 993/995 → Dovecot
-- [ ] Start Mailcow: `ssh root@37.27.218.255 "cd /opt/mailcow && docker compose up -d"`
-- [ ] Verify: `ssh root@37.27.218.255 "cd /opt/mailcow && docker compose ps"` — all containers healthy
-- [ ] Verify: access Mailcow admin UI via browser at `https://mail.<domain>.com`
+### D.5: Post-wizard Stalwart configuration
+- [ ] Configure TLS certificate (ACME DNS-01 via Cloudflare)
+- [ ] Configure network listeners (SMTP, Submission, SMTPS, IMAPS, POP3S, ManageSieve, HTTP)
+- [ ] Set `useXForwarded = true` on HTTP listener
+- [ ] Set `defaultHostname = mail.perfectwork.app`
+- [ ] Add 7 domains: synercatalyst.com, ansis.com.sg, beautywithpro.com, beyonique.com, caryllynch.com, perfectwork.app, postelsolutions.com
+- [ ] Create 18 user accounts (see domain inventory below)
+- [ ] Generate DKIM keys per domain
+- [ ] Record DKIM public keys for DNS setup
 
-## Phase E: Pre-migration DNS preparation (on us01)
+### D.6: Pre-migration DNS preparation (per domain)
+- [ ] Document current DNS records from us01
+- [ ] Lower TTLs to 300s (MX, SPF, DKIM, DMARC, A records)
+- [ ] Wait 24-48h for TTL propagation
+- [ ] Prepare new DNS records (don't activate yet)
 
-- [ ] Document all DNS records for migration: MX, SPF, DKIM, DMARC, SRV, autodiscover/autoconfig CNAMEs
-- [ ] Lower TTL on all MX/SPF/DKIM/DMARC/A records to 300s
-- [ ] Wait 24-48 hours for TTL propagation
-- [ ] Optionally test with a single non-critical domain first on eu01
+### D.7: Migrate mailboxes with imapsync
+Migration order (smallest first):
 
-## Phase F: Migrate email data (us01 → eu01)
+| # | Domain | Mailboxes | Size | Status |
+|---|--------|-----------|------|--------|
+| 1 | postelsolutions.com | 1 | 3.8 MB | ☐ |
+| 2 | ansis.com.sg | 1 | 31 MB | ☐ |
+| 3 | beautywithpro.com | 1 | 61 MB | ☐ |
+| 4 | caryllynch.com | 1 | 330 MB | ☐ |
+| 5 | perfectwork.app | 4 | 121 MB | ☐ |
+| 6 | synercatalyst.com | 6 | 3.2 GB | ☐ |
+| 7 | beyonique.com | 4 | 9.4 GB | ☐ |
 
-- [ ] On us01: set Postfix to hold queue or stop Mailcow (`docker compose stop`)
-- [ ] On us01: run Mailcow backup: `cd /opt/mailcow && ./helper-scripts/backup.sh`
-- [ ] Transfer backup to eu01: `rsync -avz --progress /opt/mailcow/backup/ root@37.27.218.255:/opt/mailcow/backup/`
-- [ ] On eu01: restore Mailcow data: `cd /opt/mailcow && ./helper-scripts/restore.sh`
-- [ ] On eu01: restart Mailcow: `docker compose restart`
-- [ ] Verify: mailboxes accessible, filters/rules intact, contacts/calendars present
-- [ ] Verify: send test email to a migrated address from an external provider → arrives on eu01
+For each mailbox:
+```bash
+imapsync --host1 us01.synercatalyst.com --port1 993 --ssl1 \
+  --user1 USER@DOMAIN --password1 'XXXX' \
+  --host2 37.27.218.255 --port2 993 --ssl2 \
+  --user2 USER@DOMAIN --password2 'XXXX'
+```
 
-## Phase G: DNS cutover
+### D.8: DNS cutover (per domain)
+- [ ] Update MX → mail.perfectwork.app (37.27.218.255)
+- [ ] Update SPF → `v=spf1 mx a ip4:37.27.218.255 ~all`
+- [ ] Update DKIM → Stalwart-generated public key
+- [ ] Update DMARC → `v=DMARC1; p=none; rua=mailto:dmarc@<domain>`
+- [ ] Update autodiscover/autoconfig CNAMEs → mail.perfectwork.app
+- [ ] Verify: email flow for each domain
 
-- [ ] Update MX records → eu01 IP (37.27.218.255)
-- [ ] Update SPF records → include eu01 IP
-- [ ] Copy/re-generate DKIM keys on eu01, update DNS TXT records
-- [ ] Update autodiscover/autoconfig CNAMEs → eu01
-- [ ] Verify: `dig MX <domain>.com` returns eu01
-- [ ] Verify: send test email from external provider → arrives on eu01
-- [ ] Verify: reply from eu01 mailbox → arrives at external provider
-- [ ] Verify: IMAP client (Thunderbird/Outlook) connects successfully to eu01
+### D.9: Post-migration
+- [ ] Keep us01 running 48-72h as fallback
+- [ ] Monitor eu01: `docker logs EU01_stalwart -f`
+- [ ] Full verification: send/receive/IMAP from multiple clients
+- [ ] Remove `STALWART_RECOVERY_ADMIN` env var
+- [ ] Update DNS TTLs to 3600+
+- [ ] Update this checklist — mark Phase D complete
+
+## Phase E-G: Remaining (will be detailed after Phase D)
+
+- Phase E: Pre-migration DNS preparation (covered in D.6)
+- Phase F: Migrate email data (covered in D.7)
+- Phase G: DNS cutover (covered in D.8)
 
 ## Phase H: Post-migration
-
-- [ ] Keep us01 running for 48-72 hours as fallback (accepts any queued mail)
-- [ ] Monitor eu01 mail logs: `ssh root@37.27.218.255 "cd /opt/mailcow && docker compose logs -f postfix-mailcow dovecot-mailcow"`
-- [ ] Full verification cycle: external send → reply → IMAP from multiple clients
-- [ ] Deploy Portainer agent: `docker run -d --name portainer_agent --network PW_NET -p 127.0.0.1:9001:9001 ...`
-- [ ] Once confident: update DNS TTLs back to normal (3600+)
+- [ ] Keep us01 running for 48-72h
+- [ ] Full email verification cycle
+- [ ] Configure Portainer Edge endpoints (other VPSes → eu01)
+- [ ] Update DNS TTLs back to normal
 - [ ] Decommission us01
 
 ---
 
+## Domain inventory (from us01 Mailcow)
+
+| Domain | Mailboxes | Size |
+|--------|-----------|------|
+| synercatalyst.com | adam.chang, info, kam-weng.goh, odoo, suseela.krishnan, wee-seng.loh | 3.2 GB |
+| ansis.com.sg | wee-seng.loh | 31 MB |
+| beautywithpro.com | info | 61 MB |
+| beyonique.com | account, andrea.loh, jeanne, wilson.loh | 9.4 GB |
+| caryllynch.com | email | 330 MB |
+| perfectwork.app | besolution, chris.cheong, kam-weng.goh, mail_service | 121 MB |
+| postelsolutions.com | info | 3.8 MB |
+
+**Total: 18 mailboxes, ~13 GB**
+
 ## Key decisions
 
 | Decision | Choice | Notes |
-|---|---|---|
-| Traefik + Mailcow | Route through Traefik | Unified SSL, single entry point |
-| Mailcow ACME | Disabled (`SKIP_LETS_ENCRYPT=y`) | Traefik handles all SSL |
-| Mailcow nginx | Disabled (`SKIP_NGINX=y`) | Traefik proxies HTTP to Mailcow internal ports |
-| Package versioning | No pins | `apt-get install` gets latest from repos |
-| Swap | 4GB | Mailcow (ClamAV) is memory-hungry |
-| Swappiness | 10 | Avoid swapping ClamAV prematurely on 8GB RAM |
-| Docker log rotation | 10m × 3 files | Prevents disk fill on 76GB disk |
-| Docker live-restore | true | Containers stay running during Docker daemon restart |
-| Docker iptables | true | Docker manages iptables for container port mapping |
-| Docker ulimits | nofile 65536 | Mailcow needs many open file descriptors |
-| Kernel tuning | swappiness=10, overcommit=1, syn_backlog=1024, inotify=524288, keepalive=600 | Optimized for Docker + mail server |
-| Journald | SystemMaxUse=500M, ForwardToSyslog=no | Cap journal size on 76GB disk |
-| fail2ban bantime | 1h | Reasonable hardening for SSH brute-force protection |
-| Hostname | eu01.synercatalyst.com | Declarative via `os.hostname` in YAML |
-| Timezone | UTC | Standard server practice |
-| Disk resize | Not now | 71GB free, monitor usage |
+|----------|--------|-------|
+| Email server | Stalwart v0.16 | Replaces Mailcow (21 containers → 1 container, 4GB+ → 1-2GB RAM) |
+| Hostname | mail.perfectwork.app | Consistent with us01's MAILCOW_HOSTNAME |
+| TLS for HTTPS | Traefik ACME (Cloudflare DNS-01) | `*.synercatalyst.com` wildcard for admin UI |
+| TLS for SMTP/IMAP | Stalwart's own ACME (Cloudflare DNS-01) | `mail.perfectwork.app` cert, same CF credentials |
+| Traefik HTTP routing | Dynamic config file | `/var/lib/traefik/conf/stalwart.yml` — auto-watched |
+| SMTP/IMAP routing | Direct to Stalwart (no Traefik) | Standard email practice; STARTTLS needs direct TLS |
+| cert-dumper | Not needed | Stalwart handles own certs via ACME DNS-01 |
+| Migration tool | imapsync | Handles Dovecot→Stalwart transparently via IMAP protocol |
+| cstation kind | Container (not Stack) | Single Docker image, no git repo |
+| Container naming | EU01_stalwart | Follows `<HOST>_<service>` convention |
+| Test domain | postelsolutions.com | Smallest (3.8 MB, 1 mailbox) |
 
-## Traefik config reference
+## Architecture
 
-Static config entrypoints:
-```yaml
-entryPoints:
-  web: ":80"
-  websecure: ":443"
-  smtp: ":25"
-  submissions: ":465"
-  submission: ":587"
-  imaps: ":993"
-  pop3s: ":995"
+```
+Browser ──HTTPS:443──► Traefik ──HTTP:8080──► Stalwart (admin UI / JMAP)
+                         │
+                    Traefik gets *.synercatalyst.com
+                    via Cloudflare DNS-01
+
+Mail client ──TLS:465──► Stalwart (direct)
+Mail client ──STARTTLS:587──► Stalwart (direct)
+Mail client ──TLS:993──► Stalwart (direct)
+
+                    Stalwart gets mail.perfectwork.app
+                    via Cloudflare DNS-01 (same CF_API_EMAIL/KEY)
 ```
 
-Dynamic config TCP routers for Mailcow:
-```yaml
-tcp:
-  routers:
-    smtp:
-      entryPoints: ["smtp"]
-      service: mailcow-postfix
-      rule: "HostSNI(`*`)"
-    submissions:
-      entryPoints: ["submissions"]
-      service: mailcow-postfix-ssl
-      rule: "HostSNI(`*`)"
-    imaps:
-      entryPoints: ["imaps"]
-      service: mailcow-dovecot
-      rule: "HostSNI(`*`)"
-  services:
-    mailcow-postfix:
-      loadBalancer:
-        servers:
-          - address: "postfix-mailcow:25"
-    mailcow-dovecot:
-      loadBalancer:
-        servers:
-          - address: "dovecot-mailcow:993"
-```
+## us01 reference
+
+- Location: `/var/lib/mailcow/` (21 containers)
+- Hostname: `mail.perfectwork.app`
+- HTTP: nginx-mailcow on PW_NET (port 8088/8089, behind us01 Traefik)
+- Ports: SMTP 25, SMTPS 465, Submission 587, IMAPS 993, POP3S 995 (bound to host)
+- MySQL creds in `/var/lib/mailcow/mailcow.conf`
+- Docker exec broken on us01 (seccomp issue) — use `imapsync` for migration

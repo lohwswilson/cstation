@@ -1126,7 +1126,7 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
         desired_json["iptables"] = daemon_config["iptables"]
     ulimits = daemon_config.get("default_ulimits", {})
     if ulimits:
-        desired_json["default-ulimits"] = {name: {"Hard": val, "Soft": val} for name, val in ulimits.items()}
+        desired_json["default-ulimits"] = {name: {"hard": val, "soft": val} for name, val in ulimits.items()}
 
     desired_content = jsonlib.dumps(desired_json, indent=2)
 

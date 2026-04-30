@@ -119,7 +119,6 @@ docker:
     storage_driver: overlay2
     live_restore: true
     iptables: true
-    default_ulimits: { nofile: 65536 }
   networks: [PW_NET]
   directories: [/var/lib/perfectwork]
 ```
@@ -139,7 +138,6 @@ network: PW_NET
 ports:
   - "80:80"
   - "443:443"
-  - "8080:8080"
   - "25:25"
   - "465:465"
   - "587:587"
@@ -150,33 +148,86 @@ volumes:
   - /var/lib/traefik/letsencrypt:/letsencrypt
   - /var/lib/traefik/conf:/etc/traefik/conf
   - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro
+  - /var/lib/traefik/logs:/etc/traefik/logs
+env_file: .env
+env:
+  DHPARAM_GENERATION: "false"
+secrets:
+  - CF_API_EMAIL
+  - CF_API_KEY
 restart_policy: unless-stopped
 static_config:
+  global:
+    checknewversion: false
+    sendanonymoususage: false
   entryPoints:
-    web: ":80"
-    websecure: ":443"
-    smtp: ":25"
-    submissions: ":465"
-    submission: ":587"
-    imaps: ":993"
-    pop3s: ":995"
+    web:
+      address: ":80"
+      http:
+        redirections:
+          entryPoint:
+            to: websecure
+            scheme: https
+            permanent: true
+      forwardedHeaders:
+        insecure: true
+    websecure:
+      address: ":443"
+      forwardedHeaders:
+        insecure: true
+    smtp:
+      address: ":25"
+    submissions:
+      address: ":465"
+    submission:
+      address: ":587"
+    imaps:
+      address: ":993"
+    pop3s:
+      address: ":995"
   providers:
     docker:
       endpoint: "unix:///var/run/docker.sock"
       exposedByDefault: false
       network: PW_NET
+      watch: true
     file:
       directory: "/etc/traefik/conf"
       watch: true
   certificatesResolvers:
     le_resolver:
       acme:
-        email: "admin@synercatalyst.com"
+        email: "syner.catalyst@gmail.com"
         storage: "/letsencrypt/acme.json"
+        caServer: "https://acme-v02.api.letsencrypt.org/directory"
+        keyType: EC256
         tlsChallenge: {}
+    le_dns_resolver:
+      acme:
+        email: "syner.catalyst@gmail.com"
+        storage: "/letsencrypt/acme_dns.json"
+        caServer: "https://acme-v02.api.letsencrypt.org/directory"
+        keyType: EC256
+        dnsChallenge:
+          provider: cloudflare
+          delayBeforeCheck: 15s
+          resolvers:
+            - "1.1.1.1:53"
+            - "1.0.0.1:53"
   api:
     dashboard: true
-    insecure: true
+  log:
+    level: INFO
+    filePath: "/etc/traefik/logs/traefik.log"
+    format: json
+  accessLog:
+    filePath: "/etc/traefik/logs/access.log"
+    format: json
+    bufferingSize: 100
+  metrics:
+    prometheus:
+      addEntryPointsLabels: true
+      addServicesLabels: true
 ```
 
 ```yaml
@@ -185,15 +236,19 @@ apiVersion: cstation/v1
 kind: Container
 name: portainer
 enabled: true
-image: portainer/portainer-ce:2.21
+image: portainer/portainer-ce:latest
+container_name: EU01_portainer
 network: PW_NET
 ports:
+  - "9000:9000"
   - "9443:9443"
-  - "127.0.0.1:9000:9000"
+  - "8000:8000"
 volumes:
-  - /var/run/docker.sock:/var/run/docker.sock:ro
+  - /var/run/docker.sock:/var/run/docker.sock
   - /var/lib/portainer/data:/data
-restart_policy: unless-stopped
+env:
+  PORTAINER_LOG_LEVEL: INFO
+restart_policy: always
 ```
 
 ### Fragment: `kind: Stack`
@@ -228,10 +283,14 @@ env:
 | `name` | required | required | Service name; matches fragment filename by convention |
 | `enabled` | required | required | `true`/`false` — controls whether plan/apply considers it |
 | `image` | required | — | Docker image (e.g., `traefik:latest`) |
+| `container_name` | optional | — | Docker container name (e.g., `EU01_portainer`). Default: service `name` |
 | `network` | required | required | Docker network (defaults to `PW_NET`) |
 | `ports` | optional | — | Host port bindings (list of Docker port spec strings) |
 | `volumes` | optional | optional | Volume mount specifications |
-| `env` | optional | optional | Environment variables written to `.env` file |
+| `env` | optional | optional | Non-secret environment variables (written as compose `environment`) |
+| `env_file` | optional | — | Path to `.env` file for secrets (written as compose `env_file`) |
+| `secrets` | optional | optional | List of secret key names — written to `.env` on VPS only (NOT committed) |
+| `ulimits` | optional | — | Container ulimits (e.g., `nofile: {soft: 65536, hard: 65536}`) |
 | `restart_policy` | optional | — | Default: `unless-stopped` |
 | `static_config` | optional | — | Service-specific config written as a file (e.g., Traefik's `traefik.yml`) |
 | `git_repo` | — | required | Git repository URL |
@@ -531,34 +590,82 @@ Traefik is the first service to deploy (Phase C of the eu01 migration) and has u
 
 ### Static Config
 
-Written to `/var/lib/traefik/etc/traefik.yml` (mounted into container via volume):
+Written to `/var/lib/traefik/etc/traefik.yml` (mounted into container via volume). Includes HTTP→HTTPS redirect, forwarded headers, file logging, Cloudflare DNS challenge, and Prometheus metrics.
+
+**Dashboard security**: `api.insecure` is NOT set — dashboard is only accessible via SSH tunnel (`ssh -L 8080:localhost:8080 root@<host>`, then `http://localhost:8080`).
 
 ```yaml
+global:
+  checknewversion: false
+  sendanonymoususage: false
 entryPoints:
-  web: ":80"
-  websecure: ":443"
-  smtp: ":25"
-  submissions: ":465"
-  submission: ":587"
-  imaps: ":993"
-  pop3s: ":995"
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+    forwardedHeaders:
+      insecure: true
+  websecure:
+    address: ":443"
+    forwardedHeaders:
+      insecure: true
+  smtp:
+    address: ":25"
+  submissions:
+    address: ":465"
+  submission:
+    address: ":587"
+  imaps:
+    address: ":993"
+  pop3s:
+    address: ":995"
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: PW_NET
+    watch: true
   file:
     directory: "/etc/traefik/conf"
     watch: true
 certificatesResolvers:
   le_resolver:
     acme:
-      email: "admin@synercatalyst.com"
+      email: "syner.catalyst@gmail.com"
       storage: "/letsencrypt/acme.json"
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      keyType: EC256
       tlsChallenge: {}
+  le_dns_resolver:
+    acme:
+      email: "syner.catalyst@gmail.com"
+      storage: "/letsencrypt/acme_dns.json"
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      keyType: EC256
+      dnsChallenge:
+        provider: cloudflare
+        delayBeforeCheck: 15s
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
 api:
   dashboard: true
-  insecure: true
+log:
+  level: INFO
+  filePath: "/etc/traefik/logs/traefik.log"
+  format: json
+accessLog:
+  filePath: "/etc/traefik/logs/access.log"
+  format: json
+  bufferingSize: 100
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
 ```
 
 ### Dynamic Config Directory
@@ -570,18 +677,17 @@ api:
 
 ### Compose File (Generated on VPS)
 
-Generated by `TraefikService` at `/var/lib/traefik/docker-compose.yml`:
+Generated by `TraefikService` at `/var/lib/traefik/docker-compose.yml`. Note: no port `8080` is exposed — dashboard is accessed via SSH tunnel only.
 
 ```yaml
 services:
   traefik:
     image: traefik:latest
-    container_name: traefik
+    container_name: EU01_traefik
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
       - "25:25"
       - "465:465"
       - "587:587"
@@ -592,6 +698,12 @@ services:
       - /var/lib/traefik/letsencrypt:/letsencrypt
       - /var/lib/traefik/conf:/etc/traefik/conf
       - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro
+      - /var/lib/traefik/logs:/etc/traefik/logs
+    environment:
+      DHPARAM_GENERATION: "false"
+    env_file: .env
+    command:
+      - --configFile=/etc/traefik/traefik.yml
     networks:
       - PW_NET
 
@@ -605,14 +717,17 @@ networks:
 ```
 /var/lib/traefik/
 ├── docker-compose.yml
-├── .env
+├── .env                        # secrets (CF_API_EMAIL, CF_API_KEY) — NOT committed
 ├── etc/
 │   └── traefik.yml           # static config
 ├── conf/                      # dynamic config (Traefik watches this)
 │   └── (dynamic route files go here)
 ├── letsencrypt/
 │   └── acme.json             # ACME certificates (created by Traefik)
-└── logs/                      # Traefik access logs (optional)
+│   └── acme_dns.json         # DNS challenge certificates
+└── logs/
+    ├── traefik.log           # Traefik log (JSON format)
+    └── access.log            # Access log (JSON format, buffered)
 ```
 
 ## Portainer-Specific Design
@@ -621,20 +736,27 @@ Portainer CE is deployed as a simple container with web UI.
 
 ### Compose File (Generated on VPS)
 
-Generated by `PortainerService` at `/var/lib/portainer/docker-compose.yml`:
+Generated by `PortainerService` at `/var/lib/portainer/docker-compose.yml`. Port 9000 is HTTP (direct access), port 9443 is HTTPS, port 8000 is the Edge tunnel for remote management of other VPSes.
 
 ```yaml
 services:
   portainer:
-    image: portainer/portainer-ce:2.21
-    container_name: portainer
-    restart: unless-stopped
+    image: portainer/portainer-ce:latest
+    container_name: EU01_portainer
+    restart: always
     ports:
+      - "9000:9000"
       - "9443:9443"
-      - "127.0.0.1:9000:9000"
+      - "8000:8000"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/portainer/data:/data
+    environment:
+      PORTAINER_LOG_LEVEL: INFO
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     networks:
       - PW_NET
 
@@ -727,8 +849,25 @@ tcp:
 
 Two types of environment variables:
 
-1. **Non-secret config** → declared in fragment YAML `env` section (committed to git). Written to the service's `.env` file on the VPS.
-2. **Secrets** → stored in `.env` files on the VPS only (NOT in fragment YAML). User manually adds them to the `.env` file on the VPS after `docker apply`.
+1. **Non-secret config** → declared in fragment YAML `env` section (committed to git). Written as compose `environment` (inline).
+2. **Secrets** → declared in fragment YAML `secrets` section as key names only (e.g., `secrets: [CF_API_EMAIL, CF_API_KEY]`). Written to a `.env` file on the VPS only (NOT committed). The fragment also sets `env_file: .env` so compose loads the secrets at runtime.
+
+**How it works:**
+- Fragment `env` → compose `environment` (non-secret, committed, visible in compose file).
+- Fragment `secrets` + `env_file` → `.env` file on VPS only (secret values, NOT committed).
+- On first `docker apply`: cstation writes a template `.env` with placeholder values (`REPLACE_ME`). User must SSH in and edit with real values.
+- On subsequent applies: cstation does NOT overwrite existing `.env` files (preserves user-set secrets).
+- `docker plan` warns if secrets in `.env` still contain placeholder values.
+
+Example Traefik fragment:
+```yaml
+env_file: .env
+env:
+  DHPARAM_GENERATION: "false"    # non-secret → compose environment
+secrets:
+  - CF_API_EMAIL                  # secret → .env on VPS only
+  - CF_API_KEY                    # secret → .env on VPS only
+```
 
 Secrets are never printed in plan output or committed to git. Future: add `cstation docker env` command to manage secrets interactively.
 
@@ -838,8 +977,8 @@ Delivers: Custom/arbitrary services without a built-in template.
 
 ## Open Questions
 
-1. **ACME email**: Should the `le_resolver` email be in the fragment YAML or a separate secrets file? (Current recommendation: fragment YAML, it's not secret.)
-2. **Traefik dashboard security**: The spec uses `api.insecure: true` for MVP. Production needs Traefik auth middleware or basic-auth. This should be configurable in the fragment.
+1. ~~**ACME email**: Should the `le_resolver` email be in the fragment YAML or a separate secrets file?~~ **Resolved**: Fragment YAML — email is not secret.
+2. ~~**Traefik dashboard security**: The spec uses `api.insecure: true` for MVP.~~ **Resolved**: `api.insecure` removed. Dashboard accessible via SSH tunnel only (`ssh -L 8080:localhost:8080`).
 3. **Mailcow network patching**: Should we patch the upstream `docker-compose.yml` directly, or layer a `docker-compose.override.yml`? Override is safer and survives `git pull` upgrades.
 4. **Container health checks**: Should `docker status` check container health (`docker inspect --format='{{.State.Health.Status}}'`) or just running state?
 5. **Rollback**: If `apply` fails mid-deploy (e.g., Mailcow compose fails), should we attempt to roll back to the previous state?

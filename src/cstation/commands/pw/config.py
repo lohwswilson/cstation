@@ -8,7 +8,7 @@ This module defines configuration options specific to PW sync operations.
 import re
 from pathlib import Path
 from typing import List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PWConfig(BaseModel):
@@ -59,10 +59,7 @@ class PWConfig(BaseModel):
     ssh_timeout: int = Field(default=30, description="SSH connection timeout in seconds")
     rsync_timeout: int = Field(default=300, description="Rsync operation timeout in seconds")
     
-    class Config:
-        """Pydantic configuration."""
-        env_prefix = "CSTATION_PW_"
-        case_sensitive = False
+    model_config = ConfigDict(env_prefix="CSTATION_PW_", case_sensitive=False)
 
 
 def get_pw_config() -> PWConfig:

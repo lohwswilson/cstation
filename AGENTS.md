@@ -46,7 +46,7 @@ config/vps/
 │   ├── vps.yaml              ← kind: VPS (identity, access, facts, os, docker)
 │   ├── traefik.yaml          ← kind: Container
 │   ├── portainer.yaml        ← kind: Container
-│   └── mailcow.yaml          ← kind: Stack
+│   └── stalwart.yaml         ← kind: Container (email server)
 ├── sg07.ansis.com.sg/
 │   ├── vps.yaml
 │   └── ...
@@ -57,8 +57,8 @@ Contains identity, access, facts, OS config, Docker infrastructure. Does NOT con
 
 ### Fragment files (read by `cstation docker` commands)
 - Each fragment file is a separate YAML in the VPS config directory
-- `kind: Container` — cstation generates the compose file (Traefik, Portainer, PostgreSQL, n8n)
-- `kind: Stack` — cstation clones a git repo and patches it (Mailcow, Odoo)
+- `kind: Container` — cstation generates the compose file (Traefik, Portainer, Stalwart, PostgreSQL, n8n)
+- `kind: Stack` — cstation clones a git repo and patches it (Odoo)
 - Fragment discovery: all `*.yaml` files except `vps.yaml`
 
 ### CLI argument resolution
@@ -113,7 +113,7 @@ os:
     firewall: { mode: ufw, allow: [22/tcp, ...] }
   journald: { system_max_use: 500M, forward_to_syslog: false }
 docker:
-  daemon: { log_driver, log_opts, storage_driver, live_restore, iptables, default_ulimits }
+  daemon: { log_driver, log_opts, storage_driver, live_restore, iptables }
   networks: [PW_NET]
   directories: [/var/lib/perfectwork]
 ```
@@ -162,13 +162,39 @@ kind: Container
 name: traefik
 enabled: true
 image: traefik:latest
+container_name: EU01_traefik
 network: PW_NET
 ports: ["80:80", "443:443", ...]
 volumes: [...]
-env: { TRAEFIK_DASHBOARD: "true" }
+env: { DHPARAM_GENERATION: "false" }    # non-secret → compose environment
+env_file: .env                           # secrets loaded from .env on VPS
+secrets: [CF_API_EMAIL, CF_API_KEY]      # secret keys → .env on VPS only (NOT committed)
 restart_policy: unless-stopped
-static_config: { ... }  # optional, service-specific (e.g., Traefik's traefik.yml)
+command: ["--configFile=/etc/traefik/traefik.yml"]  # optional, Docker compose command override
+owner: "2000:2000"                                   # optional, chown -R after apply (uid:gid)
+subdirs: [etc, conf, letsencrypt, logs]              # optional, override service subdirectories
+static_config: { ... }                               # optional, service-specific (e.g., Traefik's traefik.yml)
+traefik:                                             # optional, Traefik dynamic routing config
+  http:
+    routers:
+      myapp:
+        rule: "Host(`myapp.example.com`)"
+        entryPoints: [websecure]
+        service: myapp
+        tls:
+          certResolver: le_dns_resolver
+    services:
+      myapp:
+        loadBalancer:
+          serverPort: 3000
 ```
+
+Declarative fields handled by `ImageService` base class (no Python subclass needed):
+- **`command`** — Docker compose command override. Written directly to compose output.
+- **`owner`** — `chown -R <owner> <service_dir>` after apply. Also detected in plan.
+- **`subdirs`** — Override service subdirectories (falls back to class attribute if absent).
+- **`traefik`** — Written to `/var/lib/traefik/conf/<service_name>.yml`. Traefik watches this directory and auto-reloads. Any container can declare Traefik routing rules without a custom service class.
+- **`static_config`** — Only used by TraefikService for Traefik's own `traefik.yml`. Other services use `traefik` key for routing rules.
 
 ### Fragment schema: `kind: Stack`
 ```yaml
@@ -187,6 +213,7 @@ env: { SKIP_LETS_ENCRYPT: "y", ... }
 - Infrastructure services: `/var/lib/<service>/` (e.g., `/var/lib/traefik/`, `/var/lib/portainer/`)
 - Odoo/PerfectWork: `/var/lib/perfectwork/` (reserved for Odoo instances)
 - `docker apply` creates its own directories; no need to add them to `docker.directories` in VPS YAML
+- Secrets `.env` files live in the service directory on VPS (e.g., `/var/lib/traefik/.env`) — NOT committed to git
 
 ### Docker commands reference
 ```bash
@@ -213,16 +240,45 @@ cstation docker status <vps>                              # Show container state
 - Mock provider methods via `monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.get_vps", ...)`
 - For `apply` tests that require confirmation, patch `typer.confirm`: `monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)`
 
-### Testing Docker commands (future)
+### Testing Docker commands
 - Mock `SSHManager.run` with command → stdout responses for `docker compose`, `docker network ls`, etc.
 - Test fragment discovery: create temp directory with `vps.yaml` + fragment files
 - Test plan: verify drift detection, port collision detection, orphan detection
 - Test apply: verify compose file generation, static config writing, directory creation
+- Test secrets: `.env` template written on first apply, preserved on re-apply
+- Test `env_file` appears in generated compose when fragment declares it
 
 ## README caveats
-The README references `cstation service` and `requirements-dev.txt` — neither exist.
-Trust `pyproject.toml` and the source code over the README.
+The old README referenced `cstation service` and `requirements-dev.txt` — neither existed. The README has been rewritten to reflect the current codebase. Trust `pyproject.toml` and the source code over any outdated docs.
 
 ## Key specs
 - `docs/superpowers/specs/2026-04-28-vps-declarative-management-design.md` — VPS infrastructure design
 - `docs/superpowers/specs/2026-04-29-docker-service-management-design.md` — Docker container service design
+- `docs/superpowers/specs/2026-04-30-email-migration-stalwart-design.md` — Email migration (Mailcow → Stalwart) design
+- `docs/superpowers/plans/2026-04-30-email-migration-phase-d.md` — Phase D implementation plan
+- `docs/migration/us01-to-eu01.md` — Migration checklist (us01 → eu01)
+
+## Stalwart email server
+
+Stalwart Mail Server replaces Mailcow on eu01. Key differences:
+- **Single container** vs Mailcow's 21 containers
+- **kind: Container** (not Stack) — single Docker image, no git clone
+- **StalwartService** class in `src/cstation/commands/docker/services/stalwart.py` — just `name` + registration, no overrides
+- Directory ownership via `owner: "2000:2000"` in `stalwart.yaml` (handled generically by `ImageService`)
+- Traefik dynamic routing declared in `stalwart.yaml` via the `traefik:` key — `ImageService` writes it to `/var/lib/traefik/conf/stalwart.yml` on apply
+- Stalwart binds SMTP/IMAP ports directly (NOT through Traefik)
+- Stalwart obtains own TLS cert via ACME DNS-01 (Cloudflare, same `CF_API_EMAIL`/`CF_API_KEY`)
+- Traefik only proxies HTTPS traffic (admin UI, JMAP) to Stalwart:8080
+
+### Port allocation on eu01
+
+| Port | Service | Bound By |
+|------|---------|----------|
+| 80, 443 | HTTP/HTTPS (Traefik redirect + admin) | Traefik |
+| 25, 110, 465, 587, 993, 995, 4190 | SMTP, POP3, SMTPS, Submission, IMAPS, POP3S, ManageSieve | Stalwart |
+| 8000, 9000, 9443 | Portainer Edge/HTTP/HTTPS | Portainer |
+
+### Migration status
+- Phases A-C: COMPLETE (VPS baseline, Docker, Traefik, Portainer)
+- Phase D: IN PROGRESS (Stalwart deployment + email migration)
+- See `docs/migration/us01-to-eu01.md` for detailed checklist

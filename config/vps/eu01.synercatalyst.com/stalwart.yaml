@@ -1,0 +1,46 @@
+apiVersion: cstation/v1
+kind: Container
+name: stalwart
+enabled: true
+image: stalwartlabs/stalwart:v0.16
+container_name: EU01_stalwart
+network: PW_NET
+ports:
+  - "25:25"
+  - "110:110"
+  - "465:465"
+  - "587:587"
+  - "993:993"
+  - "995:995"
+  - "4190:4190"
+volumes:
+  - /var/lib/stalwart/etc:/etc/stalwart
+  - /var/lib/stalwart/data:/var/lib/stalwart
+env:
+  STALWART_RECOVERY_ADMIN: "admin:REPLACE_ME"
+secrets:
+  - CF_API_EMAIL
+  - CF_API_KEY
+restart_policy: unless-stopped
+owner: "2000:2000"
+subdirs:
+  - etc
+  - data
+ulimits:
+  nofile:
+    soft: 65536
+    hard: 65536
+traefik:
+  http:
+    routers:
+      stalwart-admin:
+        rule: "Host(`mail.perfectwork.app`)"
+        entryPoints:
+          - websecure
+        service: stalwart-http
+        tls:
+          certResolver: le_dns_resolver
+    services:
+      stalwart-http:
+        loadBalancer:
+          serverPort: 8080
