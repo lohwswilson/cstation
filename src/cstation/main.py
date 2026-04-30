@@ -17,6 +17,7 @@ from .commands.server.main import server_app
 from .commands.github.main import github_app
 from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
+from .commands.netcup.main import netcup_app
 
 
 # Initialize main Typer app
@@ -34,6 +35,7 @@ app.add_typer(server_app)
 app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
+app.add_typer(netcup_app)
 
 
 @app.callback()

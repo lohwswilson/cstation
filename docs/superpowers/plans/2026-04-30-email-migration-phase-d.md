@@ -130,59 +130,51 @@ All 94 tests pass (53 VPS + 41 Docker).
 
 ---
 
-### D.2: Re-deploy Traefik (remove mail ports)
+### D.2: Re-deploy Traefik (remove mail ports) ✅ COMPLETE
 
-- [ ] `uv run cstation vps apply eu01.synercatalyst.com --phase firewall` — add 110/tcp, 4190/tcp
-- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service traefik` — verify changes
-- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes`
-- [ ] Verify: `ssh root@37.27.218.255 "docker compose -f /var/lib/traefik/docker-compose.yml ps"`
-- [ ] Verify: `ssh root@37.27.218.255 "docker ps --format '{{.Names}}\t{{.Ports}}' | grep traefik"` — no SMTP/IMAP ports
-- [ ] Verify: `curl -s -o /dev/null -w "%{http_code}" http://37.27.218.255` → 301
-
----
-
-### D.3: Deploy Stalwart on eu01
-
-- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service stalwart` — review plan
-- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
-- [ ] Verify: `ssh root@37.27.218.255 "docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}' | grep stalwart"`
-- [ ] Check port bindings: `ssh root@37.27.218.255 "ss -tlnp | grep -E ':(25|110|465|587|993|995|4190)'"` — Stalwart listening
-- [ ] Get bootstrap credentials: `ssh root@37.27.218.255 "docker logs EU01_stalwart 2>&1 | grep -A8 'bootstrap mode'"`
-- [ ] Save bootstrap admin password
+- [x] `uv run cstation vps apply eu01.synercatalyst.com --phase firewall` — added 110/tcp, 4190/tcp
+- [x] `uv run cstation docker plan eu01.synercatalyst.com --service traefik` — verified changes
+- [x] `uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes`
+- [x] Verify: Traefik running with only ports 80, 443
+- [x] Verify: `curl -s -o /dev/null -w "%{http_code}" http://37.27.218.255` → 301
 
 ---
 
-### D.4: Configure Stalwart (Setup Wizard)
+### D.3: Deploy Stalwart on eu01 ✅ COMPLETE
 
-- [ ] SSH tunnel: `ssh -L 8080:localhost:8080 root@37.27.218.255`
-- [ ] Open `http://localhost:8080/admin` in browser
-- [ ] Sign in with bootstrap credentials
+- [x] `uv run cstation docker plan eu01.synercatalyst.com --service stalwart` — reviewed plan
+- [x] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
+- [x] Verified: EU01_stalwart running (healthy), ports 25, 110, 465, 587, 993, 995, 4190 bound
+- [x] Bootstrap mode active: port 8080 open for initial setup
+- [x] Fixed: Traefik dynamic config `serverPort` → `servers` with `url` (Traefik v3 file provider format)
+- [x] Fixed: Traefik .env had `REPLACE_ME` → re-applied with real secrets from config.yaml
+- [x] Re-applied Stalwart and Portainer dynamic configs with fixed format
+- [x] Restarted Traefik — no more config errors
+- [x] Verified: TLS cert auto-provisioned for `mail.ansis.com.sg` via Cloudflare DNS-01
+- [x] Verified: `https://mail.ansis.com.sg/admin` → 200 OK (Stalwart admin UI accessible via Traefik)
 
-**Wizard Step 1 — Server Identity:**
-- Server hostname: `mail.perfectwork.app`
-- Default email domain: `synercatalyst.com`
-- Automatically obtain TLS certificate: **No** (configure manually after setup)
-- Generate email signing keys: **Yes**
+- [x] `uv run cstation docker plan eu01.synercatalyst.com --service stalwart` — reviewed plan
+- [x] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
+- [x] Verify: EU01_stalwart running (healthy), ports 25, 110, 465, 587, 993, 995, 4190 bound
+- [x] Bootstrap mode active: port 8080 open for initial setup
+- [x] Also updated: stalwart.yaml now routes both mail.perfectwork.app and mail.ansis.com.sg via Traefik
 
-**Why disable ACME during setup?** Stalwart's ACME needs port 443 or DNS-01 configured. We'll configure DNS-01 via Cloudflare after the wizard completes, using the CF_API_EMAIL/CF_API_KEY environment variables.
+---
 
-**Wizard Step 2 — Storage:**
-- Main data: RocksDB (default)
-- Attachments: Use Data Store (default)
-- Full-text search: Use Data Store (default)
-- Cache: Use Data Store (default)
+### D.4: Configure Stalwart (Setup Wizard) ✅ COMPLETE
 
-**Wizard Step 3 — Account Directory:**
-- Internal Directory (default)
+**Access:** `https://mail.ansis.com.sg/admin` (TLS cert auto-provisioned via Cloudflare DNS-01)
 
-**Wizard Step 4 — Logging:**
-- Console (for Docker)
+**Wizard steps completed:**
+- Step 1: Hostname=`mail.ansis.com.sg`, Domain=`synercatalyst.com`, ACME=No (configure later), DKIM=Yes
+- Step 2: Storage=RocksDB (default)
+- Step 3: Directory=Internal (default)
+- Step 4: Logging=Console (for Docker)
+- Step 5: DNS=Manual
 
-**Wizard Step 5 — DNS:**
-- Manual DNS Server Management
-
-- [ ] Save the permanent admin credentials from the final screen
-- [ ] Restart: `ssh root@37.27.218.255 "docker restart EU01_stalwart"`
+**Verified:**
+- SMTP `220 mail.ansis.com.sg Stalwart ESMTP` ✅
+- Admin UI `https://mail.ansis.com.sg/admin/` → 200 ✅
 
 ---
 

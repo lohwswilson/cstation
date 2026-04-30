@@ -8,6 +8,7 @@ from __future__ import annotations
 import json as jsonlib
 import os
 import re
+import shutil
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ from cstation.config import get_config
 from cstation.ssh import SSHManager
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
+from cstation.providers.netcup import NetcupProvider
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
 
@@ -385,6 +387,18 @@ def _config_accounts(provider: str) -> dict[str, str]:
     cfg = get_config()
     accounts = cfg.get_config_value(f"vps.providers.{provider}.accounts", default=None)
     if not accounts:
+        if provider == "netcup":
+            scp = cfg.get_config_value(f"vps.providers.{provider}.scp", default=None)
+            if scp and isinstance(scp, dict):
+                out: dict[str, str] = {}
+                for name in scp:
+                    if isinstance(scp[name], dict):
+                        if scp[name].get("enabled", True):
+                            out[str(name)] = "oauth"
+                    else:
+                        out[str(name)] = "oauth"
+                if out:
+                    return out
         return {}
     if not isinstance(accounts, dict):
         raise typer.BadParameter(f"Invalid config: vps.providers.{provider}.accounts must be a mapping")
@@ -424,6 +438,13 @@ def _provider_from_token(provider: str, token: str) -> Any:
         return HetznerProvider(token=token, http=_HttpClient())
     if provider == "vultr":
         return VultrProvider(token=token, http=_HttpClient())
+    if provider == "netcup":
+        from cstation.providers.netcup_auth import get_access_token, NetcupAuthError
+        try:
+            access_token = get_access_token()
+        except NetcupAuthError as e:
+            raise typer.BadParameter(f"Netcup SCP auth failed: {e}. Run 'cstation netcup auth-login' first.")
+        return NetcupProvider(http=_HttpClient(), access_token=access_token)
     raise typer.BadParameter(f"Unsupported provider '{provider}'")
 
 
@@ -446,8 +467,17 @@ def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[st
         if token:
             return None, token
 
+    if provider == "netcup":
+        from cstation.providers.netcup_auth import credentials_exist
+        if credentials_exist():
+            return None, "oauth"
+        raise typer.BadParameter(
+            f"No Netcup SCP credentials found. Run 'cstation netcup auth-login' first, "
+            f"or configure vps.providers.netcup.scp in ~/.config/cstation/config.yaml"
+        )
+
     raise typer.BadParameter(
-        f"Missing {provider} token; configure ~/.config/cstation/config.yml (vps.providers.{provider}.accounts)"
+        f"Missing {provider} token; configure ~/.config/cstation/config.yaml (vps.providers.{provider}.accounts)"
     )
 
 
@@ -1495,8 +1525,8 @@ def vps_init(
     if account_name is None:
         raise typer.BadParameter("Target must include account: <provider>/<account>:<id>")
     id_, name = _parse_target(raw_target)
-    if not id_:
-        raise typer.BadParameter("Target must include VPS id after <account>:")
+    if not id_ and not name:
+        raise typer.BadParameter("Target must include VPS id or name after <account>:")
 
     output_path = out
     if output_path is not None and output_path.exists() and not force:
@@ -1570,6 +1600,116 @@ def vps_init(
         yaml.dump(clean_payload, f, sort_keys=False, Dumper=_CStationYamlDumper)
 
     console.print(f"[green]✓[/green] Wrote {output_path}")
+
+
+def _check_running_containers(ssh: SSHManager) -> list[str] | None:
+    try:
+        result = ssh.run("docker ps --format '{{.Names}}'", sudo=True)
+        if result is None:
+            return None
+        output = result.stdout.strip()
+        if not output:
+            return []
+        return [name for name in output.splitlines() if name.strip()]
+    except Exception:
+        return None
+
+
+def _remove_vps_secrets(vps_name: str) -> bool:
+    config_path = Path.home() / ".config" / "cstation" / "config.yaml"
+    if not config_path.exists():
+        return False
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return False
+    secrets = data.get("vps", {}).get("secrets", {})
+    if vps_name not in secrets:
+        return False
+    del secrets[vps_name]
+    if not secrets:
+        data.setdefault("vps", {}).pop("secrets", None)
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with config_path.open("w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, Dumper=_CStationYamlDumper)
+        return True
+    except Exception:
+        return False
+
+
+@vps_app.command("remove")
+def vps_remove(
+    vps: str = typer.Argument(..., help="VPS name or directory path"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    skip_check: bool = typer.Option(False, "--skip-check", help="Skip SSH container check (use if server is unreachable)"),
+) -> None:
+    """
+    Remove a VPS from local configuration: remove its config directory and secrets.
+
+    This does NOT destroy the VPS on the cloud provider. To remove the server itself,
+    use the provider's web console or API directly.
+
+    Examples:
+      cstation vps remove eu01.synercatalyst.com
+      cstation vps remove config/vps/eu01.synercatalyst.com --yes
+      cstation vps remove eu01.synercatalyst.com --skip-check
+    """
+    vps_dir = _resolve_vps_dir(Path(vps))
+    data = _load_vps_config(vps_dir)
+    identity = data.get("identity", {})
+    name = identity.get("name", vps_dir.name)
+
+    console.print(f"\n[bold]VPS Remove: {name}[/bold]\n")
+
+    containers_warning = None
+    if skip_check:
+        console.print("[dim]  Skipping container check (--skip-check).[/dim]")
+    else:
+        try:
+            ssh = _ssh_from_config(data)
+            ssh.connection.open_timeout = 10
+            containers = _check_running_containers(ssh)
+            if containers is None:
+                console.print("[dim]  Could not check running containers (SSH unavailable).[/dim]")
+            elif containers:
+                console.print(f"[yellow]⚠ Running containers detected: {', '.join(containers)}[/yellow]")
+                containers_warning = containers
+            else:
+                console.print("[dim]  No running containers detected.[/dim]")
+        except Exception:
+            console.print("[dim]  Could not check running containers (SSH connection failed).[/dim]")
+            console.print("[dim]  Use --skip-check if the server is already unreachable.[/dim]")
+
+    files_in_dir = list(vps_dir.iterdir()) if vps_dir.is_dir() else []
+    console.print(f"\n[red]This will permanently delete:[/red]")
+    console.print(f"  Config directory: {vps_dir}/")
+    for f in sorted(files_in_dir):
+        console.print(f"    {f.name}")
+    console.print(f"  Secrets: vps.secrets.{name} from ~/.config/cstation/config.yaml")
+
+    if containers_warning:
+        console.print(f"\n[yellow]⚠ {len(containers_warning)} container(s) are still running on {name}.[/yellow]")
+        console.print("[yellow]Consider stopping them before removing, or use the provider console to destroy the VPS.[/yellow]")
+
+    if not yes:
+        confirm = typer.confirm("\nProceed with removal?", default=False)
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+    shutil.rmtree(vps_dir)
+    console.print(f"  [green]✓[/green] Deleted {vps_dir}/")
+
+    secrets_removed = _remove_vps_secrets(name)
+    if secrets_removed:
+        config_path = Path.home() / ".config" / "cstation" / "config.yaml"
+        console.print(f"  [green]✓[/green] Removed secrets from {config_path}")
+    else:
+        console.print(f"  [dim]No secrets found for {name} in config.yaml[/dim]")
+
+    console.print(f"\n[green]✓[/green] Removed VPS [bold]{name}[/bold]")
 
 
 @vps_app.callback()

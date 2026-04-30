@@ -3,7 +3,7 @@ kind: Container
 name: traefik
 enabled: true
 image: traefik:latest
-container_name: EU01_traefik
+container_name: US02_traefik
 network: PW_NET
 ports:
   - "80:80"
@@ -94,7 +94,7 @@ traefik:
   http:
     routers:
       traefik-dashboard:
-        rule: "Host(`traefik.eu01.synercatalyst.com`)"
+        rule: "Host(`traefik.us02.synercatalyst.com`)"
         entryPoints:
           - websecure
         service: api@internal

@@ -37,6 +37,10 @@ uv run cstation vps ls
 
 # Initialize a VPS config from a Hetzner server
 uv run cstation vps init hetzner/myaccount:123456
+
+# Initialize a VPS config from a Netcup server
+cstation netcup auth-login         # First-time: authenticate with Netcup SCP
+uv run cstation vps init netcup/default:v2202604354651455383
 ```
 
 ## Usage
@@ -77,6 +81,19 @@ cstation vps apply eu01.synercatalyst.com --phase packages
 VPS command targets use the format `<provider>/<account>:<id>`. Examples:
 - `hetzner/myaccount:123456` — Hetzner server by numeric ID
 - `vultr/main:3431427c-9755-4064-903e-7a3e8bc82791` — Vultr instance by UUID
+- `netcup/default:v2202604354651455383` — Netcup server by name (OAuth2 auth required)
+
+### Netcup SCP Authentication
+
+Netcup uses OAuth2 device-code flow (browser-based) instead of API tokens:
+
+```bash
+cstation netcup auth-login    # Start OAuth2 flow (opens browser)
+cstation netcup auth-logout   # Revoke and remove stored credentials
+cstation netcup auth-show     # Show credential status
+```
+
+Credentials are stored in `~/.config/cstation/netcup-oauth.json` (refresh token, mode 0600).
 
 ### Docker Service Management
 
@@ -129,6 +146,10 @@ vps:
       accounts:
         main:
           token: "your-vultr-token"
+    netcup:
+      scp:
+        default:
+          enabled: true
 ```
 
 ## VPS Config Structure
@@ -139,9 +160,14 @@ Each VPS has its own directory under `config/vps/` containing a main `vps.yaml` 
 config/vps/
 ├── eu01.synercatalyst.com/
 │   ├── vps.yaml              ← identity, access, facts, os, docker infrastructure
-│   ├── traefik.yaml          ← kind: Container
-│   ├── portainer.yaml        ← kind: Container
-│   └── mailcow.yaml          ← kind: Stack (enabled: false)
+│   ├── EU01_traefik.yaml     ← kind: Container
+│   ├── EU01_portainer.yaml   ← kind: Container
+│   └── EU01_stalwart.yaml    ← kind: Container (email server)
+├── us02.synercatalyst.com/
+│   ├── vps.yaml
+│   ├── US02_traefik.yaml
+│   ├── US02_portainer.yaml
+│   └── US02_stalwart.yaml
 ├── sg07.ansis.com.sg/
 │   ├── vps.yaml
 │   └── ...
@@ -149,6 +175,8 @@ config/vps/
 
 - `vps.yaml` — read by `cstation vps` commands (infrastructure only)
 - Fragment files (`*.yaml` except `vps.yaml`) — read by `cstation docker` commands (container deployment)
+
+Fragment filenames can use any naming convention, but it's recommended to match the `container_name` field (e.g., `US02_traefik.yaml`, `US02_portainer.yaml`) for easy searching.
 
 ### Fragment: kind: Container
 
@@ -231,24 +259,29 @@ src/cstation/
 │   │   ├── services/    # Service classes (TraefikService, PortainerService, etc.)
 │   │   └── compose/     # Compose file rendering, .env writer
 │   ├── vps/             # VPS lifecycle (ls, status, init, plan, apply)
+│   ├── netcup/          # Netcup SCP authentication (auth-login, auth-logout, auth-show)
 │   ├── pw/              # PerfectWork operations
 │   └── sync/            # Sync management
 ├── providers/
 │   ├── base.py          # VPSProvider protocol + VPS/VPSStatus models
 │   ├── hetzner.py       # Hetzner Cloud adapter
-│   └── vultr.py         # Vultr adapter
+│   ├── vultr.py         # Vultr adapter
+│   ├── netcup.py        # Netcup SCP REST API adapter
+│   ├── netcup_auth.py   # Netcup OAuth2 device-code flow
+│   └── errors.py        # Provider error classes
 tests/
 ├── commands/
 │   ├── test_vps_cli.py  # VPS CLI integration tests
 │   └── test_docker_cli.py  # Docker CLI tests
 ├── providers/
 │   ├── test_hetzner.py  # Hetzner adapter tests
-│   └── test_vultr.py    # Vultr adapter tests
+│   ├── test_vultr.py    # Vultr adapter tests
+│   └── test_netcup.py  # Netcup adapter tests
 config/
 └── vps/                 # Per-VPS config directories
     └── <vps-name>/
         ├── vps.yaml
-        ├── traefik.yaml
+        ├── <CONTAINER_NAME>_traefik.yaml
         └── ...
 ```
 
@@ -265,13 +298,23 @@ config/
 ### Adding a New Provider
 
 1. Create `src/cstation/providers/<name>.py` implementing `VPSProvider` protocol from `base.py`
-2. Add to `_provider_from_token()` in `src/cstation/commands/vps/main.py`
+2. For OAuth2-based providers (like Netcup), create `src/cstation/providers/<name>_auth.py` for the auth flow
+3. Add to `_provider_from_token()` and `_resolve_account()` in `src/cstation/commands/vps/main.py`
+4. For OAuth2 providers, add auth commands in `src/cstation/commands/<name>/main.py` and register in `src/cstation/main.py`
+
+#### Provider comparison
+
+| Provider | Auth method | Config format | VPS creation | VPS deletion |
+|----------|------------|---------------|-------------|-------------|
+| Hetzner | API token | `accounts.<name>.token` | Yes | Yes |
+| Vultr | API token | `accounts.<name>.token` | No | Yes |
+| Netcup | OAuth2 device-code | `scp.<name>.enabled` | No | No |
 
 ## Troubleshooting
 
 ### No VPS providers configured
 
-Set provider tokens in `~/.config/cstation/config.yaml` or set `HETZNER_TOKEN` environment variable.
+Set provider tokens in `~/.config/cstation/config.yaml` or set `HETZNER_TOKEN` environment variable. For Netcup, run `cstation netcup auth-login` first.
 
 ### Command not found
 

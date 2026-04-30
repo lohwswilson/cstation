@@ -1,82 +1,75 @@
 apiVersion: cstation/v1
 kind: VPS
 identity:
-  name: eu01.synercatalyst.com
+  name: us02.synercatalyst.com
   stage: prod
-  region: hel1
+  region: Manassas
 access:
-  host: 37.27.218.255
+  host: 152.53.169.95
   user: root
   port: 22
 facts:
   os:
     id: ubuntu
-    version: '24.04'
-    pretty: Ubuntu 24.04.3 LTS
-    kernel: 6.8.0-90-generic
+    version: '26.04'
+    pretty: Ubuntu 26.04 LTS
+    kernel: 7.0.0-15-generic
     package_manager: apt
   cpu:
     architecture: aarch64
     vendor: ARM
     model: Neoverse-N1
-    vcpu: 4
-    cores_per_socket: 4
-    sockets: 1
+    vcpu: 6
+    sockets: 6
     threads_per_core: 1
   memory:
-    total_mb: 7730
-    used_mb: 344
-    available_mb: 7385
+    total_mb: 7908
+    used_mb: 509
+    available_mb: 7398
     swap_total_mb: 0
     swap_used_mb: 0
   disks:
-  - name: sda
-    size_gb: 76.3
-    type: disk
-    partitions:
-    - name: sda1
-      size_gb: 76.0
-      type: part
-      mountpoint: /
-    - name: sda14
-      size_gb: 0.0
-      type: part
-    - name: sda15
-      size_gb: 0.2
-      type: part
-      mountpoint: /boot/efi
   - name: sr0
     size_gb: 1.0
     type: rom
+  - name: vda
+    size_gb: 256.0
+    type: disk
+    partitions:
+    - name: vda1
+      size_gb: 0.2
+      type: part
+      mountpoint: /boot/efi
+    - name: vda2
+      size_gb: 1.0
+      type: part
+      mountpoint: /boot
+    - name: vda3
+      size_gb: 254.7
+      type: part
+      mountpoint: /
   network:
     interfaces:
     - name: eth0
       state: UP
-      mac: 92:00:07:a4:c8:ef
-      ipv4: 37.27.218.255
-      ipv4_prefix: 32
-      ipv6: 2a01:4f9:c014:760a::1
+      mac: 56:1d:1f:8e:88:bf
+      ipv4: 152.53.169.95
+      ipv4_prefix: 22
+      ipv6: 2a0a:4cc0:2000:aebf:541d:1fff:fe8e:88bf
       ipv6_prefix: 64
     routes:
     - destination: default
-      via: 172.31.1.1
+      via: 152.53.168.1
       dev: eth0
-    - destination: 172.31.1.1
+    - destination: 152.53.168.0/22
       dev: eth0
-    - destination: 185.12.64.1
-      via: 172.31.1.1
-      dev: eth0
-    - destination: 185.12.64.2
-      via: 172.31.1.1
-      dev: eth0
-  hostname: EU01
+  hostname: US02
   packages:
     detected:
     - openssh-server
     - ufw
     - nftables
     - python3
-    - rsync
     - curl
     - git
     - sudo
@@ -85,8 +78,10 @@ facts:
     - docker
     - docker.io
     - containerd
+    - docker-compose-v2
+    - rsync
 os:
-  hostname: eu01.synercatalyst.com
+  hostname: us02.synercatalyst.com
   baseline:
     upgrade_all: true
     packages:
@@ -95,6 +90,7 @@ os:
     - containerd
     - docker-compose-v2
     - zsh
+    - rsync
     shell: zsh
     terminal: xterm-256color
     swap:

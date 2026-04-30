@@ -35,7 +35,68 @@ Do not attempt to run lint or typecheck commands.
 
 ### Adding a new provider
 1. Create `src/cstation/providers/<name>.py` implementing `VPSProvider` protocol from `base.py`
-2. Add to `_provider_from_token()` in `src/cstation/commands/vps/main.py`
+2. For OAuth2-based providers (like Netcup), create `src/cstation/providers/<name>_auth.py` for the auth flow
+3. Add to `_provider_from_token()` and `_resolve_account()` in `src/cstation/commands/vps/main.py`
+4. For OAuth2 providers, add auth commands in `src/cstation/commands/<name>/main.py` and register in `src/cstation/main.py`
+
+#### Provider comparison
+
+| Provider | Auth method | Config format | VPS creation | VPS deletion |
+|----------|------------|---------------|-------------|-------------|
+| Hetzner | API token | `accounts.<name>.token` | Yes | Yes |
+| Vultr | API token | `accounts.<name>.token` | No | Yes |
+| Netcup | OAuth2 device-code | `scp.<name>.enabled` | No | No |
+
+### Netcup SCP provider
+
+Netcup uses a **different auth model** from Hetzner/Vultr — OAuth2 device-code flow instead of API tokens.
+
+**Key files:**
+- `src/cstation/providers/netcup.py` — `NetcupProvider` implementing `VPSProvider`
+- `src/cstation/providers/netcup_auth.py` — OAuth2 device-code flow, token refresh, credential storage
+- `src/cstation/commands/netcup/main.py` — `cstation netcup auth-login/auth-logout/auth-show` commands
+
+**SCP REST API:**
+- Base URL: `https://www.servercontrolpanel.de/scp-core/api/v1`
+- Auth: OAuth2 device-code flow (Keycloak, `client_id=scp`, `scope=offline_access openid`)
+- Token storage: `~/.config/cstation/netcup-oauth.json` (refresh token, mode 0600)
+- No VPS creation/deletion via API — only listing and power management
+
+**Config in `~/.config/cstation/config.yaml`:**
+```yaml
+vps:
+  providers:
+    netcup:
+      scp:
+        default:
+          enabled: true
+```
+
+**Auth commands:**
+```bash
+cstation netcup auth-login    # Start OAuth2 device-code flow (opens browser)
+cstation netcup auth-logout   # Revoke and remove stored credentials
+cstation netcup auth-show     # Show credential status
+```
+
+**Init format:** `cstation vps init netcup/<account>:<server_id_or_name>`
+- `<account>` maps to a key under `netcup.scp` in config (e.g., `default`)
+- `<server_id_or_name>` is the Netcup server ID (integer) or server name (e.g., `v2202604354651455383`)
+
+**SCP API to VPS field mapping:**
+| VPS field | SCP source |
+|-----------|-----------|
+| `id` | `server["id"]` |
+| `name` | `server["name"]` |
+| `status` | `server["serverLiveInfo"]["state"]` (RUNNING→running, SHUTOFF→stopped, etc.) |
+| `ipv4` | `server["ipv4Addresses"][0]["ip"]` |
+| `ipv6` | `server["ipv6Addresses"][0]["networkPrefix"]` |
+| `vcpu` | `server["serverLiveInfo"]["cpuCount"]` or `server["maxCpuCount"]` |
+| `memory_mb` | `server["serverLiveInfo"]["maxServerMemoryInMiB"]` |
+| `disk_gb` | Sum of `server["serverLiveInfo"]["disks"][*]["capacityInMiB"]` / 1024 |
+| `region` | `server["site"]["city"]` |
+| `plan` | `server["template"]["name"]` |
+| `bandwidth_gb` | Not available from SCP REST API |
 
 ## VPS config structure
 
@@ -44,9 +105,14 @@ Each VPS has its own directory under `config/vps/`:
 config/vps/
 ├── eu01.synercatalyst.com/
 │   ├── vps.yaml              ← kind: VPS (identity, access, facts, os, docker)
-│   ├── traefik.yaml          ← kind: Container
-│   ├── portainer.yaml        ← kind: Container
-│   └── stalwart.yaml         ← kind: Container (email server)
+│   ├── EU01_traefik.yaml     ← kind: Container
+│   ├── EU01_portainer.yaml   ← kind: Container
+│   └── EU01_stalwart.yaml    ← kind: Container (email server)
+├── us02.synercatalyst.com/
+│   ├── vps.yaml
+│   ├── US02_traefik.yaml
+│   ├── US02_portainer.yaml
+│   └── US02_stalwart.yaml
 ├── sg07.ansis.com.sg/
 │   ├── vps.yaml
 │   └── ...
@@ -66,7 +132,7 @@ Both `cstation vps` and `cstation docker` commands accept:
 - Directory path: `cstation vps apply config/vps/eu01.synercatalyst.com`
 - VPS name: `cstation vps apply eu01.synercatalyst.com` (auto-discover in `config/vps/`)
 
-Provider tokens live in `~/.config/cstation/config.yaml`:
+Provider tokens and Netcup config live in `~/.config/cstation/config.yaml`:
 ```yaml
 vps:
   providers:
@@ -74,6 +140,14 @@ vps:
       accounts:
         myaccount:
           token: "xxx"
+    vultr:
+      accounts:
+        main:
+          token: "yyy"
+    netcup:
+      scp:
+        default:
+          enabled: true
 ```
 
 ## Command separation
@@ -186,7 +260,8 @@ traefik:                                             # optional, Traefik dynamic
     services:
       myapp:
         loadBalancer:
-          serverPort: 3000
+          servers:
+            - url: "http://EU01_myapp:3000"
 ```
 
 Declarative fields handled by `ImageService` base class (no Python subclass needed):
@@ -229,7 +304,7 @@ cstation docker status <vps>                              # Show container state
 ## Testing
 - Tests live in `tests/` mirroring `src/` structure
 - VPS CLI tests: `tests/commands/test_vps_cli.py`
-- Provider tests: `tests/providers/test_hetzner.py`, `tests/providers/test_vultr.py`
+- Provider tests: `tests/providers/test_hetzner.py`, `tests/providers/test_vultr.py`, `tests/providers/test_netcup.py`
 - Tests use `monkeypatch` to mock `SSHManager.run` and provider methods via `monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", ...)`
 - Provider tests use `unittest.mock.Mock` for the HTTP client
 - VPS commands that need provider tokens require `~/.config/cstation/config.yaml` — tests write temp config to `tmp_path`
@@ -267,8 +342,29 @@ Stalwart Mail Server replaces Mailcow on eu01. Key differences:
 - Directory ownership via `owner: "2000:2000"` in `stalwart.yaml` (handled generically by `ImageService`)
 - Traefik dynamic routing declared in `stalwart.yaml` via the `traefik:` key — `ImageService` writes it to `/var/lib/traefik/conf/stalwart.yml` on apply
 - Stalwart binds SMTP/IMAP ports directly (NOT through Traefik)
+- Stalwart hostname: `mail.ansis.com.sg` (set during setup wizard; also accessible as `mail.perfectwork.app` via Traefik)
 - Stalwart obtains own TLS cert via ACME DNS-01 (Cloudflare, same `CF_API_EMAIL`/`CF_API_KEY`)
 - Traefik only proxies HTTPS traffic (admin UI, JMAP) to Stalwart:8080
+
+### Traefik dynamic config format (IMPORTANT)
+
+Traefik v3 file provider uses `servers` with `url`, NOT `serverPort`:
+```yaml
+# CORRECT (Traefik v3 file provider):
+services:
+  myapp:
+    loadBalancer:
+      servers:
+        - url: "http://EU01_myapp:3000"
+
+# WRONG (Traefik v3 file provider does NOT support this):
+services:
+  myapp:
+    loadBalancer:
+      serverPort: 3000  # ← This only works with Docker labels provider
+```
+
+The `serverPort` format causes `field not found, node: serverPort` errors in Traefik logs and the dynamic config is silently ignored.
 
 ### Port allocation on eu01
 
@@ -280,5 +376,9 @@ Stalwart Mail Server replaces Mailcow on eu01. Key differences:
 
 ### Migration status
 - Phases A-C: COMPLETE (VPS baseline, Docker, Traefik, Portainer)
-- Phase D: IN PROGRESS (Stalwart deployment + email migration)
+- Phase D.1: COMPLETE (cstation code for Stalwart + declarative refactoring)
+- Phase D.2: COMPLETE (Traefik redeployed without mail ports)
+- Phase D.3: COMPLETE (Stalwart deployed on eu01, all 7 mail ports bound)
+- Phase D.4: COMPLETE (Stalwart setup wizard — hostname=mail.ansis.com.sg)
+- Phase D.5-D.9: REMAINING (post-wizard config, DNS prep, imapsync, cutover, cleanup)
 - See `docs/migration/us01-to-eu01.md` for detailed checklist

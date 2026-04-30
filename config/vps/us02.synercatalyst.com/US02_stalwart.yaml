@@ -2,8 +2,8 @@ apiVersion: cstation/v1
 kind: Container
 name: stalwart
 enabled: true
-image: stalwartlabs/stalwart:v0.16
-container_name: EU01_stalwart
+image: stalwartlabs/stalwart:latest
+container_name: US02_stalwart
 network: PW_NET
 ports:
   - "25:25"
@@ -34,7 +34,7 @@ traefik:
   http:
     routers:
       stalwart-admin:
-        rule: "Host(`mail.perfectwork.app`)"
+        rule: "Host(`mail.us02.synercatalyst.com`)"
         entryPoints:
           - websecure
         service: stalwart-http
@@ -43,4 +43,5 @@ traefik:
     services:
       stalwart-http:
         loadBalancer:
-          serverPort: 8080
+          servers:
+            - url: "http://US02_stalwart:8080"

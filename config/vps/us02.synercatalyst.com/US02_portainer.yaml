@@ -3,7 +3,7 @@ kind: Container
 name: portainer
 enabled: true
 image: portainer/portainer-ce:latest
-container_name: EU01_portainer
+container_name: US02_portainer
 network: PW_NET
 ports:
   - "9000:9000"
@@ -25,7 +25,7 @@ traefik:
   http:
     routers:
       portainer:
-        rule: "Host(`portainer.eu01.synercatalyst.com`)"
+        rule: "Host(`portainer.us02.synercatalyst.com`)"
         entryPoints:
           - websecure
         service: portainer
@@ -34,4 +34,5 @@ traefik:
     services:
       portainer:
         loadBalancer:
-          serverPort: 9000
+          servers:
+            - url: "http://US02_portainer:9000"

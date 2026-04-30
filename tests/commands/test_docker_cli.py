@@ -145,7 +145,8 @@ def _portainer_fragment() -> str:
         "    services:",
         "      portainer:",
         "        loadBalancer:",
-        "          serverPort: 9000",
+        "          servers:",
+        "            - url: 'http://EU01_portainer:9000'",
     ])
 
 
@@ -687,7 +688,8 @@ def _stalwart_fragment() -> str:
         "    services:",
         "      stalwart-http:",
         "        loadBalancer:",
-        "          serverPort: 8080",
+        "          servers:",
+        "            - url: 'http://EU01_stalwart:8080'",
     ])
 
 
@@ -776,7 +778,7 @@ def test_stalwart_static_config():
                     }
                 },
                 "services": {
-                    "stalwart-http": {"loadBalancer": {"serverPort": 8080}}
+                    "stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}
                 },
             }
         }
@@ -837,7 +839,7 @@ def test_stalwart_write_traefik_dynamic_config():
                 }
             },
             "services": {
-                "stalwart-http": {"loadBalancer": {"serverPort": 8080}}
+                "stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}
             },
         }
     }
@@ -877,7 +879,7 @@ def test_stalwart_dynamic_config_from_yaml():
     fragment_text = _stalwart_fragment()
     data = yaml_lib.safe_load(fragment_text)
     traefik = data.get("traefik", {})
-    assert traefik["http"]["services"]["stalwart-http"]["loadBalancer"]["serverPort"] == 8080
+    assert traefik["http"]["services"]["stalwart-http"]["loadBalancer"]["servers"][0]["url"] == "http://EU01_stalwart:8080"
     assert traefik["http"]["routers"]["stalwart-admin"]["rule"] == "Host(`mail.perfectwork.app`)"
     assert "le_dns_resolver" in str(traefik)
 
@@ -923,7 +925,7 @@ def test_image_service_traefik_key_write():
                 }
             },
             "services": {
-                "myapp": {"loadBalancer": {"serverPort": 3000}}
+                "myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}
             },
         }
     }
@@ -951,7 +953,7 @@ def test_image_service_traefik_key_plan_drift():
                 }
             },
             "services": {
-                "myapp": {"loadBalancer": {"serverPort": 3000}}
+                "myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}
             },
         }
     }

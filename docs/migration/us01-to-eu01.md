@@ -32,33 +32,39 @@
 > Detailed spec: `docs/superpowers/specs/2026-04-30-email-migration-stalwart-design.md`
 > Detailed plan: `docs/superpowers/plans/2026-04-30-email-migration-phase-d.md`
 
-### D.1: Update cstation code
-- [ ] Create `src/cstation/commands/docker/services/stalwart.py` (StalwartService)
-- [ ] Add StalwartService import to `__init__.py`
-- [ ] Create `config/vps/eu01.synercatalyst.com/stalwart.yaml`
-- [ ] Modify `config/vps/eu01.synercatalyst.com/traefik.yaml` — remove SMTP/IMAP ports, remove entrypoints
-- [ ] Delete `config/vps/eu01.synercatalyst.com/mailcow.yaml`
-- [ ] Modify `config/vps/eu01.synercatalyst.com/vps.yaml` — add 110/tcp, 4190/tcp to firewall
-- [ ] Add stalwart secrets to `~/.config/cstation/config.yaml`
-- [ ] Write tests for StalwartService
-- [ ] `uv run pytest -q` — all tests pass
+### D.1: Update cstation code ✅ COMPLETE
+- [x] Create `src/cstation/commands/docker/services/stalwart.py` (StalwartService)
+- [x] Add StalwartService import to `__init__.py`
+- [x] Create `config/vps/eu01.synercatalyst.com/stalwart.yaml`
+- [x] Modify `config/vps/eu01.synercatalyst.com/traefik.yaml` — removed SMTP/IMAP ports
+- [x] Delete `config/vps/eu01.synercatalyst.com/mailcow.yaml`
+- [x] Modify `config/vps/eu01.synercatalyst.com/vps.yaml` — added 110/tcp, 4190/tcp
+- [x] Add stalwart secrets to `~/.config/cstation/config.yaml`
+- [x] Write tests for StalwartService
+- [x] `uv run pytest -q` — all tests pass
 
-### D.2: Re-deploy Traefik (remove mail ports)
-- [ ] `uv run cstation vps apply eu01.synercatalyst.com --phase firewall` — add ports
-- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service traefik` — verify
-- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes`
-- [ ] Verify: Traefik running with HTTP ports only (80, 443, 8000, 9000, 9443)
+### D.2: Re-deploy Traefik (remove mail ports) ✅ COMPLETE
+- [x] `uv run cstation vps apply eu01.synercatalyst.com --phase firewall` — added 110/tcp, 4190/tcp
+- [x] `uv run cstation docker apply eu01.synercatalyst.com --service traefik --yes`
+- [x] Verified: Traefik running with ports 80, 443 only
 
-### D.3: Deploy Stalwart on eu01
-- [ ] `uv run cstation docker plan eu01.synercatalyst.com --service stalwart`
-- [ ] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
-- [ ] Verify: `docker ps | grep stalwart` — running
-- [ ] Verify: Stalwart listening on ports 25, 465, 587, 993, 995, 110, 4190
-- [ ] Get bootstrap credentials from docker logs
+### D.3: Deploy Stalwart on eu01 ✅ COMPLETE
+- [x] `uv run cstation docker apply eu01.synercatalyst.com --service stalwart --yes`
+- [x] Verified: EU01_stalwart running (healthy), all 7 ports bound
+- [x] Bootstrap mode active — port 8080 open for setup (admin:REPLACE_ME)
+- [x] Fixed Traefik dynamic config (serverPort → servers/url format for v3)
+- [x] Fixed Traefik .env secrets (REPLACE_ME → real values from config.yaml)
+- [x] TLS cert auto-provisioned for mail.ansis.com.sg via Cloudflare DNS-01
+- [x] Verified: https://mail.ansis.com.sg/admin → 200 OK
 
-### D.4: Configure Stalwart (Setup Wizard)
-- [ ] SSH tunnel: `ssh -L 8080:localhost:8080 root@37.27.218.255`
-- [ ] Open `http://localhost:8080/admin`
+### D.4: Configure Stalwart (Setup Wizard) ✅ COMPLETE
+- [x] Open `https://mail.ansis.com.sg/admin` (or SSH tunnel: `ssh -L 8080:localhost:8080 root@37.27.218.255` → `http://localhost:8080/admin`)
+- [x] Sign in with admin / REPLACE_ME
+- [x] Step 1: Hostname=mail.ansis.com.sg, Domain=synercatalyst.com, ACME=No, DKIM=Yes
+- [x] Steps 2-5: Storage=RocksDB, Directory=Internal, Logging=Console, DNS=Manual
+- [x] Saved admin credentials
+- [x] Verified: SMTP responds `220 mail.ansis.com.sg Stalwart ESMTP`
+- [x] Verified: `https://mail.ansis.com.sg/admin/` → 200 OK
 - [ ] Step 1: Hostname=`mail.perfectwork.app`, Domain=`synercatalyst.com`, ACME=No (configure later), DKIM=Yes
 - [ ] Step 2: Storage=RocksDB (default)
 - [ ] Step 3: Directory=Internal (default)
