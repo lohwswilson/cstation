@@ -486,7 +486,7 @@ def test_vps_init_default_output_uses_vps_name(monkeypatch, tmp_path: Path):
     r = CliRunner().invoke(app, ["vps", "init", "hetzner/ANSIS:123456", "--force"])
     assert r.exit_code == 0
 
-    expected_path = tmp_path / "config" / "vps" / "eu01.yaml"
+    expected_path = tmp_path / "config" / "vps" / "eu01" / "vps.yaml"
     assert expected_path.exists(), f"Expected default path {expected_path} but file not found"
 def test_vps_ls_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
@@ -692,8 +692,10 @@ def test_vps_ls_fails_when_all_provider_accounts_auth_fail(monkeypatch, tmp_path
 
 
 def _minimal_vps_yaml(tmp_path: Path) -> Path:
-    """Write a minimal VPS config YAML and return its path."""
-    cfg = tmp_path / "vps.yaml"
+    """Write a minimal VPS config directory with vps.yaml and return the directory path."""
+    vps_dir = tmp_path / "testbox"
+    vps_dir.mkdir(parents=True, exist_ok=True)
+    cfg = vps_dir / "vps.yaml"
     cfg.write_text(
         "\n".join(
             [
@@ -729,7 +731,7 @@ def _minimal_vps_yaml(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    return cfg
+    return vps_dir
 
 
 class _FakeSSHResult:
@@ -846,14 +848,16 @@ def test_vps_apply_single_phase(monkeypatch, tmp_path: Path):
 
 
 def test_vps_plan_invalid_config(tmp_path: Path):
-    bad_cfg = tmp_path / "bad.yaml"
+    bad_dir = tmp_path / "bad-vps"
+    bad_dir.mkdir()
+    bad_cfg = bad_dir / "vps.yaml"
     bad_cfg.write_text("invalid: true\n", encoding="utf-8")
-    r = CliRunner().invoke(app, ["vps", "plan", str(bad_cfg)])
+    r = CliRunner().invoke(app, ["vps", "plan", str(bad_dir)])
     assert r.exit_code != 0
 
 
 def test_vps_plan_nonexistent_config(tmp_path: Path):
-    r = CliRunner().invoke(app, ["vps", "plan", str(tmp_path / "nope.yaml")])
+    r = CliRunner().invoke(app, ["vps", "plan", str(tmp_path / "nope-vps")])
     assert r.exit_code != 0
 
 
@@ -899,9 +903,11 @@ def _vps_yaml_with_extras(tmp_path: Path, **extra_fields) -> Path:
     lines.append("      allow:")
     lines.append("        - 22/tcp")
     lines.append("")
-    cfg = tmp_path / "vps.yaml"
+    vps_dir = tmp_path / "testbox"
+    vps_dir.mkdir(parents=True, exist_ok=True)
+    cfg = vps_dir / "vps.yaml"
     cfg.write_text("\n".join(lines), encoding="utf-8")
-    return cfg
+    return vps_dir
 
 
 def test_vps_plan_upgrade_all(monkeypatch, tmp_path: Path):
@@ -1059,7 +1065,7 @@ def test_vps_apply_terminal_sets_env(monkeypatch, tmp_path: Path):
 
 
 def _full_vps_yaml(tmp_path: Path, **extra_os_baseline) -> Path:
-    """Write a VPS config YAML with all sections (swap, tuning, fail2ban, hostname, docker)."""
+    """Write a VPS config directory with vps.yaml (all sections: swap, tuning, fail2ban, hostname, docker)."""
     lines = [
         "apiVersion: cstation/v1",
         "kind: VPS",
@@ -1120,9 +1126,11 @@ def _full_vps_yaml(tmp_path: Path, **extra_os_baseline) -> Path:
         "    - /var/lib/perfectwork",
         "",
     ]
-    cfg = tmp_path / "vps_full.yaml"
-    cfg.write_text("\n".join(lines), encoding="utf-8")
-    return cfg
+    vps_dir = tmp_path / "testbox"
+    vps_dir.mkdir(parents=True, exist_ok=True)
+    vps_yaml = vps_dir / "vps.yaml"
+    vps_yaml.write_text("\n".join(lines), encoding="utf-8")
+    return vps_dir
 
 
 def test_vps_plan_swap(monkeypatch, tmp_path: Path):

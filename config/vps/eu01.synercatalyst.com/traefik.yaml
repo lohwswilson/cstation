@@ -1,0 +1,47 @@
+apiVersion: cstation/v1
+kind: Container
+name: traefik
+enabled: true
+image: traefik:latest
+network: PW_NET
+ports:
+  - "80:80"
+  - "443:443"
+  - "8080:8080"
+  - "25:25"
+  - "465:465"
+  - "587:587"
+  - "993:993"
+  - "995:995"
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+  - /var/lib/traefik/letsencrypt:/letsencrypt
+  - /var/lib/traefik/conf:/etc/traefik/conf
+  - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro
+restart_policy: unless-stopped
+static_config:
+  entryPoints:
+    web: ":80"
+    websecure: ":443"
+    smtp: ":25"
+    submissions: ":465"
+    submission: ":587"
+    imaps: ":993"
+    pop3s: ":995"
+  providers:
+    docker:
+      endpoint: "unix:///var/run/docker.sock"
+      exposedByDefault: false
+      network: PW_NET
+    file:
+      directory: "/etc/traefik/conf"
+      watch: true
+  certificatesResolvers:
+    le_resolver:
+      acme:
+        email: "admin@synercatalyst.com"
+        storage: "/letsencrypt/acme.json"
+        tlsChallenge: {}
+  api:
+    dashboard: true
+    insecure: true

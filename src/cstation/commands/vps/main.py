@@ -640,12 +640,30 @@ def vps_status(
     console.print(table)
 
 
-def _load_vps_config(path: Path) -> dict[str, Any]:
-    """Load and validate a VPS config YAML."""
-    if not path.exists():
-        console.print(f"[red]✗[/red] Config file not found: {path}")
+def _resolve_vps_dir(vps_arg: Path) -> Path:
+    """Resolve a VPS argument to a config directory.
+
+    Accepts:
+    - A directory path: config/vps/eu01.synercatalyst.com/
+    - A VPS name: eu01.synercatalyst.com (searches config/vps/)
+    """
+    if vps_arg.is_dir():
+        return vps_arg
+    candidate = Path("config/vps") / str(vps_arg)
+    if candidate.is_dir():
+        return candidate
+    console.print(f"[red]✗[/red] VPS directory not found: {vps_arg}")
+    console.print(f"[dim]Searched: {vps_arg} (direct), {candidate} (config/vps/)[/dim]")
+    raise typer.Exit(6)
+
+
+def _load_vps_config(vps_dir: Path) -> dict[str, Any]:
+    """Load and validate a VPS config from a directory's vps.yaml."""
+    vps_yaml = vps_dir / "vps.yaml"
+    if not vps_yaml.exists():
+        console.print(f"[red]✗[/red] No vps.yaml found in {vps_dir}")
         raise typer.Exit(6)
-    with path.open("r", encoding="utf-8") as f:
+    with vps_yaml.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
         console.print(f"[red]✗[/red] Invalid config: expected mapping at top level")
@@ -1185,7 +1203,7 @@ def _apply_docker_directories(ssh: SSHManager, directories: list[str], *, dry_ru
 
 @vps_app.command("plan")
 def vps_plan(
-    config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
+    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or config/vps/eu01.synercatalyst.com)"),
 ) -> None:
     """
     Dry-run: show what would be applied to the VPS without making changes.
@@ -1193,10 +1211,11 @@ def vps_plan(
     Reads the VPS config and compares declared state against actual state,
     printing a summary of actions that `apply` would perform.
     """
-    data = _load_vps_config(config)
+    vps_dir = _resolve_vps_dir(Path(vps))
+    data = _load_vps_config(vps_dir)
     identity = data.get("identity", {})
-    name = identity.get("name", config.stem)
-    console.print(f"\n[bold]VPS Plan: {name}[/bold] [dim]({config})[/dim]\n")
+    name = identity.get("name", vps_dir.name)
+    console.print(f"\n[bold]VPS Plan: {name}[/bold] [dim]({vps_dir}/vps.yaml)[/dim]\n")
 
     ssh = _ssh_from_config(data)
     baseline = data.get("os", {}).get("baseline", {})
@@ -1255,31 +1274,32 @@ def vps_plan(
     console.print("\n[bold]Phase 13: Docker Directories[/bold]")
     _apply_docker_directories(ssh, docker_config.get("directories", []), dry_run=True)
 
-    console.print("\n[dim]Run 'cstation vps apply <config>' to execute these changes.[/dim]")
+    console.print("\n[dim]Run 'cstation vps apply <vps>' to execute these changes.[/dim]")
 
 
 @vps_app.command("apply")
 def vps_apply(
-    config: Path = typer.Argument(..., help="VPS config YAML path", exists=True),
+    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or config/vps/eu01.synercatalyst.com)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: upgrade_all, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories"),
 ) -> None:
     """
-    Apply VPS configuration from YAML: install packages, configure sshd, configure firewall, set up swap, tuning, Docker.
+    Apply VPS configuration: install packages, configure sshd, configure firewall, set up swap, tuning, Docker.
 
     Reads the VPS config and applies the os.baseline, os, and docker sections, making the
     actual server match the declared state. Use 'plan' first to preview changes.
 
     Examples:
-      cstation vps plan config/vps/eu01.yaml
-      cstation vps apply config/vps/eu01.yaml
-      cstation vps apply config/vps/eu01.yaml --phase packages
-      cstation vps apply config/vps/eu01.yaml --phase docker_daemon
+      cstation vps plan eu01.synercatalyst.com
+      cstation vps apply eu01.synercatalyst.com
+      cstation vps apply eu01.synercatalyst.com --phase packages
+      cstation vps apply eu01.synercatalyst.com --phase docker_daemon
     """
-    data = _load_vps_config(config)
+    vps_dir = _resolve_vps_dir(Path(vps))
+    data = _load_vps_config(vps_dir)
     identity = data.get("identity", {})
-    name = identity.get("name", config.stem)
-    console.print(f"\n[bold]VPS Apply: {name}[/bold] [dim]({config})[/dim]\n")
+    name = identity.get("name", vps_dir.name)
+    console.print(f"\n[bold]VPS Apply: {name}[/bold] [dim]({vps_dir}/vps.yaml)[/dim]\n")
 
     ssh = _ssh_from_config(data)
     baseline = data.get("os", {}).get("baseline", {})
@@ -1480,7 +1500,7 @@ def vps_init(
 
     output_path = out
     if output_path is not None and output_path.exists() and not force:
-        console.print(f"[red]✗[/red] Output file already exists: {output_path}")
+        console.print(f"[red]✗[/red] Output path already exists: {output_path}")
         raise typer.Exit(5)
 
     try:
@@ -1498,7 +1518,7 @@ def vps_init(
 
     resolved_name = vps.name
     resolved_region = vps.region or "unknown"
-    output_path = output_path or Path("config") / "vps" / f"{resolved_name}.yaml"
+    output_path = output_path or Path("config") / "vps" / resolved_name / "vps.yaml"
 
     if output_path.exists() and not force:
         console.print(f"[red]✗[/red] Output file already exists: {output_path}")

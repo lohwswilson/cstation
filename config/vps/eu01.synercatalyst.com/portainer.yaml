@@ -1,0 +1,13 @@
+apiVersion: cstation/v1
+kind: Container
+name: portainer
+enabled: true
+image: portainer/portainer-ce:2.21
+network: PW_NET
+ports:
+  - "9443:9443"
+  - "127.0.0.1:9000:9000"
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+  - /var/lib/portainer/data:/data
+restart_policy: unless-stopped
