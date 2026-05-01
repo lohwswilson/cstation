@@ -34,7 +34,7 @@ traefik:
   http:
     routers:
       stalwart-admin:
-        rule: "Host(`mail.us02.synercatalyst.com`)"
+        rule: "Host(`mail.perfectwork.app`) || Host(`mail.ansis.com.sg`)"
         entryPoints:
           - websecure
         service: stalwart-http
