@@ -3,10 +3,10 @@ kind: VPS
 identity:
   name: us02.synercatalyst.com
   stage: prod
-  region: Manassas
+  region: manual
   provider: static
 access:
-  host: us02.synercatalyst.com
+  host: 152.53.169.95
   user: root
   port: 22
 facts:
@@ -25,10 +25,10 @@ facts:
     threads_per_core: 1
   memory:
     total_mb: 7908
-    used_mb: 509
-    available_mb: 7398
-    swap_total_mb: 0
-    swap_used_mb: 0
+    used_mb: 2548
+    available_mb: 5360
+    swap_total_mb: 4095
+    swap_used_mb: 1
   disks:
   - name: sr0
     size_gb: 1.0
@@ -58,84 +58,68 @@ facts:
       ipv4_prefix: 22
       ipv6: 2a0a:4cc0:2000:aebf:541d:1fff:fe8e:88bf
       ipv6_prefix: 64
+    - name: docker0
+      state: DOWN
+      mac: c2:d7:98:77:4c:04
+      ipv4: 172.17.0.1
+      ipv4_prefix: 16
+    - name: br-bbc08d5e66cc
+      state: DOWN
+      mac: 4e:04:a4:f0:e5:4e
+      ipv4: 172.19.0.1
+      ipv4_prefix: 16
+    - name: br-5af7f18e305a
+      state: UP
+      mac: a6:d4:47:49:62:b6
+      ipv4: 172.18.0.1
+      ipv4_prefix: 16
+    - name: veth888049c
+      state: UP
+      mac: 1e:cc:a4:b3:a9:60
+    - name: vethc6a089f
+      state: UP
+      mac: f2:de:27:81:4f:0c
+    - name: veth13fb560
+      state: UP
+      mac: 3e:46:20:f0:b0:a4
+    - name: vethab3ddf9
+      state: UP
+      mac: b2:5c:a2:27:f3:06
     routes:
     - destination: default
       via: 152.53.168.1
       dev: eth0
     - destination: 152.53.168.0/22
       dev: eth0
-  hostname: US02
+    - destination: 172.17.0.0/16
+      dev: docker0
+    - destination: 172.18.0.0/16
+      dev: br-5af7f18e305a
+    - destination: 172.19.0.0/16
+      dev: br-bbc08d5e66cc
+  hostname: us02.synercatalyst.com
   packages:
     detected:
     - openssh-server
     - ufw
     - nftables
+    - fail2ban
+    - docker.io
+    - containerd
+    - docker-compose-v2
     - python3
+    - rsync
     - curl
     - git
     - sudo
     missing:
-    - fail2ban
     - docker
-    - docker.io
-    - containerd
-    - docker-compose-v2
-    - rsync
 os:
-  hostname: us02.synercatalyst.com
   baseline:
-    upgrade_all: true
-    packages:
-    - fail2ban
-    - docker.io
-    - containerd
-    - docker-compose-v2
-    - zsh
-    - rsync
-    shell: zsh
-    terminal: xterm-256color
-    swap:
-      size_gb: 4
-    tuning:
-      vm_swappiness: 10
-      vm_overcommit_memory: 1
-      net_ipv4_tcp_max_syn_backlog: 1024
-      fs_inotify_max_user_watches: 524288
-      net_ipv4_tcp_keepalive_time: 600
+    packages: []
     sshd:
       disable_password_auth: true
-    fail2ban:
-      bantime: 1h
-      findtime: 10m
-      maxretry: 5
     firewall:
       mode: ufw
       allow:
       - 22/tcp
-      - 80/tcp
-      - 443/tcp
-      - 25/tcp
-      - 110/tcp
-      - 465/tcp
-      - 587/tcp
-      - 993/tcp
-      - 995/tcp
-      - 4190/tcp
-      - 8000/tcp
-      - 9000/tcp
-  journald:
-    system_max_use: 500M
-    forward_to_syslog: false
-docker:
-  daemon:
-    log_driver: json-file
-    log_opts:
-      max_size: 10m
-      max_file: "3"
-    storage_driver: overlay2
-    live_restore: true
-    iptables: true
-  networks:
-  - PW_NET
-  directories:
-  - /var/lib/perfectwork

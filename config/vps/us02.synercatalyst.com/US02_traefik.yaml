@@ -1,146 +1,28 @@
 apiVersion: cstation/v1
 kind: Container
-name: traefik
+name: US02_traefik
 enabled: true
 image: traefik:latest
 container_name: US02_traefik
 network: PW_NET
 ports:
-  - "80:80"
-  - "443:443"
-  - "25:25"
-  - "110:110"
-  - "465:465"
-  - "587:587"
-  - "993:993"
-  - "995:995"
-  - "4190:4190"
+- 110:110
+- '25:25'
+- 4190:4190
+- 443:443
+- 465:465
+- 587:587
+- 80:80
+- 993:993
+- 995:995
 volumes:
-  - /var/run/docker.sock:/var/run/docker.sock:ro
-  - /var/lib/traefik/letsencrypt:/letsencrypt
-  - /var/lib/traefik/conf:/etc/traefik/conf
-  - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro
-  - /var/lib/traefik/logs:/etc/traefik/logs
-env_file: .env
+- /var/run/docker.sock:/var/run/docker.sock
+- /var/lib/traefik/letsencrypt:/letsencrypt
+- /var/lib/traefik/conf:/etc/traefik/conf
+- /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml
+- /var/lib/traefik/logs:/etc/traefik/logs
 env:
-  DHPARAM_GENERATION: "false"
-secrets:
-  - CF_API_EMAIL
-  - CF_API_KEY
+  CF_API_KEY: 923abedd02920ce74104a899309bec1434d0c
+  DHPARAM_GENERATION: 'false'
+  CF_API_EMAIL: syner.catalyst@gmail.com
 restart_policy: unless-stopped
-command:
-  - --configFile=/etc/traefik/traefik.yml
-subdirs:
-  - etc
-  - conf
-  - letsencrypt
-  - logs
-static_config:
-  global:
-    checknewversion: false
-    sendanonymoususage: false
-  entryPoints:
-    web:
-      address: ":80"
-      http:
-        redirections:
-          entryPoint:
-            to: websecure
-            scheme: https
-            permanent: true
-      forwardedHeaders:
-        trustedIPs:
-          - "172.16.0.0/12"
-    websecure:
-      address: ":443"
-      forwardedHeaders:
-        trustedIPs:
-          - "172.16.0.0/12"
-    smtp:
-      address: ":25"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    pop3:
-      address: ":110"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    smtps:
-      address: ":465"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    submission:
-      address: ":587"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    imaps:
-      address: ":993"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    pop3s:
-      address: ":995"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-    sieve:
-      address: ":4190"
-      proxyProtocol:
-        trustedIPs:
-          - "172.16.0.0/12"
-  providers:
-    docker:
-      endpoint: "unix:///var/run/docker.sock"
-      exposedByDefault: false
-      network: PW_NET
-      watch: true
-    file:
-      directory: "/etc/traefik/conf"
-      watch: true
-  certificatesResolvers:
-    le_resolver:
-      acme:
-        email: "syner.catalyst@gmail.com"
-        storage: "/letsencrypt/acme.json"
-        caServer: "https://acme-v02.api.letsencrypt.org/directory"
-        keyType: EC256
-        tlsChallenge: {}
-    le_dns_resolver:
-      acme:
-        email: "syner.catalyst@gmail.com"
-        storage: "/letsencrypt/acme_dns.json"
-        caServer: "https://acme-v02.api.letsencrypt.org/directory"
-        keyType: EC256
-        dnsChallenge:
-          provider: cloudflare
-          delayBeforeCheck: 15s
-          resolvers:
-            - "1.1.1.1:53"
-            - "1.0.0.1:53"
-  api:
-    dashboard: true
-  log:
-    level: INFO
-    filePath: "/etc/traefik/logs/traefik.log"
-    format: json
-  accessLog:
-    filePath: "/etc/traefik/logs/access.log"
-    format: json
-    bufferingSize: 100
-  metrics:
-    prometheus:
-      addEntryPointsLabels: true
-      addServicesLabels: true
-traefik:
-  http:
-    routers:
-      traefik-dashboard:
-        rule: "Host(`traefik.us02.synercatalyst.com`)"
-        entryPoints:
-          - websecure
-        service: api@internal
-        tls:
-          certResolver: le_dns_resolver

@@ -1,38 +1,17 @@
 apiVersion: cstation/v1
 kind: Container
-name: portainer
+name: US02_portainer
 enabled: true
 image: portainer/portainer-ce:latest
 container_name: US02_portainer
 network: PW_NET
 ports:
-  - "9000:9000"
-  - "9443:9443"
-  - "8000:8000"
+- 8000:8000
+- 9000:9000
+- 9443:9443
 volumes:
-  - /var/run/docker.sock:/var/run/docker.sock
-  - /var/lib/portainer/data:/data
+- /var/run/docker.sock:/var/run/docker.sock
+- /var/lib/portainer/data:/data
 env:
   PORTAINER_LOG_LEVEL: INFO
 restart_policy: always
-subdirs:
-  - data
-ulimits:
-  nofile:
-    soft: 65536
-    hard: 65536
-traefik:
-  http:
-    routers:
-      portainer:
-        rule: "Host(`portainer.us02.synercatalyst.com`)"
-        entryPoints:
-          - websecure
-        service: portainer
-        tls:
-          certResolver: le_dns_resolver
-    services:
-      portainer:
-        loadBalancer:
-          servers:
-            - url: "http://US02_portainer:9000"
