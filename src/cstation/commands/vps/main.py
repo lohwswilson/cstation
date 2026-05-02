@@ -25,8 +25,8 @@ from cstation.config import get_config
 from cstation.ssh import SSHManager
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
-from cstation.providers.netcup import NetcupProvider
 from cstation.providers.static import StaticProvider
+from cstation.providers.netcup import NetcupProvider
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
 
@@ -431,7 +431,10 @@ def _configured_providers() -> list[str]:
     providers = cfg.get_config_value("vps.providers", default={}) or {}
     if not isinstance(providers, dict):
         providers = {}
-    result = [str(k) for k in providers.keys()]
+    
+    supported = {"hetzner", "vultr", "static"}
+    result = [str(k) for k in providers.keys() if str(k) in supported]
+    
     if "static" not in result:
         result.append("static")
     return result
@@ -444,13 +447,6 @@ def _provider_from_token(provider: str, token: str) -> Any:
         return HetznerProvider(token=token, http=_HttpClient())
     if provider == "vultr":
         return VultrProvider(token=token, http=_HttpClient())
-    if provider == "netcup":
-        from cstation.providers.netcup_auth import get_access_token, NetcupAuthError
-        try:
-            access_token = get_access_token()
-        except NetcupAuthError as e:
-            raise typer.BadParameter(f"Netcup SCP auth failed: {e}. Run 'cstation netcup auth-login' first.")
-        return NetcupProvider(http=_HttpClient(), access_token=access_token)
     raise typer.BadParameter(f"Unsupported provider '{provider}'")
 
 
@@ -475,15 +471,6 @@ def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[st
         token = os.getenv("HETZNER_TOKEN")
         if token:
             return None, token
-
-    if provider == "netcup":
-        from cstation.providers.netcup_auth import credentials_exist
-        if credentials_exist():
-            return None, "oauth"
-        raise typer.BadParameter(
-            f"No Netcup SCP credentials found. Run 'cstation netcup auth-login' first, "
-            f"or configure vps.providers.netcup.scp in ~/.config/cstation/config.yaml"
-        )
 
     raise typer.BadParameter(
         f"Missing {provider} token; configure ~/.config/cstation/config.yaml (vps.providers.{provider}.accounts)"
@@ -512,8 +499,8 @@ def _split_account_target(target: str) -> tuple[Optional[str], str]:
     return account, rest
 
 
-@vps_app.command("ls")
-def vps_ls(
+@vps_app.command("list")
+def vps_list(
     provider: str = typer.Option("all"),
     account: Optional[str] = typer.Option(None, "--account"),
 ) -> None:
@@ -1530,7 +1517,6 @@ def vps_init(
     Examples:
       cstation vps init hetzner/ANSIS:123456
       cstation vps init vultr/MAIN:9b2f...
-      cstation vps init netcup/default:v2202604354651455383
       cstation vps init static/SSH:your-server.com
       cstation vps init static/SSH:192.168.1.100 --user admin --port 2222 --key ~/.ssh/id_ed25519
     """

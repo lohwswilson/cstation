@@ -15,7 +15,7 @@ def test_vps_help():
     r = CliRunner().invoke(app, ["vps", "--help"])
     assert r.exit_code == 0
     out = r.output.lower()
-    assert "ls" in out
+    assert "list" in out
     assert "status" in out
     assert "create" not in out
     assert "delete" not in out
@@ -37,7 +37,7 @@ def _normalize_output(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9/:._-]+", "", no_ansi)
 
 
-def test_vps_ls_requires_token(monkeypatch, tmp_path: Path):
+def test_vps_list_requires_token(monkeypatch, tmp_path: Path):
     home = tmp_path / "home"
     _write(home / ".config" / "cstation" / "config.yml", "")
 
@@ -48,14 +48,14 @@ def test_vps_ls_requires_token(monkeypatch, tmp_path: Path):
     initialize_configuration()
 
     monkeypatch.delenv("HETZNER_TOKEN", raising=False)
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     # static provider is always present; without cloud providers it just
     # returns 0 with no rows (static scans an empty config/vps/ dir)
     assert r.exit_code == 0
     assert "no vps providers configured" not in r.output.lower()
 
 
-def test_vps_ls_aggregates_multiple_accounts(monkeypatch, tmp_path: Path):
+def test_vps_list_aggregates_multiple_accounts(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
 
     home = tmp_path / "home"
@@ -97,7 +97,7 @@ def test_vps_ls_aggregates_multiple_accounts(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.list_vps", fake_list_vps)
 
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     assert r.exit_code == 0
     normalized = _normalize_output(r.output)
     assert "personal:t1" in normalized
@@ -490,7 +490,7 @@ def test_vps_init_default_output_uses_vps_name(monkeypatch, tmp_path: Path):
 
     expected_path = tmp_path / "config" / "vps" / "eu01" / "vps.yaml"
     assert expected_path.exists(), f"Expected default path {expected_path} but file not found"
-def test_vps_ls_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
+def test_vps_list_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
 
     home = tmp_path / "home"
@@ -549,7 +549,7 @@ def test_vps_ls_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.list_vps", fake_h_list)
     monkeypatch.setattr("cstation.providers.vultr.VultrProvider.list_vps", fake_v_list)
 
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     assert r.exit_code == 0
     normalized = _normalize_output(r.output)
     assert "hetzner" in normalized
@@ -558,7 +558,7 @@ def test_vps_ls_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     assert "222" in normalized
 
 
-def test_vps_ls_provider_filter_vultr(monkeypatch, tmp_path: Path):
+def test_vps_list_provider_filter_vultr(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
 
     home = tmp_path / "home"
@@ -597,13 +597,13 @@ def test_vps_ls_provider_filter_vultr(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr("cstation.providers.vultr.VultrProvider.list_vps", fake_v_list)
 
-    r = CliRunner().invoke(app, ["vps", "ls", "--provider", "vultr"])
+    r = CliRunner().invoke(app, ["vps", "list", "--provider", "vultr"])
     assert r.exit_code == 0
     normalized = _normalize_output(r.output)
     assert "main:222" in normalized
 
 
-def test_vps_ls_continues_when_one_provider_account_auth_fails(monkeypatch, tmp_path: Path):
+def test_vps_list_continues_when_one_provider_account_auth_fails(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
     from cstation.providers.errors import ProviderAuthError
 
@@ -651,13 +651,13 @@ def test_vps_ls_continues_when_one_provider_account_auth_fails(monkeypatch, tmp_
     monkeypatch.setattr("cstation.providers.hetzner.HetznerProvider.list_vps", fake_h_list)
     monkeypatch.setattr("cstation.providers.vultr.VultrProvider.list_vps", fake_v_list)
 
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     assert r.exit_code == 0
     assert "hbox" in r.output
     assert "Vultr authentication failed" in r.output
 
 
-def test_vps_ls_fails_when_all_provider_accounts_auth_fail(monkeypatch, tmp_path: Path):
+def test_vps_list_fails_when_all_provider_accounts_auth_fail(monkeypatch, tmp_path: Path):
     from cstation.providers.errors import ProviderAuthError
 
     home = tmp_path / "home"
@@ -685,7 +685,7 @@ def test_vps_ls_fails_when_all_provider_accounts_auth_fail(monkeypatch, tmp_path
 
     monkeypatch.setattr("cstation.providers.vultr.VultrProvider.list_vps", fake_v_list)
 
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     assert r.exit_code == 2
     assert "Vultr authentication failed" in r.output
 
@@ -1495,7 +1495,7 @@ def test_vps_init_static_ssh_writes_yaml(monkeypatch, tmp_path: Path):
     assert "name: myserver" in content
 
 
-def test_vps_ls_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
+def test_vps_list_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
     import yaml as _yaml
 
     home = tmp_path / "home"
@@ -1517,12 +1517,12 @@ def test_vps_ls_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
 
-    r = CliRunner().invoke(app, ["vps", "ls"])
+    r = CliRunner().invoke(app, ["vps", "list"])
     assert r.exit_code == 0
     assert "static-srv" in r.output
 
 
-def test_vps_ls_static_filter(monkeypatch, tmp_path: Path):
+def test_vps_list_static_filter(monkeypatch, tmp_path: Path):
     import yaml as _yaml
 
     home = tmp_path / "home"
@@ -1545,6 +1545,6 @@ def test_vps_ls_static_filter(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
 
-    r = CliRunner().invoke(app, ["vps", "ls", "--provider", "static"])
+    r = CliRunner().invoke(app, ["vps", "list", "--provider", "static"])
     assert r.exit_code == 0
     assert "static-srv" in r.output
