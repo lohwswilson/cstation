@@ -58,6 +58,8 @@ class ImageService:
             service_def["environment"] = config["env"]
         if config.get("env_file"):
             service_def["env_file"] = config["env_file"]
+        if config.get("secrets") or config.get("env"):
+            service_def["env_file"] = ".env"
         if config.get("ulimits"):
             service_def["ulimits"] = config["ulimits"]
         if config.get("command"):
@@ -74,8 +76,19 @@ class ImageService:
     def _render_env(self, config: dict) -> str | None:
         env = config.get("env")
         if not env:
-            return None
-        return render_env(env)
+            env = {}
+        resolved = config.get("_resolved_secrets")
+        if resolved:
+            merged = {**env, **resolved}
+        else:
+            secrets_keys = config.get("secrets", [])
+            if secrets_keys:
+                merged = {**env, **{k: "REPLACE_ME" for k in secrets_keys}}
+            elif env:
+                merged = env
+            else:
+                return None
+        return render_env(merged)
 
     def _create_dirs(self, ssh: SSHManager, config: dict) -> list[str]:
         dirs = [self.compose_subdir or self.service_dir]
@@ -114,12 +127,12 @@ class ImageService:
 
     def _render_secrets_env(self, config: dict) -> str | None:
         resolved = config.get("_resolved_secrets")
+        secrets_keys = config.get("secrets", [])
+        if not resolved and not secrets_keys:
+            return None
         if resolved:
             return render_secrets_env(resolved)
-        secrets_keys = config.get("secrets", [])
-        if secrets_keys:
-            return render_secrets_env({k: "REPLACE_ME" for k in secrets_keys})
-        return None
+        return render_secrets_env({k: "REPLACE_ME" for k in secrets_keys})
 
     def plan(self, ssh: SSHManager, config: dict) -> list[str]:
         actions: list[str] = []

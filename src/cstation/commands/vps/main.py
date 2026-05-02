@@ -11,7 +11,6 @@ import re
 import shutil
 import urllib.error
 import urllib.request
-import concurrent.futures
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -544,99 +543,119 @@ def _split_account_target(target: str) -> tuple[Optional[str], str]:
     return account, rest
 
 
-def _get_uptime(ssh: SSHManager) -> str:
-    """Get pretty uptime via SSH."""
-    try:
-        # Using uptime -p for human readable "up 2 weeks, 3 days, 1 hour, 4 minutes"
-        result = ssh.run("uptime -p", hide=True)
-        if result and result.stdout:
-            return str(result.stdout).strip().replace("up ", "")
-        return "unknown"
-    except Exception:
-        return "unreachable"
-
-
 @vps_app.command("list")
-def vps_list() -> None:
-    """List all managed VPS instances from local configuration."""
-    vps_base_dir = Path("config/vps")
-    if not vps_base_dir.exists() or not vps_base_dir.is_dir():
-        console.print("[yellow]⚠[/yellow] No managed VPS instances found (config/vps/ is empty).")
+def vps_list(
+    provider: str = typer.Option("all"),
+    account: Optional[str] = typer.Option(None, "--account"),
+) -> None:
+    """List all VPS instances from configured providers."""
+    aggregate_mode = provider == "all" and account is None
+    auth_errors: list[str] = []
+    provider_errors: list[str] = []
+    rows: list[tuple[str, Optional[str], Any]] = []
+
+    providers = _configured_providers()
+    if not providers and os.getenv("HETZNER_TOKEN"):
+        providers = ["hetzner", "static"]
+    if not providers:
+        console.print(
+            "[red]✗[/red] No VPS providers configured; set vps.providers in ~/.config/cstation/config.yml (or set HETZNER_TOKEN)"
+        )
+        raise typer.Exit(2)
+
+    if provider != "all" and provider not in providers:
+        if provider == "hetzner" and os.getenv("HETZNER_TOKEN"):
+            providers = ["hetzner"]
+        else:
+            raise typer.BadParameter(f"Unknown provider '{provider}'")
+
+    providers_to_list = providers if provider == "all" else [provider]
+    for p_name in providers_to_list:
+        accounts = _config_accounts(p_name)
+        if accounts:
+            if account is not None and account not in accounts:
+                raise typer.BadParameter(f"Unknown {p_name} account '{account}'")
+            for acct_name, token in accounts.items():
+                if account is not None and acct_name != account:
+                    continue
+                p = _provider_from_token(p_name, token)
+                try:
+                    for v in p.list_vps():
+                        rows.append((p_name, acct_name, v))
+                except ProviderAuthError as e:
+                    if not aggregate_mode:
+                        console.print(f"[red]✗[/red] {e}")
+                        raise typer.Exit(2)
+                    auth_errors.append(f"{p_name}/{acct_name}: {e}")
+                except ProviderError as e:
+                    if not aggregate_mode:
+                        console.print(f"[red]✗[/red] {e}")
+                        raise typer.Exit(1)
+                    provider_errors.append(f"{p_name}/{acct_name}: {e}")
+        else:
+            acct_name, p = _provider(p_name, account=None)
+            try:
+                for v in p.list_vps():
+                    rows.append((p_name, acct_name, v))
+            except ProviderAuthError as e:
+                if not aggregate_mode:
+                    console.print(f"[red]✗[/red] {e}")
+                    raise typer.Exit(2)
+                auth_errors.append(f"{p_name}: {e}")
+            except ProviderError as e:
+                if not aggregate_mode:
+                    console.print(f"[red]✗[/red] {e}")
+                    raise typer.Exit(1)
+                provider_errors.append(f"{p_name}: {e}")
+
+    if not rows:
+        if auth_errors:
+            for msg in auth_errors:
+                console.print(f"[red]✗[/red] {msg}")
+            raise typer.Exit(2)
+        if provider_errors:
+            for msg in provider_errors:
+                console.print(f"[red]✗[/red] {msg}")
+            raise typer.Exit(1)
+        console.print("[dim]No VPS instances found.[/dim]")
         return
 
-    table = Table(title="Managed VPS Infrastructure")
-    table.add_column("Name", style="cyan")
-    table.add_column("Stage")
-    table.add_column("IP Address")
-    table.add_column("CPU")
-    table.add_column("RAM")
-    table.add_column("Storage")
-    table.add_column("Uptime")
-    table.add_column("OS")
+    table = Table(title="VPS")
+    distinct_providers = sorted({p for p, _, _ in rows})
+    show_provider = len(distinct_providers) > 1
+    show_account = any(acct is not None for _, acct, _ in rows)
 
-    vps_dirs = sorted([d for d in vps_base_dir.iterdir() if d.is_dir()])
-    
-    def fetch_vps_info(vps_dir: Path):
-        vps_yaml = vps_dir / "vps.yaml"
-        if not vps_yaml.exists():
-            return None
-            
-        try:
-            with vps_yaml.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
-            
-            identity = data.get("identity", {})
-            access = data.get("access", {})
-            facts = data.get("facts", {})
-            
-            name = identity.get("name", vps_dir.name)
-            stage = identity.get("stage", "-")
-            ip = access.get("host", "-")
-            
-            # CPU
-            vcpu = facts.get("cpu", {}).get("vcpu", "?")
-            cpu_str = f"{vcpu} vCPU"
-            
-            # RAM
-            mem_mb = facts.get("memory", {}).get("total_mb", 0)
-            ram_str = f"{round(mem_mb / 1024)} GB" if mem_mb > 0 else "?"
-            
-            # Storage (Root partition)
-            storage_str = "?"
-            disks = facts.get("disks", [])
-            for d in disks:
-                for p in d.get("partitions", []):
-                    if p.get("mountpoint") == "/":
-                        storage_str = f"{p.get('size_gb', '?')} GB"
-                        break
-                if storage_str != "?":
-                    break
-            
-            # Uptime (Live)
-            ssh = _ssh_from_config(data)
-            uptime = _get_uptime(ssh)
-            
-            os_pretty = facts.get("os", {}).get("pretty", "-")
-            
-            return (name, stage, ip, cpu_str, ram_str, storage_str, uptime, os_pretty)
-        except Exception:
-            return None
+    if show_provider:
+        table.add_column("Provider")
+    if show_account:
+        table.add_column("Account")
+    table.add_column("ID", overflow="fold")
+    table.add_column("Name")
+    table.add_column("Region")
+    table.add_column("Status")
+    table.add_column("IPv4")
+    for provider_name, acct_name, v in rows:
+        if show_provider and acct_name:
+            id_value = v.id
+        elif show_provider and not acct_name:
+            id_value = v.id
+        elif show_account and acct_name:
+            id_value = f"{acct_name}:{v.id}"
+        else:
+            id_value = v.id
 
-    with console.status("[bold green]Collecting live status from servers..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            results = list(executor.map(fetch_vps_info, vps_dirs))
-
-    count = 0
-    for res in results:
-        if res:
-            table.add_row(*res)
-            count += 1
-
-    if count == 0:
-        console.print("[yellow]⚠[/yellow] No valid VPS configurations found in config/vps/.")
-    else:
-        console.print(table)
-        console.print(f"[dim]Total: {count} managed servers[/dim]")
+        row: list[str] = []
+        if show_provider:
+            row.append(provider_name)
+        if show_account:
+            row.append(acct_name or "-")
+        row.extend([id_value, v.name, v.region or "-", v.status.value, v.ipv4 or "-"])
+        table.add_row(*row)
+    console.print(table)
+    for msg in auth_errors:
+        console.print(f"[yellow]![/yellow] {msg}")
+    for msg in provider_errors:
+        console.print(f"[yellow]![/yellow] {msg}")
 
 
 @vps_app.command("status")
