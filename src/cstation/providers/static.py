@@ -38,7 +38,8 @@ class StaticProvider(VPSProvider):
             identity = data.get("identity", {})
             if not isinstance(identity, dict):
                 continue
-            if identity.get("provider") != "static":
+            provider = identity.get("provider")
+            if provider is not None and provider != "static":
                 continue
             access = data.get("access", {})
             if not isinstance(access, dict):

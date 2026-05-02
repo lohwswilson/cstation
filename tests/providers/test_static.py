@@ -137,7 +137,15 @@ def test_static_provider_list_vps_ignores_malformed_yaml(tmp_path: Path, monkeyp
         encoding="utf-8",
     )
 
+    not_vps_dir = tmp_path / "config" / "vps" / "not-a-vps"
+    not_vps_dir.mkdir(parents=True)
+    (not_vps_dir / "vps.yaml").write_text(
+        yaml.dump({"apiVersion": "cstation/v1", "kind": "Service", "identity": {"name": "not-a-vps"}}),
+        encoding="utf-8",
+    )
+
     p = StaticProvider()
     result = p.list_vps()
-    assert len(result) == 1
-    assert result[0].name == "good"
+    assert len(result) == 2
+    names = {v.name for v in result}
+    assert names == {"bad", "good"}

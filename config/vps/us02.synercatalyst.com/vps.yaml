@@ -4,6 +4,7 @@ identity:
   name: us02.synercatalyst.com
   stage: prod
   region: Manassas
+  provider: static
 access:
   host: 152.53.169.95
   user: root
