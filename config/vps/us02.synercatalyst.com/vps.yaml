@@ -6,7 +6,7 @@ identity:
   region: Manassas
   provider: static
 access:
-  host: 152.53.169.95
+  host: us02.synercatalyst.com
   user: root
   port: 22
 facts:
