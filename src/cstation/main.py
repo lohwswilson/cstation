@@ -12,7 +12,6 @@ from .config import initialize_configuration, get_config
 
 # Import command modules
 from .commands.version.main import version
-from .commands.server.main import server_app
 from .commands.github.main import github_app
 from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
@@ -37,7 +36,6 @@ app = typer.Typer(
 
 # Add commands to the main app
 app.command()(version)
-app.add_typer(server_app)
 app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
