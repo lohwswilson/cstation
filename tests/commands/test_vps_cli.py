@@ -49,8 +49,10 @@ def test_vps_ls_requires_token(monkeypatch, tmp_path: Path):
 
     monkeypatch.delenv("HETZNER_TOKEN", raising=False)
     r = CliRunner().invoke(app, ["vps", "ls"])
-    assert r.exit_code != 0
-    assert "no vps providers configured" in r.output.lower()
+    # static provider is always present; without cloud providers it just
+    # returns 0 with no rows (static scans an empty config/vps/ dir)
+    assert r.exit_code == 0
+    assert "no vps providers configured" not in r.output.lower()
 
 
 def test_vps_ls_aggregates_multiple_accounts(monkeypatch, tmp_path: Path):
@@ -1444,3 +1446,105 @@ def test_vps_plan_all_13_phases(monkeypatch, tmp_path: Path):
     assert "Phase 2" in r.output
     assert "Phase 7" in r.output
     assert "Phase 13" in r.output
+
+
+# ── static provider / vps init static/SSH tests ──────────────────
+
+
+def test_vps_init_static_ssh_writes_yaml(monkeypatch, tmp_path: Path):
+    home = tmp_path / "home"
+    _write(home / ".config" / "cstation" / "config.yml", "")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    class FakeResult:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        outputs = {
+            "cat /etc/os-release": 'NAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\n',
+            "uname -r": "6.8.0\n",
+            "lscpu": "CPU(s): 2\nModel name: Intel Xeon\n",
+            "free -m": "Mem: 4096 0 0\n",
+            "lsblk -b -J": '{"blockdevices":[{"name":"sda","size":42949672960}]}',
+            "ip -j a": "[]",
+            "ip route": "default via 10.0.0.1 dev eth0\n",
+            "hostname": "myserver\n",
+            "command -v apt-get": "/usr/bin/apt-get\n",
+            "dpkg -s openssh-server >/dev/null 2>&1; echo $?": "0\n",
+            "dpkg -s docker.io >/dev/null 2>&1; echo $?": "1\n",
+        }
+        return FakeResult(outputs.get(command, ""))
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+
+    out_path = tmp_path / "config" / "vps" / "myserver" / "vps.yaml"
+    r = CliRunner().invoke(
+        app,
+        ["vps", "init", "static/SSH:myserver", "--out", str(out_path), "--force"],
+    )
+    assert r.exit_code == 0, r.output
+    assert out_path.exists()
+    content = out_path.read_text(encoding="utf-8")
+    assert "identity:" in content
+    assert "provider: static" in content
+    assert "name: myserver" in content
+
+
+def test_vps_ls_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
+    import yaml as _yaml
+
+    home = tmp_path / "home"
+    _write(home / ".config" / "cstation" / "config.yml", "")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    vps_dir = tmp_path / "config" / "vps" / "static-srv"
+    vps_dir.mkdir(parents=True)
+    (vps_dir / "vps.yaml").write_text(
+        _yaml.dump({
+            "apiVersion": "cstation/v1",
+            "kind": "VPS",
+            "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
+            "access": {"host": "10.0.0.5", "user": "root", "port": 22},
+        }),
+        encoding="utf-8",
+    )
+
+    r = CliRunner().invoke(app, ["vps", "ls"])
+    assert r.exit_code == 0
+    assert "static-srv" in r.output
+
+
+def test_vps_ls_static_filter(monkeypatch, tmp_path: Path):
+    import yaml as _yaml
+
+    home = tmp_path / "home"
+    _write(home / ".config" / "cstation" / "config.yml", "")
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    vps_dir = tmp_path / "config" / "vps" / "static-srv"
+    vps_dir.mkdir(parents=True)
+    (vps_dir / "vps.yaml").write_text(
+        _yaml.dump({
+            "apiVersion": "cstation/v1",
+            "kind": "VPS",
+            "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
+            "access": {"host": "10.0.0.5", "user": "root", "port": 22},
+        }),
+        encoding="utf-8",
+    )
+
+    r = CliRunner().invoke(app, ["vps", "ls", "--provider", "static"])
+    assert r.exit_code == 0
+    assert "static-srv" in r.output

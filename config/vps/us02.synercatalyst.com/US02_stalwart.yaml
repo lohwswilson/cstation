@@ -4,20 +4,14 @@ name: stalwart
 enabled: true
 image: stalwartlabs/stalwart:latest
 container_name: US02_stalwart
+hostname: mail.ansis.com.sg
 network: PW_NET
-ports:
-  - "25:25"
-  - "110:110"
-  - "465:465"
-  - "587:587"
-  - "993:993"
-  - "995:995"
-  - "4190:4190"
 volumes:
   - /var/lib/stalwart/etc:/etc/stalwart
   - /var/lib/stalwart/data:/var/lib/stalwart
+  - /var/lib/traefik/certs:/data/certs:ro
 env:
-  STALWART_RECOVERY_ADMIN: "admin:REPLACE_ME"
+  STALWART_PUBLIC_URL: "https://mail.ansis.com.sg"
 secrets:
   - CF_API_EMAIL
   - CF_API_KEY
@@ -34,14 +28,103 @@ traefik:
   http:
     routers:
       stalwart-admin:
-        rule: "Host(`mail.perfectwork.app`) || Host(`mail.ansis.com.sg`)"
+        rule: "Host(`mail.ansis.com.sg`) || Host(`mail.perfectwork.app`)"
         entryPoints:
           - websecure
         service: stalwart-http
         tls:
           certResolver: le_dns_resolver
+          domains:
+            - main: "mail.ansis.com.sg"
+              sans:
+                - "mail.perfectwork.app"
     services:
       stalwart-http:
         loadBalancer:
           servers:
             - url: "http://US02_stalwart:8080"
+  tcp:
+    routers:
+      stalwart-smtp:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - smtp
+        service: stalwart-smtp
+      stalwart-pop3:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - pop3
+        service: stalwart-pop3
+      stalwart-smtps:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - smtps
+        service: stalwart-smtps
+        tls:
+          passthrough: true
+      stalwart-submission:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - submission
+        service: stalwart-submission
+      stalwart-imaps:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - imaps
+        service: stalwart-imaps
+        tls:
+          passthrough: true
+      stalwart-pop3s:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - pop3s
+        service: stalwart-pop3s
+        tls:
+          passthrough: true
+      stalwart-sieve:
+        rule: "HostSNI(`*`)"
+        entryPoints:
+          - sieve
+        service: stalwart-sieve
+        tls:
+          passthrough: true
+    services:
+      stalwart-smtp:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:25"
+      stalwart-pop3:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:110"
+      stalwart-smtps:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:465"
+      stalwart-submission:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:587"
+      stalwart-imaps:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:993"
+      stalwart-pop3s:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:995"
+      stalwart-sieve:
+        loadBalancer:
+          serversTransport: stalwart-proxy
+          servers:
+            - address: "US02_stalwart:4190"
+    serversTransports:
+      stalwart-proxy:
+        proxyProtocol:
+          version: 2

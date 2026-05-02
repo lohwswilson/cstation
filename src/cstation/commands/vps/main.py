@@ -26,6 +26,7 @@ from cstation.ssh import SSHManager
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
 from cstation.providers.netcup import NetcupProvider
+from cstation.providers.static import StaticProvider
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
 
@@ -429,11 +430,16 @@ def _configured_providers() -> list[str]:
     cfg = get_config()
     providers = cfg.get_config_value("vps.providers", default={}) or {}
     if not isinstance(providers, dict):
-        return []
-    return [str(k) for k in providers.keys()]
+        providers = {}
+    result = [str(k) for k in providers.keys()]
+    if "static" not in result:
+        result.append("static")
+    return result
 
 
 def _provider_from_token(provider: str, token: str) -> Any:
+    if provider == "static":
+        return StaticProvider()
     if provider == "hetzner":
         return HetznerProvider(token=token, http=_HttpClient())
     if provider == "vultr":
@@ -449,6 +455,9 @@ def _provider_from_token(provider: str, token: str) -> Any:
 
 
 def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[str], str]:
+    if provider == "static":
+        return account or "manual", "none"
+
     accounts = _config_accounts(provider)
     if accounts:
         if account is None:
@@ -515,7 +524,7 @@ def vps_ls(
 
     providers = _configured_providers()
     if not providers and os.getenv("HETZNER_TOKEN"):
-        providers = ["hetzner"]
+        providers = ["hetzner", "static"]
     if not providers:
         console.print(
             "[red]✗[/red] No VPS providers configured; set vps.providers in ~/.config/cstation/config.yml (or set HETZNER_TOKEN)"
@@ -576,6 +585,8 @@ def vps_ls(
             for msg in provider_errors:
                 console.print(f"[red]✗[/red] {msg}")
             raise typer.Exit(1)
+        console.print("[dim]No VPS instances found.[/dim]")
+        return
 
     table = Table(title="VPS")
     distinct_providers = sorted({p for p, _, _ in rows})
@@ -1513,10 +1524,15 @@ def vps_init(
     """
     Initialize a per-VPS config from provider metadata + SSH facts.
 
+    For cloud providers, use <provider>/<account>:<id>. For servers
+    with no cloud API, use static/SSH:<hostname>.
+
     Examples:
       cstation vps init hetzner/ANSIS:123456
       cstation vps init vultr/MAIN:9b2f...
-      cstation vps init hetzner/ANSIS:123456 --out config/vps/sg05.yaml
+      cstation vps init netcup/default:v2202604354651455383
+      cstation vps init static/SSH:your-server.com
+      cstation vps init static/SSH:192.168.1.100 --user admin --port 2222 --key ~/.ssh/id_ed25519
     """
     if "/" not in target:
         raise typer.BadParameter("Target must be <provider>/<account>:<id>")
@@ -1582,6 +1598,7 @@ def vps_init(
             "name": resolved_name,
             "stage": stage,
             "region": resolved_region,
+            "provider": provider_name,
         },
         "access": access,
         "facts": facts,

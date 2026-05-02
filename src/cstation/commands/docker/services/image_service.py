@@ -62,6 +62,8 @@ class ImageService:
             service_def["ulimits"] = config["ulimits"]
         if config.get("command"):
             service_def["command"] = config["command"]
+        if config.get("hostname"):
+            service_def["hostname"] = config["hostname"]
         service_def["networks"] = [network]
         compose = {
             "services": {self.name: service_def},

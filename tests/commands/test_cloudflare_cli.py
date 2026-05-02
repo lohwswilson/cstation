@@ -29,44 +29,38 @@ def test_cloudflare_help():
     assert "apply" in r.output
 
 
-def test_cloudflare_plan_no_dns_yaml(tmp_path, monkeypatch):
+def test_cloudflare_plan_no_domain_config(tmp_path, monkeypatch):
     home = tmp_path / "home"
-    vps_dir = tmp_path / "config" / "vps" / "us02.synercatalyst.com"
-    vps_dir.mkdir(parents=True)
-    _write(vps_dir / "vps.yaml", "apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: us02\n")
     _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test\n")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
     _reset_config()
     initialize_configuration()
 
-    r = CliRunner().invoke(app, ["cloudflare", "plan", "us02.synercatalyst.com"])
+    r = CliRunner().invoke(app, ["cloudflare", "plan", "nonexistent.example.com"])
     assert r.exit_code == 6
-    assert "No dns.yaml" in r.output
+    assert "No DNS config found" in r.output
 
 
 def test_cloudflare_apply_no_token(tmp_path, monkeypatch):
+    dns_dir = tmp_path / "config" / "dns"
+    dns_dir.mkdir(parents=True)
+    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
     home = tmp_path / "home"
-    vps_dir = tmp_path / "config" / "vps" / "us02.synercatalyst.com"
-    vps_dir.mkdir(parents=True)
-    _write(vps_dir / "vps.yaml", "apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: us02\n")
-    _write(vps_dir / "dns.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomains:\n  example.com:\n    records:\n      - name: mail\n        type: A\n        value: 1.2.3.4\n        ttl: 300\n")
-    _write(home / ".config" / "cstation" / "config.yaml", "")
+    home.mkdir(parents=True, exist_ok=True)
+    _write(tmp_path / "home" / ".config" / "cstation" / "config.yaml", "")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
     _reset_config()
     initialize_configuration()
 
-    r = CliRunner().invoke(app, ["cloudflare", "apply", "us02.synercatalyst.com"])
+    r = CliRunner().invoke(app, ["cloudflare", "apply", "example.com"])
     assert r.exit_code == 2
     assert "No Cloudflare API token" in r.output
 
 
 def test_cloudflare_zones_with_token(tmp_path, monkeypatch):
     home = tmp_path / "home"
-    vps_dir = tmp_path / "config" / "vps" / "us02.synercatalyst.com"
-    vps_dir.mkdir(parents=True)
-    _write(vps_dir / "vps.yaml", "apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: us02\n")
     _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test-token\n")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
@@ -86,11 +80,10 @@ def test_cloudflare_zones_with_token(tmp_path, monkeypatch):
 
 
 def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
+    dns_dir = tmp_path / "config" / "dns"
+    dns_dir.mkdir(parents=True)
+    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
     home = tmp_path / "home"
-    vps_dir = tmp_path / "config" / "vps" / "us02.synercatalyst.com"
-    vps_dir.mkdir(parents=True)
-    _write(vps_dir / "vps.yaml", "apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: us02\n")
-    _write(vps_dir / "dns.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomains:\n  example.com:\n    records:\n      - name: mail\n        type: A\n        value: 1.2.3.4\n        ttl: 300\n")
     _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test-token\n")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
@@ -104,7 +97,33 @@ def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
     mock_provider.list_records.return_value = []
 
     with patch("cstation.commands.cloudflare.main.CloudflareProvider", return_value=mock_provider):
-        r = CliRunner().invoke(app, ["cloudflare", "plan", "us02.synercatalyst.com"])
+        r = CliRunner().invoke(app, ["cloudflare", "plan", "example.com"])
 
     assert r.exit_code == 0
     assert "+" in r.output
+
+
+def test_cloudflare_plan_all_domains(tmp_path, monkeypatch):
+    dns_dir = tmp_path / "config" / "dns"
+    dns_dir.mkdir(parents=True)
+    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: ''\n    type: MX\n    value: mail.example.com\n    priority: 10\n    ttl: 300\n")
+    _write(dns_dir / "test.org.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: test.org\nrecords:\n  - name: ''\n    type: A\n    value: 5.6.7.8\n    ttl: 300\n")
+    home = tmp_path / "home"
+    _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test-token\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    from cstation.providers.cloudflare import DNSRecord
+
+    mock_provider = Mock()
+    mock_provider.get_zone_id.return_value = "zone123"
+    mock_provider.list_records.return_value = []
+
+    with patch("cstation.commands.cloudflare.main.CloudflareProvider", return_value=mock_provider):
+        r = CliRunner().invoke(app, ["cloudflare", "plan"])
+
+    assert r.exit_code == 0
+    assert "example.com" in r.output
+    assert "test.org" in r.output

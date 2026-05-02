@@ -79,6 +79,63 @@ class TestDNSRecord:
         assert r.name == "example.com"
         assert r.priority == 10
 
+    def test_srv_to_api_dict(self):
+        r = DNSRecord(
+            name="_imaps._tcp.example.com",
+            type="SRV",
+            content="mail.example.com",
+            priority=1,
+            srv_weight=1,
+            srv_port=993
+        )
+        d = r.to_api_dict()
+        assert "content" not in d
+        assert d["data"]["priority"] == 1
+        assert d["data"]["weight"] == 1
+        assert d["data"]["port"] == 993
+        assert d["data"]["target"] == "mail.example.com"
+        assert d["data"]["service"] == "_imaps"
+        assert d["data"]["proto"] == "_tcp"
+        assert d["data"]["name"] == "example.com"
+
+    def test_srv_from_api(self):
+        data = {
+            "id": "srv1",
+            "name": "_imaps._tcp.example.com",
+            "type": "SRV",
+            "content": "1 993 mail.example.com",
+            "data": {
+                "priority": 1,
+                "weight": 2,
+                "port": 993,
+                "target": "mail.example.com",
+                "service": "_imaps",
+                "proto": "_tcp",
+                "name": "example.com"
+            },
+            "ttl": 300
+        }
+        r = DNSRecord.from_api(data, domain="example.com")
+        assert r.srv_weight == 2
+        assert r.srv_port == 993
+        assert r.content == "mail.example.com"
+        assert r.priority == 1
+
+    def test_srv_from_api_legacy_fallback(self):
+        data = {
+            "id": "srv1",
+            "name": "_imaps._tcp.example.com",
+            "type": "SRV",
+            "content": "5 443 target.com",
+            "ttl": 300,
+            "priority": 10
+        }
+        r = DNSRecord.from_api(data, domain="example.com")
+        assert r.srv_weight == 5
+        assert r.srv_port == 443
+        assert r.content == "target.com"
+        assert r.priority == 10
+
 
 class TestDNSZone:
     def test_from_api(self):

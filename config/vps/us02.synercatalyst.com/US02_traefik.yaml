@@ -8,6 +8,13 @@ network: PW_NET
 ports:
   - "80:80"
   - "443:443"
+  - "25:25"
+  - "110:110"
+  - "465:465"
+  - "587:587"
+  - "993:993"
+  - "995:995"
+  - "4190:4190"
 volumes:
   - /var/run/docker.sock:/var/run/docker.sock:ro
   - /var/lib/traefik/letsencrypt:/letsencrypt
@@ -42,11 +49,48 @@ static_config:
             scheme: https
             permanent: true
       forwardedHeaders:
-        insecure: true
+        trustedIPs:
+          - "172.16.0.0/12"
     websecure:
       address: ":443"
       forwardedHeaders:
-        insecure: true
+        trustedIPs:
+          - "172.16.0.0/12"
+    smtp:
+      address: ":25"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    pop3:
+      address: ":110"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    smtps:
+      address: ":465"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    submission:
+      address: ":587"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    imaps:
+      address: ":993"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    pop3s:
+      address: ":995"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
+    sieve:
+      address: ":4190"
+      proxyProtocol:
+        trustedIPs:
+          - "172.16.0.0/12"
   providers:
     docker:
       endpoint: "unix:///var/run/docker.sock"

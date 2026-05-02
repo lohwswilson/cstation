@@ -16,6 +16,18 @@ from .services import TraefikService, PortainerService  # noqa: F401 — auto-re
 
 console = Console()
 
+class _CStationYamlDumper(yaml.SafeDumper):
+    pass
+
+
+def _yaml_represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.nodes.ScalarNode:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_CStationYamlDumper.add_representer(str, _yaml_represent_str)
+
+
 docker_app = typer.Typer(
     name="docker",
     help="Docker container service management",
@@ -243,6 +255,120 @@ def docker_status(
         table.add_row(name, kind, enabled, state.get("state", "unknown"), image)
 
     console.print(table)
+
+
+@docker_app.command("import")
+def docker_import(
+    vps: str = typer.Argument(..., help="VPS name or directory path"),
+    container: Optional[str] = typer.Argument(None, help="Container name or ID to import"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Name for the generated fragment file"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing fragment file"),
+) -> None:
+    """Import a running container from the VPS as a declarative fragment."""
+    vps_dir = _resolve_vps_dir(Path(vps))
+    vps_data = _load_vps_config(vps_dir)
+    ssh = _ssh_from_config(vps_data)
+
+    if not container:
+        # List running containers to help the user choose
+        result = ssh.run("docker ps --format '{{.Names}}\t{{.Image}}\t{{.ID}}'", hide=True, sudo=True)
+        if not result or not result.stdout.strip():
+            console.print("[yellow]⚠[/yellow] No running containers found on the VPS.")
+            return
+        
+        console.print("\n[bold]Running Containers:[/bold]")
+        table = Table()
+        table.add_column("Name", style="cyan")
+        table.add_column("Image")
+        table.add_column("ID")
+        for line in result.stdout.strip().splitlines():
+            table.add_row(*line.split("\t"))
+        console.print(table)
+        console.print("\n[dim]Run 'cstation docker import <vps> <container_name>' to import one.[/dim]")
+        return
+
+    # Inspect the container
+    import json as jsonlib
+    result = ssh.run(f"docker inspect {container}", hide=True, sudo=True)
+    if not result or not result.stdout.strip():
+        console.print(f"[red]✗[/red] Could not find container '{container}'")
+        raise typer.Exit(1)
+    
+    try:
+        inspect_data = jsonlib.loads(result.stdout)[0]
+    except (jsonlib.JSONDecodeError, IndexError, KeyError):
+        console.print(f"[red]✗[/red] Failed to parse docker inspect output for '{container}'")
+        raise typer.Exit(1)
+
+    # Map metadata to CStation schema
+    c_name = inspect_data.get("Name", "").lstrip("/")
+    short_name = name or c_name.lower().replace("_", "-")
+    
+    config = inspect_data.get("Config", {})
+    host_config = inspect_data.get("HostConfig", {})
+    
+    # Ports mapping
+    ports = []
+    port_bindings = host_config.get("PortBindings", {}) or {}
+    for c_port_proto, host_bindings in port_bindings.items():
+        if host_bindings:
+            host_port = host_bindings[0].get("HostPort")
+            c_port = c_port_proto.split("/")[0]
+            ports.append(f"{host_port}:{c_port}")
+
+    # Volumes mapping
+    volumes = []
+    mounts = inspect_data.get("Mounts", [])
+    for m in mounts:
+        src = m.get("Source")
+        dst = m.get("Destination")
+        if src and dst:
+            volumes.append(f"{src}:{dst}")
+
+    # Environment variables
+    env = {}
+    env_list = config.get("Env", [])
+    for e in env_list:
+        if "=" in e:
+            k, v = e.split("=", 1)
+            # Filter out common standard envs
+            if k not in ("PATH", "HOME", "HOSTNAME", "PWD"):
+                env[k] = v
+
+    # Network
+    networks = inspect_data.get("NetworkSettings", {}).get("Networks", {})
+    network = list(networks.keys())[0] if networks else "PW_NET"
+
+    payload = {
+        "apiVersion": "cstation/v1",
+        "kind": "Container",
+        "name": short_name,
+        "enabled": True,
+        "image": config.get("Image"),
+        "container_name": c_name,
+        "network": network,
+    }
+    if ports:
+        payload["ports"] = ports
+    if volumes:
+        payload["volumes"] = volumes
+    if env:
+        payload["env"] = env
+    if host_config.get("RestartPolicy", {}).get("Name"):
+        payload["restart_policy"] = host_config["RestartPolicy"]["Name"]
+
+    # Write fragment
+    out_path = vps_dir / f"{short_name}.yaml"
+    if out_path.exists() and not force:
+        console.print(f"[red]✗[/red] Fragment file already exists: {out_path}")
+        console.print("[dim]Use --force to overwrite.[/dim]")
+        raise typer.Exit(1)
+
+    with out_path.open("w", encoding="utf-8") as f:
+        yaml.dump(payload, f, sort_keys=False, Dumper=_CStationYamlDumper)
+
+    console.print(f"[green]✓[/green] Imported [bold]{c_name}[/bold] as [bold]{out_path}[/bold]")
+    console.print("[dim]Review the file to move any sensitive environment variables to 'secrets'.[/dim]")
 
 
 @docker_app.callback()

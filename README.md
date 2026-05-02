@@ -41,6 +41,10 @@ uv run cstation vps init hetzner/myaccount:123456
 # Initialize a VPS config from a Netcup server
 cstation netcup auth-login         # First-time: authenticate with Netcup SCP
 uv run cstation vps init netcup/default:v2202604354651455383
+
+# Initialize a VPS config from SSH (no cloud provider needed)
+uv run cstation vps init static/SSH:your-server.com
+uv run cstation vps init static/SSH:192.168.1.100 --user admin --port 2222 --key ~/.ssh/id_ed25519
 ```
 
 ## Usage
@@ -49,7 +53,8 @@ uv run cstation vps init netcup/default:v2202604354651455383
 
 ```bash
 cstation version              # Show version
-cstation init                 # Initialize configuration
+cstation init                 # Initialize configuration (requires sudo)
+cstation init --developer     # Initialize with user ownership (no sudo for editing)
 cstation <command> --help     # Get help for any command
 ```
 
@@ -68,6 +73,9 @@ cstation vps status myaccount:123456
 
 # Initialize a per-VPS config from provider metadata + SSH facts
 cstation vps init hetzner/myaccount:123456
+cstation vps init netcup/default:v2202604354651455383
+cstation vps init static/SSH:your-server.com
+cstation vps init static/SSH:192.168.1.100 --user admin --port 2222 --key ~/.ssh/id_ed25519
 
 # Dry-run: preview what would be applied
 cstation vps plan eu01.synercatalyst.com
@@ -76,12 +84,18 @@ cstation vps plan eu01.synercatalyst.com
 cstation vps apply eu01.synercatalyst.com
 cstation vps apply eu01.synercatalyst.com --yes
 cstation vps apply eu01.synercatalyst.com --phase packages
+
+# Remove a VPS from local configuration (does NOT destroy the VPS on the cloud provider)
+cstation vps remove eu01.synercatalyst.com
+cstation vps remove eu01.synercatalyst.com --yes
+cstation vps remove eu01.synercatalyst.com --skip-check  # Skip SSH check if server is unreachable
 ```
 
 VPS command targets use the format `<provider>/<account>:<id>`. Examples:
 - `hetzner/myaccount:123456` — Hetzner server by numeric ID
 - `vultr/main:3431427c-9755-4064-903e-7a3e8bc82791` — Vultr instance by UUID
 - `netcup/default:v2202604354651455383` — Netcup server by name (OAuth2 auth required)
+- `static/SSH:your-server.com` — Any server via SSH (no cloud provider API needed)
 
 ### Netcup SCP Authentication
 
@@ -118,8 +132,61 @@ cstation docker status eu01.synercatalyst.com
 
 ```bash
 cstation github --help
-cstation github ssh             # Setup GitHub SSH keys
-cstation github repo            # Repository operations
+cstation github ssh             # Setup GitHub SSH keys on a remote server
+cstation github ssh hostname --generate --add-to-github  # Generate key and add to GitHub
+cstation github repo list       # List repositories
+cstation github repo sync repo  # Sync a repository
+cstation github repo clone repo # Clone a repository
+```
+
+### Server Management
+
+Server commands manage remote servers via Ansible and direct SSH.
+
+```bash
+# Setup SSH key authentication for a remote server
+cstation server ssh hostname
+cstation server ssh hostname --generate           # Generate key if missing
+cstation server ssh hostname -k ~/.ssh/id_ed25519 # Use specific key
+
+# Check server status, health, and uptime
+cstation server status
+cstation server status hostname --services --no-uptime
+
+# List servers from Ansible inventory
+cstation server ls
+cstation server ls hostname   # Show details for specific server
+
+# Remove a server entry from the Ansible inventory
+cstation server rm server_name --force
+
+# Ansible playbook management
+cstation server playbook list                    # List available playbooks
+cstation server playbook push playbook host      # Execute a playbook on a host
+
+# PerfectWork sync operations
+cstation server pw sync hostname 18.0            # Sync PW files to server
+cstation server pw sync hostname 18.0 --port 8288 --dry-run
+cstation server pw status hostname 18.0          # Check sync status
+cstation server pw clean --all                    # Clean temp sync files
+```
+
+### Cloudflare DNS Management
+
+Cloudflare commands manage DNS records declaratively from `config/dns/` YAML files.
+
+```bash
+# List all Cloudflare DNS zones
+cstation cloudflare zones
+
+# Dry-run: compare local DNS config against Cloudflare and show drift
+cstation cloudflare plan
+cstation cloudflare plan example.com
+
+# Apply DNS records from config/dns/ to Cloudflare
+cstation cloudflare apply
+cstation cloudflare apply example.com --yes
+cstation cloudflare apply example.com --yes --delete  # Also delete unmanaged records
 ```
 
 ## Configuration
@@ -188,14 +255,31 @@ kind: Container
 name: traefik
 enabled: true
 image: traefik:latest
+container_name: EU01_traefik   # Optional: explicit Docker container name
 network: PW_NET
-ports: [...]
+ports: ["80:80"]
 volumes: [...]
-env: {...}          # non-secret config → compose environment
-env_file: .env      # secrets loaded from .env file on VPS
-secrets: [...]      # secret key names → .env on VPS only (NOT committed)
-restart_policy: unless-stopped
-static_config: {...}  # optional, service-specific
+env: {...}                      # non-secret config → compose environment
+env_file: .env                   # secrets loaded from .env file on VPS
+secrets: [...]                  # secret key names → .env on VPS only (NOT committed)
+restart_policy: unless-stopped  # Optional: Docker restart policy
+command: ["--configFile=/etc/traefik/traefik.yml"]  # Optional: Docker compose command override
+owner: "1000:1000"              # Optional: chown -R after apply (uid:gid)
+subdirs: [etc, conf, data]      # Optional: override service subdirectories
+static_config: {...}            # Optional: service-specific static config
+traefik:                        # Optional: dynamic routing config
+  http:
+    routers:
+      myapp:
+        rule: "Host(`myapp.example.com`)"
+        entryPoints: [websecure]
+        service: myapp
+        tls:
+          certResolver: le_dns_resolver
+    services:
+      myapp:
+        loadBalancer:
+          serverPort: 3000
 ```
 
 ### Fragment: kind: Stack
@@ -253,36 +337,40 @@ src/cstation/
 ├── commands/
 │   ├── version/         # Version command
 │   ├── init/            # Initialization command
-│   ├── github/          # GitHub repository operations
+│   ├── server/          # Remote server management (ssh, status, ls, playbook, rm, pw)
+│   ├── github/          # GitHub repository operations (ssh, repo)
 │   ├── docker/
 │   │   ├── main.py      # Docker commands: plan, apply, status
 │   │   ├── services/    # Service classes (TraefikService, PortainerService, etc.)
 │   │   └── compose/     # Compose file rendering, .env writer
-│   ├── vps/             # VPS lifecycle (ls, status, init, plan, apply)
+│   ├── vps/             # VPS lifecycle (ls, status, init, plan, apply, remove)
 │   ├── netcup/          # Netcup SCP authentication (auth-login, auth-logout, auth-show)
-│   ├── pw/              # PerfectWork operations
-│   └── sync/            # Sync management
+│   ├── cloudflare/      # Cloudflare DNS management (zones, plan, apply)
+│   └── pw/              # PerfectWork sync operations (sync, status, clean)
 ├── providers/
 │   ├── base.py          # VPSProvider protocol + VPS/VPSStatus models
+│   ├── cloudflare.py   # Cloudflare DNS provider adapter
+│   ├── static.py        # Static provider for SSH-provisioned servers
 │   ├── hetzner.py       # Hetzner Cloud adapter
 │   ├── vultr.py         # Vultr adapter
 │   ├── netcup.py        # Netcup SCP REST API adapter
 │   ├── netcup_auth.py   # Netcup OAuth2 device-code flow
 │   └── errors.py        # Provider error classes
-tests/
-├── commands/
-│   ├── test_vps_cli.py  # VPS CLI integration tests
-│   └── test_docker_cli.py  # Docker CLI tests
-├── providers/
-│   ├── test_hetzner.py  # Hetzner adapter tests
-│   ├── test_vultr.py    # Vultr adapter tests
-│   └── test_netcup.py  # Netcup adapter tests
 config/
+├── dns/                 # Cloudflare DNS config files (<domain>.yaml)
 └── vps/                 # Per-VPS config directories
     └── <vps-name>/
         ├── vps.yaml
         ├── <CONTAINER_NAME>_traefik.yaml
         └── ...
+tests/
+├── commands/
+│   ├── test_vps_cli.py      # VPS CLI integration tests
+│   └── test_docker_cli.py   # Docker CLI tests
+└── providers/
+    ├── test_hetzner.py       # Hetzner adapter tests
+    ├── test_vultr.py         # Vultr adapter tests
+    └── test_netcup.py        # Netcup adapter tests
 ```
 
 ### Adding a New Command Group
@@ -309,6 +397,7 @@ config/
 | Hetzner | API token | `accounts.<name>.token` | Yes | Yes |
 | Vultr | API token | `accounts.<name>.token` | No | Yes |
 | Netcup | OAuth2 device-code | `scp.<name>.enabled` | No | No |
+| Static | SSH key (CLI flags) | None needed (uses `--user`, `--port`, `--key`) | No | No |
 
 ## Troubleshooting
 

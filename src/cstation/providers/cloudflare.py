@@ -20,22 +20,50 @@ class DNSRecord:
     priority: Optional[int] = None
     proxied: bool = False
     comment: str = ""
+    srv_weight: Optional[int] = None
+    srv_port: Optional[int] = None
 
     def to_api_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
             "name": self.name,
             "type": self.type,
-            "content": self.content,
             "ttl": self.ttl,
             "proxied": self.proxied,
         }
-        if self.priority is not None:
-            d["priority"] = self.priority
+        if self.type == "SRV":
+            weight = self.srv_weight if self.srv_weight is not None else 1
+            port = self.srv_port if self.srv_port is not None else 0
+            priority = self.priority if self.priority is not None else 0
+
+            # Optional: split name for 'data' object
+            service = ""
+            proto = ""
+            base_name = self.name
+            if self.name.startswith("_"):
+                parts = self.name.split(".", 2)
+                if len(parts) >= 3:
+                    service = parts[0]
+                    proto = parts[1]
+                    base_name = parts[2]
+
+            d["data"] = {
+                "service": service,
+                "proto": proto,
+                "name": base_name,
+                "priority": priority,
+                "weight": weight,
+                "port": port,
+                "target": self.content,
+            }
+        else:
+            d["content"] = self.content
+            if self.priority is not None:
+                d["priority"] = self.priority
         return d
 
     @classmethod
     def from_api(cls, data: dict[str, Any], domain: str = "") -> DNSRecord:
-        return cls(
+        rec = cls(
             id=str(data.get("id", "")),
             domain=domain,
             name=data.get("name", ""),
@@ -46,6 +74,23 @@ class DNSRecord:
             proxied=data.get("proxied", False),
             comment=data.get("comment", ""),
         )
+        if rec.type == "SRV":
+            srv_data = data.get("data", {})
+            if srv_data:
+                rec.srv_weight = srv_data.get("weight")
+                rec.srv_port = srv_data.get("port")
+                rec.content = srv_data.get("target", rec.content)
+                rec.priority = srv_data.get("priority", rec.priority)
+            elif rec.content:
+                parts = rec.content.split()
+                if len(parts) >= 3:
+                    try:
+                        rec.srv_weight = int(parts[0])
+                        rec.srv_port = int(parts[1])
+                        rec.content = " ".join(parts[2:])
+                    except ValueError:
+                        pass
+        return rec
 
 
 @dataclass
