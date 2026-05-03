@@ -18,6 +18,7 @@ from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
 from .commands.cloudflare.main import cloudflare_app
 from .commands.odoo.main import odoo_app
+from .commands.image.main import image_app
 
 
 def version_callback(value: bool):
@@ -42,6 +43,7 @@ app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
 app.add_typer(cloudflare_app)
 app.add_typer(odoo_app)
+app.add_typer(image_app)
 
 
 @app.callback()

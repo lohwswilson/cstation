@@ -28,10 +28,10 @@ RUN apt-get update && \
     python3-magic \
     python3-num2words \
     python3-odf \
-    python3-pdfminer \
+    python3-pdfminer.six \
     python3-pip \
     python3-phonenumbers \
-    python3-pyldap \
+    python3-ldap \
     python3-qrcode \
     python3-renderpm \
     python3-setuptools \
@@ -40,6 +40,7 @@ RUN apt-get update && \
     python3-watchdog \
     python3-xlrd \
     python3-xlwt \
+    equivs \
     xz-utils && \
     if [ -z "${TARGETARCH}" ]; then \
     TARGETARCH="$(dpkg --print-architecture)"; \
@@ -79,6 +80,13 @@ RUN npm install -g rtlcss \
 ENV ODOO_VERSION 16.0
 ARG ODOO_RELEASE=20250218
 ARG ODOO_SHA=b95e7c08cfdb8d0d25a2016cc5ef295e283da96b
+
+# Create dummy package for python3-vatnumber which is missing in Noble
+RUN printf "Section: python\nPriority: optional\nPackage: python3-vatnumber\nVersion: 1.0\nDescription: dummy package for odoo\n" > vatnumber-dummy \
+    && equivs-build vatnumber-dummy \
+    && dpkg -i python3-vatnumber_1.0_all.deb \
+    && rm vatnumber-dummy python3-vatnumber_1.0_all.deb
+
 RUN curl -o odoo.deb -sSL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/odoo_${ODOO_VERSION}.${ODOO_RELEASE}_all.deb \
     && echo "${ODOO_SHA} odoo.deb" | sha1sum -c - \
     && apt-get update \
@@ -93,7 +101,7 @@ COPY ./requirements.txt /
 
 # **** Install extra python libraries for PW ****
 RUN set -x; \
-    python3 -m pip install --no-cache-dir  --break-system-packages --ignore-installed typing-extensions -r /requirements.txt 
+    python3 -m pip install --no-cache-dir  --break-system-packages --ignore-installed typing-extensions vatnumber -r /requirements.txt 
 
 # Set permissions and Mount /var/lib/odoo to allow restoring filestore and /mnt/extra-addons for users addons
 RUN chown odoo /entrypoint.sh \

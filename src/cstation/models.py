@@ -70,6 +70,14 @@ class ContainerConfig(BaseModel):
     class Config:
         extra = "allow"
 
+class DockerImageConfig(BaseModel):
+    apiVersion: str = "cstation/v1"
+    kind: str = "DockerImage"
+    name: str
+    image: str
+    platforms: List[str] = Field(default_factory=lambda: ["linux/amd64", "linux/arm64"])
+    build_args: Dict[str, str] = Field(default_factory=dict)
+
 class DNSRecordConfig(BaseModel):
     name: str = "@"
     type: str
