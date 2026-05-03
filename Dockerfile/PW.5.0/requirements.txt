@@ -1,0 +1,8 @@
+click-odoo
+html2text
+odooly
+openupgradelib
+pw_cli
+pw_zoomus
+paramiko
+pysftp==0.2.8

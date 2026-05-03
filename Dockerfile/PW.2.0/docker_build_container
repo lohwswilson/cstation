@@ -1,0 +1,13 @@
+if [ -z "$1" ];
+then
+    echo "Please provide tag name for the PW 2.0 Docker Image"
+    echo "./docker_build_container [latest]"
+    echo ""
+else
+    echo "Building PW 2.0 Docker Image with tag=$1 "
+    rsync -avr /Users/wsloh/PW/PW.2.0/ --files-from=/Users/wsloh/pw/DOCKER/PW.2.0/pw_docker_files /Users/wsloh/pw/DOCKER/PW.2.0/PW
+    find . -name __pycache__ -type d -exec rm -rf {} +
+    docker image build -t synercatalyst/perfectwork2:$1 .
+    docker push synercatalyst/perfectwork2:$1
+    echo ""
+fi

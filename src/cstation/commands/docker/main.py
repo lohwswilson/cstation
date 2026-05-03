@@ -171,7 +171,7 @@ def docker_plan(
         if status == "disabled":
             console.print(f"[dim]{name}: disabled (skipped)[/dim]")
             continue
-        kind = data.get("kind", "Container")
+        kind = data.kind
         svc = _get_service_instance(name, kind, data)
         actions = svc.plan(ssh, data)
         if actions:
@@ -227,8 +227,8 @@ def docker_apply(
     if not yes:
         console.print("[yellow]⚠[/yellow] This will deploy/modify containers on the remote VPS:")
         for name, data in enabled_fragments:
-            kind = data.get("kind", "Container")
-            image = data.get("image", "unknown")
+            kind = data.kind
+            image = data.image
             console.print(f"  {name} (kind: {kind}, image: {image})")
         confirm = typer.confirm("\nProceed?", default=False)
         if not confirm:
@@ -237,7 +237,7 @@ def docker_apply(
         console.print()
 
     for name, data in enabled_fragments:
-        kind = data.get("kind", "Container")
+        kind = data.kind
         svc = _get_service_instance(name, kind, data)
         svc.apply(ssh, data)
         console.print()

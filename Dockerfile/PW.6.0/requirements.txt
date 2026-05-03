@@ -1,0 +1,10 @@
+markdown
+odooly
+openai
+openupgradelib
+pw_zoomus
+paramiko
+PyPDF2
+pyOpenSSL
+html2text
+pysftp
