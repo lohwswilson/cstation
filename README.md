@@ -135,8 +135,12 @@ Each VPS has its own directory under `config/vps/` containing a main `vps.yaml` 
 config/vps/
 ├── sg01.synercatalyst.com/
 │   ├── vps.yaml              ← infrastructure (access, facts, os)
-│   ├── sg01-traefik.yaml     ← kind: Container
-│   └── sg01-db.yaml          ← kind: Container
+│   ├── SG01_TRAEFIK.yaml     ← kind: Container
+│   └── SG01_DB.yaml          ← kind: Container (PostgreSQL)
+├── us02.synercatalyst.com/
+│   ├── vps.yaml              ← infrastructure (access, facts, os)
+│   ├── US02_traefik.yaml     ← kind: Container
+│   └── US02_DB.yaml          ← kind: Container (PostgreSQL)
 ```
 
 ## Development

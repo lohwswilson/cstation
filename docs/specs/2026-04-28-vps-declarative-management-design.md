@@ -49,15 +49,14 @@ This design replaces legacy Ansible/PW_CS usage with a stable schema, determinis
 
 ```
 config/vps/
-├── eu01.synercatalyst.com/
-│   ├── vps.yaml              ← kind: VPS (identity, access, facts, os, docker)
-│   ├── traefik.yaml          ← kind: Container
-│   ├── portainer.yaml        ← kind: Container
-│   └── mailcow.yaml          ← kind: Stack
-├── sg07.ansis.com.sg/
-│   ├── vps.yaml
-│   ├── traefik.yaml
-│   └── ...
+├── sg01.synercatalyst.com/
+│   ├── vps.yaml              ← infrastructure (access, facts, os)
+│   ├── SG01_TRAEFIK.yaml     ← kind: Container
+│   └── SG01_DB.yaml          ← kind: Container (PostgreSQL)
+├── us02.synercatalyst.com/
+│   ├── vps.yaml              ← infrastructure (access, facts, os)
+│   ├── US02_traefik.yaml     ← kind: Container
+│   └── US02_DB.yaml          ← kind: Container (PostgreSQL)
 ```
 
 The main `vps.yaml` file is the only required file. Fragment files are added when containers need to be deployed. Fragment discovery: all `*.yaml` files in the directory except `vps.yaml`.
@@ -303,6 +302,147 @@ Key points:
 - Container declarations live in fragment files (`traefik.yaml`, `portainer.yaml`, etc.), NOT in `vps.yaml`.
 - Infrastructure services (Traefik, Portainer) store data at `/var/lib/<service>/`. Odoo uses `/var/lib/perfectwork/`.
 - The old Ansible-based `cstation docker playbook` commands have been retired.
+
+## PostgreSQL Docker Container
+
+CStation deploys PostgreSQL as a declarative `kind: Container` fragment. The fragment is tuned per-VPS based on the server's hardware profile (CPU, RAM, disk type) and accessed over an SSH tunnel for security.
+
+### Fragment Schema
+
+```yaml
+apiVersion: cstation/v1
+kind: Container
+name: US02_DB
+enabled: true
+image: postgres:18
+container_name: US02_DB
+network: PW_NET
+ports:
+  - "127.0.0.1:1488:5432"     # localhost-only binding (SSH tunnel required)
+volumes:
+  - "/var/lib/postgresql:/var/lib/postgresql/data"
+secrets:
+  - POSTGRES_PASSWORD            # resolved from ~/.config/cstation/config.yaml → .env on VPS
+env:
+  POSTGRES_USER: postgres
+  PGDATA: /var/lib/postgresql/data/pgdata
+restart_policy: always
+command:
+  - "postgres"
+  - "-c"
+  - "max_connections=120"
+  # ... (see Tuning section below)
+```
+
+Key design decisions:
+
+| Decision | Detail |
+|----------|--------|
+| **Port binding** | `127.0.0.1:1488:5432` — localhost only. Never expose PostgreSQL on a public interface. Remote access requires SSH tunnel. |
+| **Port convention** | `1488` is the standard offset port for PostgreSQL across all VPS (SG01, US02, etc.). Consistent port reduces cognitive load. |
+| **Secrets in `.env`** | `POSTGRES_PASSWORD` is declared under `secrets`, resolved from `~/.config/cstation/config.yaml`, and written to `.env` on the VPS. It is never committed to the repo or printed in logs. |
+| **PGDATA subdirectory** | `PGDATA` is set to `/var/lib/postgresql/data/pgdata` (a subdirectory of the volume mount) to avoid PostgreSQL initdb failures when the volume mountpoint has lost+found or other files. |
+| **Volume path** | `/var/lib/postgresql` on the host — distinct from `/var/lib/perfectwork/` which is for application data. |
+| **`command` overrides** | PostgreSQL tuning is done via `-c` flags in the `command` array, not via a mounted `postgresql.auto.conf`. This keeps tuning declarative in the fragment and avoids config drift between the fragment and a file on disk. |
+
+### PostgreSQL Tuning Guidelines
+
+Tuning parameters are derived from the server's hardware profile. The following table shows the two current reference profiles:
+
+| Parameter | US02 (ARM, 8 GB RAM) | SG01 (x86, 48 GB RAM) | Notes |
+|-----------|----------------------|-----------------------|-------|
+| `shared_buffers` | 1 GB | 4 GB | 25% of dedicated PG RAM (US02: 4 GB → 1 GB) |
+| `effective_cache_size` | 3 GB | 12 GB | 75% of dedicated PG RAM |
+| `work_mem` | 16 MB | 32 MB | Per-sort-operation memory |
+| `maintenance_work_mem` | 256 MB | 512 MB | For VACUUM, CREATE INDEX |
+| `max_connections` | 120 | 200 | Based on expected concurrency |
+| `min_wal_size` | 1 GB | 1 GB | |
+| `max_wal_size` | 4 GB | 4 GB | |
+| `wal_buffers` | 32 MB | 64 MB | |
+| `checkpoint_completion_target` | 0.9 | 0.9 | |
+| `random_page_cost` | 1.1 | 1.1 | SSD assumption |
+| `effective_io_concurrency` | 200 | 200 | SSD assumption |
+| `wal_compression` | on | on | pglz in PG18 |
+| `max_worker_processes` | 4 | 8 | Match vCPU or fewer |
+| `max_parallel_workers_per_gather` | 2 | 4 | |
+| `max_parallel_workers` | 4 | 8 | |
+| `max_parallel_maintenance_workers` | 2 | 2 | |
+| `idle_in_transaction_session_timeout` | 300000 (5 min) | 300000 (5 min) | Prevents idle transactions from holding locks |
+| `shared_preload_libraries` | pg_stat_statements | pg_stat_statements | |
+
+**Tuning formula** (for new VPS):
+
+1. Determine dedicated PG RAM = `total_ram * 0.5` (for mixed app+DB servers) or `total_ram * 0.75` (for DB-only).
+2. `shared_buffers` = dedicated PG RAM / 4.
+3. `effective_cache_size` = dedicated PG RAM * 0.75.
+4. `work_mem` = 16 MB for ≤8 GB RAM, 32 MB for ≤32 GB, 64 MB for 64 GB+.
+5. `max_worker_processes` = min(vCPU, 8).
+6. All other params remain constant across profiles.
+
+### `io_method` on PostgreSQL 18
+
+PostgreSQL 18 introduced `io_method` with valid values `sync`, `worker`, and `io_uring`. **Do not set `io_method`** in the fragment command:
+
+- `aio` is not a valid value (was removed/renamed in PG18).
+- `io_uring` requires kernel support and specific permissions — it fails on Netcup ARM VPS with "Operation not permitted".
+- Omitting `io_method` entirely lets PG18 default to `sync`, which is safe on all platforms.
+
+If `io_uring` is desired, validate kernel support first: `grep io_uring /proc/kallsyms && echo OK || echo MISSING`.
+
+### Remote Access via SSH Tunnel
+
+PostgreSQL is only accessible via SSH tunnel. The connection flow:
+
+```
+Client (DBeaver, pgAdmin, psql)
+  ↓ SSH tunnel (port 22 → VPS)
+  → 127.0.0.1:1488 (localhost on VPS)
+  → PostgreSQL container port 5432
+```
+
+**DBeaver setup:**
+
+1. **Main tab**: Host `127.0.0.1`, Port `1488`, Database `postgres`, User `postgres`.
+2. **SSH tab**: Enable "Use SSH Tunnel", Host `<vps-hostname>`, Port `22`, User `root`, Auth type: Public Key → your SSH key.
+
+**psql via SSH tunnel:**
+
+```bash
+# Manual tunnel
+ssh -L 1488:127.0.0.1:1488 root@us02.synercatalyst.com -N -f
+psql -h 127.0.0.1 -p 1488 -U postgres
+
+# Or one-liner
+ssh root@us02.synercatalyst.com "docker exec US02_DB psql -U postgres"
+```
+
+### Secrets Management
+
+PostgreSQL secrets are stored outside the fragment YAML to prevent credential leakage:
+
+```yaml
+# ~/.config/cstation/config.yaml
+vps:
+  secrets:
+    us02.synercatalyst.com:
+      US02_DB:
+        POSTGRES_PASSWORD: "<secret-value>"
+```
+
+At deploy time, `ImageService._render_env()` merges `env` + resolved secrets into a single `.env` file on the VPS, and `_render_compose()` adds `env_file: .env` to the compose service. The PostgreSQL Docker entrypoint reads `POSTGRES_PASSWORD` from the environment.
+
+### SG01 Legacy Note
+
+The SG01 database fragment (`config/vps/sg01.synercatalyst.com/SG01_DB.yaml`) still has `POSTGRES_PASSWORD` in plaintext under `env`. This should be migrated to secrets for consistency.
+
+### Deployment Checklist
+
+1. Ensure `vps apply <hostname>` has been run (Docker + PW_NET ready).
+2. Create fragment YAML in `config/vps/<hostname>/` with tuning params for the server profile.
+3. Add `POSTGRES_PASSWORD` to `~/.config/cstation/config.yaml` under `vps.secrets.<hostname>.<service_name>`.
+4. Run `cstation docker apply <hostname> --yes`.
+5. Verify: `ssh root@<hostname> "docker exec <container_name> psql -U postgres -c 'SHOW shared_buffers'"`.
+6. Connect from Mac via SSH tunnel (DBeaver or psql).
 
 ## MVP Slice
 

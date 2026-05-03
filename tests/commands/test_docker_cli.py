@@ -850,7 +850,9 @@ def test_stalwart_write_traefik_dynamic_config():
     config_commands = [c for c in recorded_commands if "stalwart.yml" in c]
     assert len(config_commands) == 1
     expected = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False)
-    assert expected in config_commands[0]
+    import base64
+    encoded = base64.b64encode(expected.encode()).decode()
+    assert encoded in config_commands[0]
 
 
 def test_stalwart_no_traefik_writes_nothing():
@@ -936,7 +938,9 @@ def test_image_service_traefik_key_write():
     config_commands = [c for c in recorded_commands if "myapp.yml" in c]
     assert len(config_commands) == 1
     expected = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False)
-    assert expected in config_commands[0]
+    import base64
+    encoded = base64.b64encode(expected.encode()).decode()
+    assert encoded in config_commands[0]
 
 
 def test_image_service_traefik_key_plan_drift():

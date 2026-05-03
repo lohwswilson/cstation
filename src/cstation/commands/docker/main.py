@@ -91,17 +91,23 @@ def _check_port_collisions(ssh: SSHManager, fragments: list) -> list[str]:
     return []
 
 
-def _get_service_instance(name: str, kind: str):
+def _get_service_instance(name: str, kind: str, config: dict | None = None):
     try:
         svc_cls = get_service(name)
         return svc_cls()
     except ValueError:
-        console.print(f"[yellow]⚠[/yellow] No built-in service class for '{name}' (kind: {kind}). Using generic ImageService.")
-        from .services.image_service import ImageService
-        svc = ImageService()
+        pass
+    if config and config.get("odoo_conf"):
+        from .services.odoo import OdooService
+        svc = OdooService()
         svc.name = name
         svc.kind = kind
         return svc
+    from .services.image_service import ImageService
+    svc = ImageService()
+    svc.name = name
+    svc.kind = kind
+    return svc
 
 
 def _resolve_secrets(vps_name: str, fragments: list) -> list:
@@ -150,7 +156,7 @@ def docker_plan(
             console.print(f"[dim]{name}: disabled (skipped)[/dim]")
             continue
         kind = data.get("kind", "Container")
-        svc = _get_service_instance(name, kind)
+        svc = _get_service_instance(name, kind, data)
         actions = svc.plan(ssh, data)
         if actions:
             has_changes = True
@@ -216,7 +222,7 @@ def docker_apply(
 
     for name, data in enabled_fragments:
         kind = data.get("kind", "Container")
-        svc = _get_service_instance(name, kind)
+        svc = _get_service_instance(name, kind, data)
         svc.apply(ssh, data)
         console.print()
 
@@ -250,7 +256,7 @@ def docker_status(
         if status == "disabled":
             table.add_row(name, kind, enabled, "disabled", image)
             continue
-        svc = _get_service_instance(name, kind)
+        svc = _get_service_instance(name, kind, data)
         state = svc.status(ssh, data)
         table.add_row(name, kind, enabled, state.get("state", "unknown"), image)
 

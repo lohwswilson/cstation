@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json as jsonlib
 from typing import Any
 
@@ -41,6 +42,13 @@ class ImageService:
         d = self.compose_subdir or self.service_dir
         return f"{d}/.env"
 
+    def _data_volume_path(self, config: dict) -> str | None:
+        volumes = config.get("volumes", [])
+        for vol in volumes:
+            if isinstance(vol, str) and ":/var/lib/odoo" in vol:
+                return vol.split(":")[0]
+        return None
+
     def _render_compose(self, config: dict) -> str:
         network = config.get("network", "PW_NET")
         service_def: dict[str, Any] = {
@@ -66,6 +74,10 @@ class ImageService:
             service_def["command"] = config["command"]
         if config.get("hostname"):
             service_def["hostname"] = config["hostname"]
+        if config.get("labels"):
+            service_def["labels"] = config["labels"]
+        if config.get("privileged"):
+            service_def["privileged"] = True
         service_def["networks"] = [network]
         compose = {
             "services": {self.name: service_def},
@@ -99,15 +111,19 @@ class ImageService:
             dirs.append(d)
         return dirs
 
+    def _traefik_conf_path(self, config: dict) -> str:
+        name = config.get("container_name", self.name)
+        return f"/var/lib/traefik/conf/{name}.yml"
+
     def _write_static_configs(self, ssh: SSHManager, config: dict) -> list[str]:
         written = []
         traefik_config = config.get("traefik")
         if traefik_config:
-            traefik_conf_path = f"/var/lib/traefik/conf/{self.name}.yml"
+            traefik_conf_path = self._traefik_conf_path(config)
             content = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False)
+            encoded = base64.b64encode(content.encode()).decode()
             ssh.run(
-                f"bash -c 'cat > {traefik_conf_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'",
-                sudo=True,
+                f"echo {encoded} | base64 -d | sudo tee {traefik_conf_path} > /dev/null",
             )
             console.print(f"  [green]✓[/green] wrote {traefik_conf_path}")
             written.append(traefik_conf_path)
@@ -117,7 +133,7 @@ class ImageService:
         actions = []
         traefik_config = config.get("traefik")
         if traefik_config:
-            traefik_conf_path = f"/var/lib/traefik/conf/{self.name}.yml"
+            traefik_conf_path = self._traefik_conf_path(config)
             desired = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False).strip()
             result = ssh.run(f"cat {traefik_conf_path} 2>/dev/null", hide=True, sudo=True)
             current = getattr(result, "stdout", "").strip() if result else ""
@@ -174,12 +190,22 @@ class ImageService:
         if owner:
             actions.append(f"would chown -R {owner} {self.service_dir}")
 
+        chmod = config.get("chmod")
+        if chmod:
+            data_path = self._data_volume_path(config)
+            if data_path:
+                actions.append(f"would chmod -R {chmod} {data_path}")
+
         result = ssh.run(f"docker compose -f {self.compose_path} ps -q 2>/dev/null", hide=True, sudo=True)
         running = getattr(result, "stdout", "").strip() if result else ""
         if not running:
             actions.append(f"would run: docker compose up -d ({self.name})")
 
         return actions
+
+    def _start(self, ssh: SSHManager, config: dict) -> None:
+        ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
+        console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
 
     def apply(self, ssh: SSHManager, config: dict) -> None:
         console.print(f"  [bold]Applying {self.name}[/bold] (kind: Container)")
@@ -213,8 +239,14 @@ class ImageService:
             ssh.run(f"chown -R {owner} {self.service_dir}", sudo=True)
             console.print(f"  [green]✓[/green] chown {self.service_dir} to {owner}")
 
-        ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
-        console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
+        chmod = config.get("chmod")
+        if chmod:
+            data_path = self._data_volume_path(config)
+            if data_path:
+                ssh.run(f"chmod -R {chmod} {data_path}", sudo=True)
+                console.print(f"  [green]✓[/green] chmod {chmod} {data_path}")
+
+        self._start(ssh, config)
 
     def status(self, ssh: SSHManager, config: dict) -> dict:
         result = ssh.run(f"docker compose -f {self.compose_path} ps --format json 2>/dev/null", hide=True, sudo=True)

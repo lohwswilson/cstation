@@ -11,6 +11,7 @@ import re
 import shutil
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -132,13 +133,20 @@ def _first_line(result: Any) -> str:
     return result.stdout.strip().splitlines()[0].strip()
 
 
-def _detect_package_manager(ssh: SSHManager, os_id: str) -> str:
+def _detect_package_manager(ssh: SSHManager, os_id: str, results: Optional[dict[str, str]] = None) -> str:
     if os_id in ("ubuntu", "debian"):
         return "apt"
     if os_id in ("centos", "rhel", "fedora", "rocky", "almalinux"):
         return "dnf"
     if os_id in ("alpine",):
         return "apk"
+    
+    if results:
+        if results.get("pkg_apt"): return "apt"
+        if results.get("pkg_dnf"): return "dnf"
+        if results.get("pkg_yum"): return "yum"
+        if results.get("pkg_apk"): return "apk"
+
     if _first_line(ssh.run("command -v apt-get")):
         return "apt"
     if _first_line(ssh.run("command -v dnf")):
@@ -148,6 +156,19 @@ def _detect_package_manager(ssh: SSHManager, os_id: str) -> str:
     if _first_line(ssh.run("command -v apk")):
         return "apk"
     return "unknown"
+
+
+def _check_packages_batch(mgr: str, packages: list[str]) -> str:
+    """Build a single shell command to check multiple packages."""
+    cmds = []
+    for p in packages:
+        if mgr == "apt":
+            cmds.append(f"dpkg -s {p} >/dev/null 2>&1 && echo 'inst:{p}' || echo 'miss:{p}'")
+        elif mgr in ("dnf", "yum"):
+            cmds.append(f"rpm -q {p} >/dev/null 2>&1 && echo 'inst:{p}' || echo 'miss:{p}'")
+        elif mgr == "apk":
+            cmds.append(f"apk info -e {p} >/dev/null 2>&1 && echo 'inst:{p}' || echo 'miss:{p}'")
+    return " ; ".join(cmds)
 
 
 def _package_installed(ssh: SSHManager, mgr: str, name: str) -> bool:
@@ -332,28 +353,56 @@ def _parse_ip_route(raw: str) -> list[dict[str, Any]]:
 
 
 def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
-    def _run_stdout(cmd: str) -> str:
-        result = ssh.run(cmd)
-        if not result or not getattr(result, "stdout", ""):
-            return ""
-        return str(result.stdout).rstrip()
-
-    os_release_text = _run_stdout("cat /etc/os-release")
-    os_release = _parse_os_release(os_release_text)
-
-    kernel = _first_line(ssh.run("uname -r"))
-    hostname = _first_line(ssh.run("hostname"))
-
-    lscpu_raw = _run_stdout("lscpu")
-    mem_raw = _run_stdout("free -m")
-    lsblk_raw = _run_stdout("lsblk -b -J")
-    ip_addr_raw = _run_stdout("ip -j a")
-    ip_route_raw = _run_stdout("ip route")
-    uptime_raw = _run_stdout("uptime")
-    df_raw = _run_stdout("df -h / --output=size,used,avail,pcent | tail -1")
+    # Phase 1: Bundle all fact collection + package manager detection
+    batch_cmds = {
+        "os_release": "cat /etc/os-release",
+        "kernel": "uname -r",
+        "hostname": "hostname",
+        "lscpu": "lscpu",
+        "memory": "free -m",
+        "lsblk": "lsblk -b -J",
+        "ip_addr": "ip -j a",
+        "ip_route": "ip route",
+        "uptime": "uptime",
+        "df": "df -h / --output=size,used,avail,pcent | tail -1",
+        "docker_stats": "docker ps --format '{{.Status}}' 2>/dev/null",
+        "pkg_apt": "command -v apt-get",
+        "pkg_dnf": "command -v dnf",
+        "pkg_yum": "command -v yum",
+        "pkg_apk": "command -v apk",
+    }
     
-    # Check for docker summary (suppress errors if docker not installed)
-    docker_stats = _run_stdout("docker ps --format '{{.Status}}' 2>/dev/null")
+    results = ssh.run_batch(batch_cmds)
+    
+    os_release = _parse_os_release(results["os_release"])
+    os_id = os_release.get("ID", "")
+    pkg_mgr = _detect_package_manager(ssh, os_id, results)
+
+    # Phase 2: Check all packages in a second batch now that we know the pkg_mgr
+    pkg_results_raw = ""
+    if pkg_mgr != "unknown":
+        pkg_batch_cmd = _check_packages_batch(pkg_mgr, KEY_PACKAGES)
+        pkg_res = ssh.run(pkg_batch_cmd)
+        pkg_results_raw = getattr(pkg_res, "stdout", "") or ""
+    
+    detected = []
+    for line in pkg_results_raw.splitlines():
+        if line.startswith("inst:"):
+            detected.append(line.split(":", 1)[1])
+    
+    missing = [p for p in KEY_PACKAGES if p not in detected]
+
+    kernel = results["kernel"].strip()
+    hostname = results["hostname"].strip()
+    
+    lscpu_raw = results["lscpu"]
+    mem_raw = results["memory"]
+    lsblk_raw = results["lsblk"]
+    ip_addr_raw = results["ip_addr"]
+    ip_route_raw = results["ip_route"]
+    uptime_raw = results["uptime"]
+    df_raw = results["df"]
+    docker_stats = results["docker_stats"]
 
     parsed_cpu = _parse_lscpu(lscpu_raw) if lscpu_raw else {}
     parsed_memory = _parse_free_m(mem_raw) if mem_raw else {}
@@ -381,11 +430,6 @@ def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
         lines = docker_stats.strip().splitlines()
         docker_summary["total"] = len(lines)
         docker_summary["running"] = sum(1 for line in lines if "Up" in line)
-
-    os_id = os_release.get("ID", "")
-    pkg_mgr = _detect_package_manager(ssh, os_id)
-    detected = [p for p in KEY_PACKAGES if _package_installed(ssh, pkg_mgr, p)]
-    missing = [p for p in KEY_PACKAGES if p not in detected]
 
     return {
         "os": {
@@ -548,7 +592,7 @@ def vps_list(
     provider: str = typer.Option("all"),
     account: Optional[str] = typer.Option(None, "--account"),
 ) -> None:
-    """List all VPS instances from configured providers."""
+    """List all VPS instances from configured providers in parallel."""
     aggregate_mode = provider == "all" and account is None
     auth_errors: list[str] = []
     provider_errors: list[str] = []
@@ -570,6 +614,9 @@ def vps_list(
             raise typer.BadParameter(f"Unknown provider '{provider}'")
 
     providers_to_list = providers if provider == "all" else [provider]
+    
+    # Prepare work units for parallel execution
+    tasks = []
     for p_name in providers_to_list:
         accounts = _config_accounts(p_name)
         if accounts:
@@ -578,35 +625,47 @@ def vps_list(
             for acct_name, token in accounts.items():
                 if account is not None and acct_name != account:
                     continue
-                p = _provider_from_token(p_name, token)
-                try:
-                    for v in p.list_vps():
-                        rows.append((p_name, acct_name, v))
-                except ProviderAuthError as e:
-                    if not aggregate_mode:
-                        console.print(f"[red]✗[/red] {e}")
-                        raise typer.Exit(2)
-                    auth_errors.append(f"{p_name}/{acct_name}: {e}")
-                except ProviderError as e:
-                    if not aggregate_mode:
-                        console.print(f"[red]✗[/red] {e}")
-                        raise typer.Exit(1)
-                    provider_errors.append(f"{p_name}/{acct_name}: {e}")
+                tasks.append((p_name, acct_name, token))
         else:
-            acct_name, p = _provider(p_name, account=None)
-            try:
-                for v in p.list_vps():
-                    rows.append((p_name, acct_name, v))
-            except ProviderAuthError as e:
+            # For providers without accounts (like static or environment-based)
+            tasks.append((p_name, None, None))
+
+    def _fetch_vps_task(p_name: str, acct_name: Optional[str], token: Optional[str]):
+        try:
+            if token:
+                p = _provider_from_token(p_name, token)
+            else:
+                acct_name, p = _provider(p_name, account=None)
+            
+            vps_list = p.list_vps()
+            return p_name, acct_name, vps_list, None, None
+        except ProviderAuthError as e:
+            return p_name, acct_name, [], f"{p_name}{'/' + acct_name if acct_name else ''}: {e}", None
+        except ProviderError as e:
+            return p_name, acct_name, [], None, f"{p_name}{'/' + acct_name if acct_name else ''}: {e}"
+        except Exception as e:
+            return p_name, acct_name, [], None, f"{p_name}{'/' + acct_name if acct_name else ''}: unexpected error: {e}"
+
+    # Execute discovery in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(_fetch_vps_task, *t) for t in tasks]
+        for future in futures:
+            p_name, acct_name, vps_list, auth_err, prov_err = future.result()
+            
+            if auth_err:
                 if not aggregate_mode:
-                    console.print(f"[red]✗[/red] {e}")
+                    console.print(f"[red]✗[/red] {auth_err}")
                     raise typer.Exit(2)
-                auth_errors.append(f"{p_name}: {e}")
-            except ProviderError as e:
+                auth_errors.append(auth_err)
+            
+            if prov_err:
                 if not aggregate_mode:
-                    console.print(f"[red]✗[/red] {e}")
+                    console.print(f"[red]✗[/red] {prov_err}")
                     raise typer.Exit(1)
-                provider_errors.append(f"{p_name}: {e}")
+                provider_errors.append(prov_err)
+            
+            for v in vps_list:
+                rows.append((p_name, acct_name, v))
 
     if not rows:
         if auth_errors:
@@ -680,8 +739,13 @@ def vps_status(
                     console.print(f"Connecting to [bold]{target_name}[/bold] via SSH to collect live status...")
                     ssh = _ssh_from_config(vps_data)
                     facts = _collect_facts(ssh)
+                    if not facts or not facts.get("os", {}).get("id"):
+                        console.print("[yellow]⚠[/yellow] Failed to collect comprehensive facts. Check SSH connectivity.")
                     _print_vps_live_status(target_name, identity.get("region", "manual"), access, facts)
                     return
+                else:
+                    console.print("[red]✗[/red] VPS config missing access.host")
+                    raise typer.Exit(1)
         except Exception as e:
             console.print(f"[yellow]⚠[/yellow] Failed to get live status via SSH: {e}")
             # Fall through to provider logic as fallback

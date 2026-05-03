@@ -35,25 +35,70 @@ class SSHManager:
     @property
     def connection(self):
         if self._conn is None:
+            # Add timeout to prevent hanging on unreachable hosts
             self._conn = Connection(
                 host=self.host,
                 user=self.user,
                 port=self.port,
-                connect_kwargs={"key_filename": self.key_filename} if self.key_filename else {}
+                connect_kwargs={
+                    "key_filename": self.key_filename,
+                    "timeout": 10,
+                    "banner_timeout": 10,
+                    "auth_timeout": 10,
+                } if self.key_filename else {
+                    "timeout": 10,
+                    "banner_timeout": 10,
+                    "auth_timeout": 10,
+                }
             )
         return self._conn
 
     def run(self, command: str, hide: bool = True, sudo: bool = False) -> Any:
+        """Execute a single command."""
         try:
             if sudo:
-                return self.connection.sudo(command, hide=hide)
-            return self.connection.run(command, hide=hide)
+                return self.connection.sudo(command, hide=hide, warn=True)
+            return self.connection.run(command, hide=hide, warn=True)
         except UnexpectedExit as e:
             console.print(f"[red]Error executing command on {self.host}: {e.result.stderr}[/red]")
             return e.result
         except Exception as e:
             console.print(f"[red]SSH connection error to {self.host}: {e}[/red]")
             return None
+
+    def run_batch(self, commands: Dict[str, str], sudo: bool = False) -> Dict[str, str]:
+        """
+        Execute multiple commands in a single SSH round-trip.
+        Returns a mapping of key -> stdout.
+        """
+        # Use a more robust separator that is unlikely to appear in command output
+        separator = "---CSTATION-BATCH-SEPARATOR---"
+        keys = list(commands.keys())
+        
+        # Build a single shell command
+        # ( cmd ) 2>&1 ensures subshell execution and output capturing
+        # echo is preceded by a semicolon to ensure it runs even if command fails
+        parts = []
+        for cmd in commands.values():
+            parts.append(f"( {cmd} ) 2>&1")
+        
+        bundled_cmd = f" ; echo '{separator}' ; ".join(parts)
+        
+        result = self.run(bundled_cmd, sudo=sudo)
+        if not result or not getattr(result, "stdout", ""):
+            return {key: "" for key in keys}
+        
+        # Split by separator and strip whitespace
+        outputs = result.stdout.split(separator)
+        
+        # Ensure we have the same number of outputs as keys
+        res = {}
+        for i, key in enumerate(keys):
+            if i < len(outputs):
+                res[key] = outputs[i].strip()
+            else:
+                res[key] = ""
+        return res
 
     def setup_ssh_key(self, public_key: str, remote_user: str = "root") -> bool:
         """
