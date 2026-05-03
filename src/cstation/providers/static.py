@@ -7,7 +7,7 @@ from typing import Optional
 import yaml
 
 from cstation.providers.base import VPS, VPSProvider, VPSStatus
-
+from cstation.facts import load_cached_facts, format_facts_summary
 
 CONFIG_VPS_DIR = Path("config/vps")
 
@@ -44,6 +44,12 @@ class StaticProvider(VPSProvider):
             access = data.get("access", {})
             if not isinstance(access, dict):
                 access = {}
+            
+            summary = None
+            cached = load_cached_facts(entry)
+            if cached:
+                summary = format_facts_summary(cached)
+
             results.append(VPS(
                 provider="static",
                 id=identity.get("name", entry.name),
@@ -51,6 +57,7 @@ class StaticProvider(VPSProvider):
                 region=identity.get("region"),
                 status=VPSStatus.RUNNING,
                 ipv4=access.get("host"),
+                facts_summary=summary,
             ))
         return results
 
@@ -60,6 +67,13 @@ class StaticProvider(VPSProvider):
             from cstation.providers.errors import ProviderError
             raise ProviderError("Host or IP must be provided for static provider")
 
+        vps_dir = CONFIG_VPS_DIR / host
+        summary = None
+        if vps_dir.is_dir():
+            cached = load_cached_facts(vps_dir)
+            if cached:
+                summary = format_facts_summary(cached)
+
         return VPS(
             provider=self.provider_name,
             id=host,
@@ -68,6 +82,7 @@ class StaticProvider(VPSProvider):
             status=VPSStatus.RUNNING,
             ipv4=host,
             ipv6=None,
+            facts_summary=summary,
         )
 
     def _is_ip(self, host: str) -> bool:

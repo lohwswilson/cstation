@@ -27,6 +27,7 @@ class VPS:
     disk_gb: Optional[int] = None
     bandwidth_gb: Optional[int] = None
     plan: Optional[str] = None
+    facts_summary: Optional[str] = None
 
 
 class VPSProvider(Protocol):

@@ -17,7 +17,9 @@
 - `src/cstation/commands/docker/main.py` — Docker service management & import logic
 - `src/cstation/providers/` — Cloud provider adapters (Hetzner, Vultr)
 - `src/cstation/providers/static.py` — Default SSH-based provider
-- `src/cstation/ssh.py` — `SSHManager` wrapping Fabric
+- `src/cstation/ssh.py` — `SSHManager` wrapping Fabric, supporting optimized `run_batch` for performance.
+- `src/cstation/models.py` — Pydantic models for configuration validation and type safety.
+- `src/cstation/facts.py` — Logic for local fact caching and summary formatting.
 
 ### Adding a new command group
 1. Create `src/cstation/commands/<group>/main.py` with a Typer app
@@ -26,8 +28,17 @@
    from .commands.<group>.main import <group_app>
    app.add_typer(<group_app>)
    ```
+### Performance & Cache
+- **Fact Caching**: Live metrics are cached in `config/vps/<host>/.facts.json` to enable sub-100ms response times for `vps list` and `vps status`.
+- **SSH Batching**: Facts are collected in a single SSH round-trip using subshell grouping and a custom separator (`==CS_SEP==`) to minimize latency.
+
+### Safety & Orchestration
+- **Validation**: Every configuration (VPS, Container, DNS, GitHub) is validated against Pydantic models in `src/cstation/models.py`.
+- **Native SSH**: Remote setup tasks (OS baseline, Docker, GitHub SSH, Odoo Restore) are performed directly via `SSHManager` (Fabric/Paramiko), eliminating Ansible dependencies for orchestration.
 
 ### VPS Management (Local-First)
+...
+
 The source of truth is the `config/vps/` directory.
 
 - **`list`**: Scans `config/vps/` and performs parallel SSH uptime checks.

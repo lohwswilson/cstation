@@ -9,6 +9,7 @@ import json as jsonlib
 import os
 import re
 import shutil
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -18,12 +19,14 @@ from typing import Any, Optional
 
 import typer
 import yaml
+from pydantic import ValidationError
 from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
 from cstation.config import get_config
 from cstation.ssh import SSHManager
+from cstation.models import VPSConfig
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
 from cstation.providers.static import StaticProvider
@@ -693,6 +696,11 @@ def vps_list(
     table.add_column("Region")
     table.add_column("Status")
     table.add_column("IPv4")
+    
+    show_metrics = any(v.facts_summary is not None for _, _, v in rows)
+    if show_metrics:
+        table.add_column("Live Metrics (Cached)")
+
     for provider_name, acct_name, v in rows:
         if show_provider and acct_name:
             id_value = v.id
@@ -708,7 +716,18 @@ def vps_list(
             row.append(provider_name)
         if show_account:
             row.append(acct_name or "-")
-        row.extend([id_value, v.name, v.region or "-", v.status.value, v.ipv4 or "-"])
+        
+        row.extend([
+            id_value,
+            v.name,
+            v.region or "-",
+            f"[green]{v.status.value}[/green]" if v.status.value == "running" else v.status.value,
+            v.ipv4 or "-",
+        ])
+        
+        if show_metrics:
+            row.append(v.facts_summary or "[dim]-[/dim]")
+            
         table.add_row(*row)
     console.print(table)
     for msg in auth_errors:
@@ -717,11 +736,16 @@ def vps_list(
         console.print(f"[yellow]![/yellow] {msg}")
 
 
+from cstation.facts import load_cached_facts, save_cached_facts, format_facts_summary
+
+# ... (other imports)
+
 @vps_app.command("status")
 def vps_status(
     target: str = typer.Argument(..., help="VPS name (e.g. sg01.synercatalyst.com) or target in the form <provider>/<account>:<id>"),
     provider: Optional[str] = typer.Option(None, "--provider"),
     account: Optional[str] = typer.Option(None, "--account"),
+    refresh: bool = typer.Option(False, "--refresh", "-r", help="Force a live SSH update even if cached data exists"),
 ) -> None:
     """Show detailed live status for a specific VPS instance via SSH."""
     # Try to resolve as a local VPS name first (silent check)
@@ -729,26 +753,39 @@ def vps_status(
     if vps_dir.is_dir() and (vps_dir / "vps.yaml").exists():
         try:
             vps_data = _load_vps_config(vps_dir)
-            identity = vps_data.get("identity", {})
-            target_name = identity.get("name", vps_dir.name)
+            target_name = vps_data.identity.name
+            host = vps_data.access.host
             
-            if "access" in vps_data:
-                access = vps_data.get("access", {})
-                host = access.get("host")
-                if host:
-                    console.print(f"Connecting to [bold]{target_name}[/bold] via SSH to collect live status...")
-                    ssh = _ssh_from_config(vps_data)
-                    facts = _collect_facts(ssh)
-                    if not facts or not facts.get("os", {}).get("id"):
-                        console.print("[yellow]⚠[/yellow] Failed to collect comprehensive facts. Check SSH connectivity.")
-                    _print_vps_live_status(target_name, identity.get("region", "manual"), access, facts)
+            # Check for cache
+            if not refresh:
+                cached_facts = load_cached_facts(vps_dir)
+                if cached_facts:
+                    cached_at = cached_facts.get("_cached_at")
+                    age_str = ""
+                    if cached_at:
+                        age_sec = int(time.time() - cached_at)
+                        if age_sec < 60:
+                            age_str = f"({age_sec}s ago)"
+                        else:
+                            age_str = f"({age_sec // 60}m ago)"
+                    
+                    console.print(f"[dim]Using cached status for {target_name} {age_str}[/dim]")
+                    _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, cached_facts)
                     return
-                else:
-                    console.print("[red]✗[/red] VPS config missing access.host")
-                    raise typer.Exit(1)
+
+            console.print(f"Connecting to [bold]{target_name}[/bold] via SSH ({host}) to collect live status...")
+            ssh = _ssh_from_config(vps_data)
+            facts = _collect_facts(ssh)
+            if not facts or not facts.get("os", {}).get("id"):
+                console.print("[yellow]⚠[/yellow] Failed to collect comprehensive facts. Check SSH connectivity.")
+            else:
+                save_cached_facts(vps_dir, facts)
+
+            _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, facts)
+            return
         except Exception as e:
-            console.print(f"[yellow]⚠[/yellow] Failed to get live status via SSH: {e}")
             # Fall through to provider logic as fallback
+            pass
 
     # Fallback to manual provider/account:id logic
     target_provider, rest = (target.split("/", 1) + [None])[:2] if "/" in target else (None, target)
@@ -871,38 +908,38 @@ def _resolve_vps_dir(vps_arg: Path) -> Path:
     raise typer.Exit(6)
 
 
-def _load_vps_config(vps_dir: Path) -> dict[str, Any]:
+def _load_vps_config(vps_dir: Path) -> VPSConfig:
     """Load and validate a VPS config from a directory's vps.yaml."""
     vps_yaml = vps_dir / "vps.yaml"
     if not vps_yaml.exists():
         console.print(f"[red]✗[/red] No vps.yaml found in {vps_dir}")
         raise typer.Exit(6)
+    
     with vps_yaml.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    
     if not isinstance(data, dict):
-        console.print(f"[red]✗[/red] Invalid config: expected mapping at top level")
+        console.print(f"[red]✗[/red] Invalid config in {vps_yaml}: expected mapping at top level")
         raise typer.Exit(6)
-    if data.get("apiVersion") != "cstation/v1":
-        console.print(f"[red]✗[/red] Unsupported apiVersion: {data.get('apiVersion')}")
+    
+    try:
+        return VPSConfig(**data)
+    except ValidationError as e:
+        console.print(f"[red]✗[/red] Schema validation failed for {vps_yaml}:")
+        for error in e.errors():
+            loc = ".".join(str(l) for l in error["loc"])
+            msg = error["msg"]
+            console.print(f"  - [bold]{loc}[/bold]: {msg}")
         raise typer.Exit(6)
-    if data.get("kind") != "VPS":
-        console.print(f"[red]✗[/red] Unexpected kind: {data.get('kind')}")
-        raise typer.Exit(6)
-    return data
 
 
-def _ssh_from_config(data: dict[str, Any]) -> SSHManager:
-    """Build an SSHManager from a VPS config's access section."""
-    access = data.get("access", {})
-    host = access.get("host")
-    if not host:
-        console.print("[red]✗[/red] Config missing access.host")
-        raise typer.Exit(6)
+def _ssh_from_config(config: VPSConfig) -> SSHManager:
+    """Build an SSHManager from a VPSConfig object."""
     return SSHManager(
-        host=host,
-        user=access.get("user", "root"),
-        port=access.get("port", 22),
-        key_filename=access.get("key"),
+        host=config.access.host,
+        user=config.access.user,
+        port=config.access.port,
+        key_filename=config.access.key,
     )
 
 

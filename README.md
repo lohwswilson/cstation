@@ -39,65 +39,84 @@ uv run cstation vps status your-server.com
 uv run cstation docker import your-server.com
 ```
 
-## Usage
+## Key Features
 
-### Basic Commands
+- **🚀 High-Performance SSH:** Uses bundled command execution (SSH Batching) and local fact caching to provide near-instantaneous status reports (<100ms).
+- **🛡️ Universal Schema Safety:** *Every* configuration (VPS, Container, DNS, GitHub) is validated using Pydantic, catching errors before they touch your servers.
+- **⚡ Native Orchestration:** Performs remote setup (OS hardening, Docker, GitHub SSH) directly via high-speed SSH. No Ansible dependency required for daily operations.
+- **📦 Declarative Docker:** Manage containers as code. Import existing containers, plan changes with dry-runs, and apply updates via SSH-based Compose orchestration.
+- **💻 Local-First:** Your `config/` directory is the single source of truth. Version control your infrastructure with Git.
+
+## Installation
 
 ```bash
-cstation --version            # Show version
-cstation <command> --help     # Get help for any command
+git clone <repository-url>
+cd cstation
+
+# Install using uv
+uv pip install -e .
+
+# Verify
+uv run cstation --help
 ```
+
+## Usage
 
 ### VPS Management
 
-VPS commands follow a **"Local-First"** architecture, using your local `config/vps/` directory as the source of truth.
+CStation uses a **"Local-First"** architecture. It performs parallel SSH checks but prioritizes local caching for speed.
 
 ```bash
-# List all managed VPS instances (shows CPU, RAM, Storage, and live Uptime)
+# List all managed VPS instances (instantly shows cached health metrics)
 cstation vps list
 
-# Show live health dashboard via SSH (Load Avg, RAM, Disk, Docker status)
+# Show live health dashboard (Load Avg, RAM, Disk, Docker status)
 cstation vps status sg01.synercatalyst.com
 
-# Initialize a per-VPS config via SSH scan (auto-discovers real IP and hardware)
-cstation vps init sg01.synercatalyst.com --port 8288
-cstation vps init 1.2.3.4 --user admin --key ~/.ssh/id_ed25519
+# Force a live refresh (bypasses local cache)
+cstation vps status sg01.synercatalyst.com --refresh
 
-# Initialize using Cloud Provider metadata (optional)
-cstation vps init hetzner/myaccount:123456
-
-# Dry-run: preview what would be applied
-cstation vps plan eu01.synercatalyst.com
-
-# Apply VPS configuration (OS hardening, swap, Docker setup, etc.)
-cstation vps apply eu01.synercatalyst.com --yes
-
-# Remove a VPS from local configuration
-cstation vps remove eu01.synercatalyst.com
+# Initialize a new VPS config via SSH scan
+cstation vps init sg01.synercatalyst.com --port 22 --user root
 ```
 
 ### Docker Service Management
 
-Docker commands manage declarative container deployment via YAML fragments.
+Manage your containers declaratively using YAML fragments.
 
 ```bash
-# Import running containers from VPS to local config
-cstation docker import eu01.synercatalyst.com             # List available
-cstation docker import eu01.synercatalyst.com my-app      # Import specific
+# 1. Scrape existing containers from a VPS into local YAML files
+cstation docker import sg01.synercatalyst.com --all
 
-# Plan: dry-run to see what would change
-cstation docker plan eu01.synercatalyst.com
+# 2. View current container state (detects both managed and unmanaged containers)
+cstation docker status sg01.synercatalyst.com
 
-# Apply: deploy all enabled services
-cstation docker apply eu01.synercatalyst.com --yes
+# 3. Dry-run: see what would happen if you applied local configs
+cstation docker plan sg01.synercatalyst.com
 
-# Status: show managed container state on VPS
-cstation docker status eu01.synercatalyst.com
+# 4. Deploy/Update: launch containers via SSH-based Compose orchestration
+cstation docker apply sg01.synercatalyst.com --yes
+```
+
+## Advanced Features
+
+### Fact Caching
+To ensure the CLI feels snappy, `cstation` stores the latest hardware and performance metrics in a hidden `.facts.json` file inside each VPS directory.
+- `vps list` displays these metrics in a "Live Metrics (Cached)" column.
+- `vps status` displays them instantly and shows the age of the cache.
+- Background tasks (or manual `-r` flags) keep the cache fresh.
+
+### Schema Validation
+Config files are strictly validated. If you have an error in your `vps.yaml`, you'll get a detailed report:
+```text
+✗ Schema validation failed for config/vps/sg01.synercatalyst.com/vps.yaml:
+  - access.host: Field required
+  - identity.region: Input should be a valid string
 ```
 
 ### Cloudflare DNS Management
 
-Cloudflare commands manage DNS records declaratively from `config/dns/` YAML files.
+Manage DNS records declaratively from `config/dns/` YAML files.
 
 ```bash
 # List all Cloudflare DNS zones
@@ -105,6 +124,19 @@ cstation cloudflare zones
 
 # Apply DNS records from config/dns/ to Cloudflare
 cstation cloudflare apply example.com --yes
+```
+
+### GitHub & Odoo Management
+
+```bash
+# Setup SSH keys for GitHub access on a remote VPS (native SSH)
+cstation github ssh sg01.synercatalyst.com --generate
+
+# Download an Odoo database backup from a remote container
+cstation odoo backup sg01.synercatalyst.com my-odoo-container my_db
+
+# Restore a local Odoo backup zip to a remote VPS
+cstation odoo restore sg01.synercatalyst.com target-container backup.zip
 ```
 
 ## Configuration

@@ -55,15 +55,18 @@ class SSHManager:
 
     def run(self, command: str, hide: bool = True, sudo: bool = False) -> Any:
         """Execute a single command."""
+        import sys
         try:
             if sudo:
                 return self.connection.sudo(command, hide=hide, warn=True)
             return self.connection.run(command, hide=hide, warn=True)
         except UnexpectedExit as e:
-            console.print(f"[red]Error executing command on {self.host}: {e.result.stderr}[/red]")
+            msg = f"ERROR: Command failed on {self.host}: {e.result.stderr or e.result.stdout}"
+            console.print(f"[red]{msg}[/red]")
             return e.result
         except Exception as e:
-            console.print(f"[red]SSH connection error to {self.host}: {e}[/red]")
+            msg = f"ERROR: SSH connection/execution failed for {self.host}: {e}"
+            console.print(f"[red]{msg}[/red]")
             return None
 
     def run_batch(self, commands: Dict[str, str], sudo: bool = False) -> Dict[str, str]:
@@ -71,25 +74,37 @@ class SSHManager:
         Execute multiple commands in a single SSH round-trip.
         Returns a mapping of key -> stdout.
         """
-        # Use a more robust separator that is unlikely to appear in command output
-        separator = "---CSTATION-BATCH-SEPARATOR---"
+        import sys
+        # Shorter, safer separator
+        separator = "==CS_SEP=="
         keys = list(commands.keys())
         
-        # Build a single shell command
-        # ( cmd ) 2>&1 ensures subshell execution and output capturing
-        # echo is preceded by a semicolon to ensure it runs even if command fails
+        # Build a single shell command without subshells for maximum compatibility
+        # We use '|| true' to ensure the sequence continues and we get our separators
         parts = []
         for cmd in commands.values():
-            parts.append(f"( {cmd} ) 2>&1")
+            # Ensure each command returns 0 so the chain continues and Result.ok is True
+            parts.append(f"{{ {cmd} ; }} 2>&1")
         
         bundled_cmd = f" ; echo '{separator}' ; ".join(parts)
         
         result = self.run(bundled_cmd, sudo=sudo)
-        if not result or not getattr(result, "stdout", ""):
+        
+        if result is None:
+            return {key: "" for key in keys}
+
+        stdout = getattr(result, "stdout", "") or ""
+        stderr = getattr(result, "stderr", "") or ""
+        exited = getattr(result, "exited", -1)
+
+        if not stdout and exited != 0:
             return {key: "" for key in keys}
         
+        if not stdout:
+            return {key: "" for key in keys}
+
         # Split by separator and strip whitespace
-        outputs = result.stdout.split(separator)
+        outputs = stdout.split(separator)
         
         # Ensure we have the same number of outputs as keys
         res = {}

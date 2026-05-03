@@ -10,6 +10,7 @@ from rich.table import Table
 
 from cstation.ssh import SSHManager
 from cstation.config import get_vps_secrets
+from cstation.models import VPSConfig, ContainerConfig
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 from .services.registry import get_service, available_services
 from .services import TraefikService, PortainerService  # noqa: F401 — auto-register
@@ -39,7 +40,8 @@ def _discover_fragments(vps_dir: Path) -> list[Path]:
     return sorted(p for p in vps_dir.glob("*.yaml") if p.name != "vps.yaml")
 
 
-def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list[tuple[str, dict]]:
+def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list[tuple[str, ContainerConfig, str]]:
+    from pydantic import ValidationError
     fragments = []
     for frag_path in _discover_fragments(vps_dir):
         with frag_path.open("r", encoding="utf-8") as f:
@@ -49,17 +51,28 @@ def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list
         kind = data.get("kind", "")
         if kind not in ("Container", "Stack"):
             continue
-        name = data.get("name", frag_path.stem)
-        if service_filter and name != service_filter:
+        
+        try:
+            config = ContainerConfig(**data)
+            name = config.name
+            if service_filter and name != service_filter:
+                continue
+            
+            status = "enabled" if config.enabled else "disabled"
+            fragments.append((name, config, status))
+        except ValidationError as e:
+            console.print(f"[red]✗[/red] Schema validation failed for {frag_path}:")
+            for error in e.errors():
+                loc = ".".join(str(l) for l in error["loc"])
+                msg = error["msg"]
+                console.print(f"  - [bold]{loc}[/bold]: {msg}")
+            # Skip invalid fragments instead of crashing
             continue
-        if not data.get("enabled", True):
-            fragments.append((name, data, "disabled"))
-        else:
-            fragments.append((name, data, "enabled"))
+            
     return fragments
 
 
-def _preflight_check(ssh: SSHManager, vps_data: dict) -> bool:
+def _preflight_check(ssh: SSHManager, vps_data: VPSConfig) -> bool:
     result = ssh.run("docker info >/dev/null 2>&1 && echo ok || echo missing", hide=True, sudo=True)
     status = getattr(result, "stdout", "").strip() if result else "missing"
     if status != "ok":
@@ -70,7 +83,8 @@ def _preflight_check(ssh: SSHManager, vps_data: dict) -> bool:
     networks = set()
     if result and getattr(result, "stdout", "").strip():
         networks = {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
-    required_network = (vps_data.get("docker", {}).get("networks") or ["PW_NET"])[0]
+    
+    required_network = vps_data.docker.networks[0] if vps_data.docker.networks else "PW_NET"
     if required_network not in networks:
         console.print(f"[red]✗[/red] Docker network {required_network} does not exist on the VPS.")
         console.print("[dim]Run 'cstation vps apply <vps>' first.[/dim]")
@@ -78,12 +92,12 @@ def _preflight_check(ssh: SSHManager, vps_data: dict) -> bool:
     return True
 
 
-def _check_port_collisions(ssh: SSHManager, fragments: list) -> list[str]:
+def _check_port_collisions(ssh: SSHManager, fragments: list[tuple[str, ContainerConfig, str]]) -> list[str]:
     declared_ports: dict[str, str] = {}
-    for name, data, status in fragments:
+    for name, config, status in fragments:
         if status == "disabled":
             continue
-        for port_spec in data.get("ports", []):
+        for port_spec in config.ports:
             host_port = port_spec.split(":")[0] if ":" in port_spec else port_spec
             if host_port in declared_ports:
                 return [f"Port {host_port} declared by both {declared_ports[host_port]} and {name}"]
@@ -91,33 +105,35 @@ def _check_port_collisions(ssh: SSHManager, fragments: list) -> list[str]:
     return []
 
 
-def _get_service_instance(name: str, kind: str, config: dict | None = None):
+def _get_service_instance(name: str, kind: str, config: ContainerConfig | None = None):
     try:
         svc_cls = get_service(name)
         return svc_cls()
     except ValueError:
         pass
-    if config and config.get("odoo_conf"):
+    
+    if config and config.odoo_conf:
         from .services.odoo import OdooService
         svc = OdooService()
-        svc.name = name
-        svc.kind = kind
-        return svc
-    from .services.image_service import ImageService
-    svc = ImageService()
+    else:
+        from .services.image_service import ImageService
+        svc = ImageService()
+        
     svc.name = name
     svc.kind = kind
     return svc
 
 
-def _resolve_secrets(vps_name: str, fragments: list) -> list:
+def _resolve_secrets(vps_name: str, fragments: list[tuple[str, ContainerConfig, str]]) -> list[tuple[str, ContainerConfig, str]]:
     resolved_fragments = []
-    for name, data, status in fragments:
-        if status == "enabled" and data.get("secrets"):
+    for name, config, status in fragments:
+        if status == "enabled" and config.secrets:
             secrets = get_vps_secrets(vps_name, name)
             if secrets:
-                data = {**data, "_resolved_secrets": secrets}
-        resolved_fragments.append((name, data, status))
+                # Store resolved secrets for the apply/plan phase
+                # We use a custom attribute that won't interfere with Pydantic validation
+                setattr(config, "_resolved_secrets", secrets)
+        resolved_fragments.append((name, config, status))
     return resolved_fragments
 
 
@@ -183,7 +199,7 @@ def docker_apply(
     vps_dir = _resolve_vps_dir(Path(vps))
     vps_data = _load_vps_config(vps_dir)
 
-    identity_name = vps_dir.name
+    identity_name = vps_data.identity.name
     console.print(f"\n[bold]Docker Apply: {identity_name}[/bold] [dim]({vps_dir}/)[/dim]\n")
 
     ssh = _ssh_from_config(vps_data)
@@ -242,7 +258,7 @@ def docker_status(
 
     fragments = _load_fragments(vps_dir, service)
 
-    table = Table(title=f"Docker Services: {vps_dir.name}")
+    table = Table(title=f"Docker Services: {vps_data.identity.name}")
     table.add_column("Service", style="cyan")
     table.add_column("Kind")
     table.add_column("Enabled")
@@ -250,9 +266,9 @@ def docker_status(
     table.add_column("Image")
 
     for name, data, status in fragments:
-        kind = data.get("kind", "Container")
+        kind = data.kind
         enabled = status
-        image = data.get("image", "-")
+        image = data.image
         if status == "disabled":
             table.add_row(name, kind, enabled, "disabled", image)
             continue

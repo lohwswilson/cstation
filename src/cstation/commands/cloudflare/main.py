@@ -17,7 +17,9 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from pydantic import ValidationError
 from cstation.config import get_config
+from cstation.models import DNSConfig, DNSRecordConfig
 from cstation.providers.cloudflare import CloudflareProvider, DNSRecord, DNSZone
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
@@ -32,37 +34,48 @@ cloudflare_app = typer.Typer(
 DNS_DIR = Path("config/dns")
 
 
-def _load_domain_config(domain: str) -> dict:
+def _load_domain_config(domain: str) -> DNSConfig:
     dns_file = DNS_DIR / f"{domain}.yaml"
     if not dns_file.exists():
         console.print(f"[red]✗[/red] No DNS config found for {domain}")
         console.print(f"[dim]Expected: {dns_file}[/dim]")
         console.print("[dim]Create it with kind: DNS and domain: <domain>[/dim]")
         raise typer.Exit(6)
+    
     with dns_file.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
+    
     if not isinstance(data, dict):
         console.print(f"[red]✗[/red] Invalid {dns_file}: expected mapping")
         raise typer.Exit(6)
-    if data.get("kind") != "DNS":
-        console.print(f"[red]✗[/red] Invalid {dns_file}: expected kind=DNS, got kind={data.get('kind')}")
+    
+    try:
+        config = DNSConfig(**data)
+        if config.domain != domain:
+            console.print(f"[red]✗[/red] Domain mismatch: file declares '{config.domain}' but expected '{domain}'")
+            raise typer.Exit(6)
+        return config
+    except ValidationError as e:
+        console.print(f"[red]✗[/red] Schema validation failed for {dns_file}:")
+        for error in e.errors():
+            loc = ".".join(str(l) for l in error["loc"])
+            msg = error["msg"]
+            console.print(f"  - [bold]{loc}[/bold]: {msg}")
         raise typer.Exit(6)
-    declared_domain = data.get("domain", "")
-    if declared_domain and declared_domain != domain:
-        console.print(f"[red]✗[/red] Domain mismatch: file declares '{declared_domain}' but expected '{domain}'")
-        raise typer.Exit(6)
-    return data
 
 
-def _load_legacy_config(vps_dir: Path) -> dict:
+def _load_legacy_config(vps_dir: Path) -> Optional[DNSConfig]:
     dns_yaml = vps_dir / "dns.yaml"
     if not dns_yaml.exists():
-        return {}
+        return None
     with dns_yaml.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict) or data.get("kind") != "DNS":
-        return {}
-    return data
+        return None
+    try:
+        return DNSConfig(**data)
+    except ValidationError:
+        return None
 
 
 def _list_available_domains() -> list[str]:
@@ -80,46 +93,23 @@ def _resolve_record_name(rec_name: str, domain: str) -> str:
     return f"{rec_name}.{domain}"
 
 
-def _dns_records_from_domain_config(data: dict) -> list[DNSRecord]:
-    domain = data.get("domain", "")
+def _dns_records_from_domain_config(config: DNSConfig) -> list[DNSRecord]:
+    domain = config.domain
     records = []
-    for rec_data in data.get("records", []):
-        full_name = _resolve_record_name(rec_data.get("name", ""), domain)
+    for rec in config.records:
+        full_name = _resolve_record_name(rec.name, domain)
         records.append(DNSRecord(
             domain=domain,
             name=full_name,
-            type=rec_data.get("type", ""),
-            content=rec_data.get("value", ""),
-            ttl=rec_data.get("ttl", 1),
-            priority=rec_data.get("priority"),
-            proxied=rec_data.get("proxied", False),
-            comment=rec_data.get("comment", "cstation"),
-            srv_weight=rec_data.get("srv_weight"),
-            srv_port=rec_data.get("srv_port"),
+            type=rec.type,
+            content=rec.value,
+            ttl=rec.ttl,
+            priority=rec.priority,
+            proxied=rec.proxied,
+            comment=rec.comment,
+            srv_weight=rec.srv_weight,
+            srv_port=rec.srv_port,
         ))
-    return records
-
-
-def _dns_records_from_legacy_config(data: dict) -> list[DNSRecord]:
-    records = []
-    for domain, domain_data in data.get("domains", {}).items():
-        if not isinstance(domain_data, dict):
-            continue
-        domain_records = domain_data.get("records", [])
-        for rec_data in domain_records:
-            full_name = _resolve_record_name(rec_data.get("name", ""), domain)
-            records.append(DNSRecord(
-                domain=domain,
-                name=full_name,
-                type=rec_data.get("type", ""),
-                content=rec_data.get("value", ""),
-                ttl=rec_data.get("ttl", 1),
-                priority=rec_data.get("priority"),
-                proxied=rec_data.get("proxied", False),
-                comment=rec_data.get("comment", "cstation"),
-                srv_weight=rec_data.get("srv_weight"),
-                srv_port=rec_data.get("srv_port"),
-            ))
     return records
 
 

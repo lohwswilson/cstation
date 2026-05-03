@@ -4,6 +4,7 @@ CStation - Infrastructure Management CLI
 A DevOps CLI tool for managing infrastructure using Ansible
 """
 
+import sys
 import typer
 from rich import print as rprint
 
@@ -16,6 +17,7 @@ from .commands.github.main import github_app
 from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
 from .commands.cloudflare.main import cloudflare_app
+from .commands.odoo.main import odoo_app
 
 
 def version_callback(value: bool):
@@ -39,6 +41,7 @@ app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
 app.add_typer(cloudflare_app)
+app.add_typer(odoo_app)
 
 
 @app.callback()

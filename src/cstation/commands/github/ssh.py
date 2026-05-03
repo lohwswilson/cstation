@@ -6,27 +6,25 @@ GitHub SSH key management for remote servers
 import os
 import subprocess
 import typer
+import base64
 from pathlib import Path
 from typing import Optional
 from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
-from ..server.inventory_utils import host_exists
+
+from cstation.ssh import SSHManager
+from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 
 console = Console()
 
 def setup_github_ssh(
-    hostname: str = typer.Argument(..., help="Target hostname from inventory"),
-    inventory_path: Optional[str] = typer.Option(
-        "/etc/cstation/ansible/inventory", 
-        "-i", "--inventory", 
-        help="Inventory directory path"
-    ),
+    target: str = typer.Argument(..., help="VPS name (e.g. sg01.synercatalyst.com)"),
     key_path: Optional[str] = typer.Option(
         None,
         "-k", "--key-path",
-        help="Path to SSH private key for GitHub (default: ~/.ssh/id_rsa)"
+        help="Path to local SSH private key for GitHub (default: ~/.ssh/id_rsa)"
     ),
     github_user: Optional[str] = typer.Option(
         None,
@@ -45,44 +43,42 @@ def setup_github_ssh(
     )
 ):
     """
-    Setup SSH key for GitHub access on remote servers using Ansible
+    Setup SSH key for GitHub access on a remote VPS.
     """
-    
+    # 1. Resolve VPS and build SSH manager
+    vps_dir = _resolve_vps_dir(Path(target))
+    vps_data = _load_vps_config(vps_dir)
+    ssh = _ssh_from_config(vps_data)
+
     # Default SSH key path
     if key_path is None:
         key_path = os.path.expanduser("~/.ssh/id_rsa")
-    
+
     public_key_path = f"{key_path}.pub"
-    
+
     # Get GitHub username if not provided
     if github_user is None:
         github_user = Prompt.ask("Enter your GitHub username")
-    
-    # Check if SSH key exists
+
+    # Check if local SSH key exists
     if not os.path.exists(key_path) or not os.path.exists(public_key_path):
         if generate_key:
             console.print(f"[yellow]Generating new SSH key pair for GitHub...[/yellow]")
-            
-            # Generate SSH key with GitHub email
             email = Prompt.ask("Enter email for SSH key", default=f"{github_user}@users.noreply.github.com")
             try:
                 subprocess.run([
-                    "ssh-keygen", 
-                    "-t", "ed25519", 
-                    "-C", email,
-                    "-f", key_path,
-                    "-N", ""
+                    "ssh-keygen", "-t", "ed25519", "-C", email, "-f", key_path, "-N", ""
                 ], check=True)
                 console.print(f"[green]SSH key generated: {key_path}[/green]")
             except subprocess.CalledProcessError as e:
                 console.print(f"[red]Failed to generate SSH key: {e}[/red]")
                 raise typer.Exit(1)
         else:
-            console.print(f"[red]SSH key not found: {key_path}[/red]")
+            console.print(f"[red]Local SSH key not found: {key_path}[/red]")
             console.print(f"[yellow]Use --generate to create a new key pair[/yellow]")
             raise typer.Exit(1)
-    
-    # Read the private and public keys
+
+    # Read the keys
     try:
         with open(key_path, 'r') as f:
             private_key = f.read().strip()
@@ -91,163 +87,69 @@ def setup_github_ssh(
     except Exception as e:
         console.print(f"[red]Failed to read SSH keys: {e}[/red]")
         raise typer.Exit(1)
-    
-    # Check if inventory directory exists
-    if not os.path.exists(inventory_path):
-        console.print(f"[red]Inventory directory not found: {inventory_path}[/red]")
-        raise typer.Exit(1)
-    
-    # Check if host exists in inventory
-    if not host_exists(hostname, inventory_path):
-        console.print(f"[red]Host '{hostname}' not found in inventory[/red]")
-        raise typer.Exit(1)
-    
+
     console.print(Panel.fit(
-        f"[bold]Setting up GitHub SSH access for host: {hostname}[/bold]\n"
+        f"[bold]Setting up GitHub SSH access for VPS: {vps_data.identity.name}[/bold]\n"
         f"GitHub User: {github_user}\n"
-        f"Key: {key_path}\n"
-        f"Inventory: {inventory_path}",
+        f"Host: {ssh.host}\n"
+        f"Local Key: {key_path}",
         title="GitHub SSH Setup",
         border_style="blue"
     ))
-    
-    # Show public key for GitHub if requested
+
     if add_to_github:
         console.print("\n[yellow]Add this public key to your GitHub account:[/yellow]")
-        console.print(Panel.fit(
-            public_key,
-            title="Public Key for GitHub",
-            border_style="green"
-        ))
+        console.print(Panel.fit(public_key, title="Public Key for GitHub", border_style="green"))
         console.print(f"\n[blue]Go to: https://github.com/settings/ssh/new[/blue]")
-        console.print(f"[blue]Title: {hostname}-github-key[/blue]")
-        
         if not Confirm.ask("Have you added the public key to GitHub?"):
             console.print("[yellow]Please add the public key to GitHub first, then run this command again.[/yellow]")
             raise typer.Exit(0)
-    
-    # Confirm before proceeding
-    if not Confirm.ask("Proceed with GitHub SSH setup on remote server?"):
+
+    if not Confirm.ask("Proceed with remote VPS setup?"):
         console.print("[yellow]Operation cancelled[/yellow]")
         raise typer.Exit(0)
-    
-    # Create temporary ansible playbook for GitHub SSH setup
-    playbook_content = f"""
----
-- name: Setup GitHub SSH Access
-  hosts: {hostname}
-  gather_facts: no
-  vars:
-    github_user: "{github_user}"
-    ssh_key_path: "/home/{{{{ ansible_user | default('root') }}}}/.ssh/github_rsa"
-  tasks:
-    - name: Ensure .ssh directory exists
-      file:
-        path: "/home/{{{{ ansible_user | default('root') }}}}/.ssh"
-        state: directory
-        mode: '0700'
-        owner: "{{{{ ansible_user | default('root') }}}}"
-      become: yes
-    
-    - name: Copy GitHub SSH private key
-      copy:
-        content: |
-{chr(10).join('          ' + line for line in private_key.split(chr(10)))}
-        dest: "{{{{ ssh_key_path }}}}"
-        mode: '0600'
-        owner: "{{{{ ansible_user | default('root') }}}}"
-      become: yes
-    
-    - name: Copy GitHub SSH public key
-      copy:
-        content: "{public_key}"
-        dest: "{{{{ ssh_key_path }}}}.pub"
-        mode: '0644'
-        owner: "{{{{ ansible_user | default('root') }}}}"
-      become: yes
-    
-    - name: Add GitHub to known_hosts
-      known_hosts:
-        name: github.com
-        key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
-        path: "/home/{{{{ ansible_user | default('root') }}}}/.ssh/known_hosts"
-      become: yes
-    
-    - name: Create SSH config for GitHub
-      blockinfile:
-        path: "/home/{{{{ ansible_user | default('root') }}}}/.ssh/config"
-        create: yes
-        mode: '0600'
-        owner: "{{{{ ansible_user | default('root') }}}}"
-        marker: "# {{{{ ansible_managed }}}} - GitHub SSH Config"
-        block: |
-          Host github.com
-              HostName github.com
-              User git
-              IdentityFile {{{{ ssh_key_path }}}}
-              IdentitiesOnly yes
-      become: yes
-    
-    - name: Test GitHub SSH connection
-      command: ssh -T git@github.com
-      register: github_test
-      failed_when: github_test.rc not in [0, 1]
-      changed_when: false
-      become: yes
-      become_user: "{{{{ ansible_user | default('root') }}}}"
-    
-    - name: Display GitHub connection result
-      debug:
-        msg: "{{{{ github_test.stderr }}}}"
+
+    # 2. Remote Setup via SSHManager
+    remote_ssh_dir = "~/.ssh"
+    remote_key_path = "~/.ssh/github_rsa"
+
+    console.print("[yellow]Performing remote setup...[/yellow]")
+
+    # Ensure .ssh exists
+    ssh.run(f"mkdir -p {remote_ssh_dir} && chmod 700 {remote_ssh_dir}", sudo=False)
+
+    # Copy private key
+    encoded_private = base64.b64encode(private_key.encode()).decode()
+    ssh.run(f"echo '{encoded_private}' | base64 -d > {remote_key_path} && chmod 600 {remote_key_path}", sudo=False)
+
+    # Copy public key
+    ssh.run(f"echo '{public_key}' > {remote_key_path}.pub && chmod 644 {remote_key_path}.pub", sudo=False)
+
+    # Add GitHub to known_hosts
+    github_key = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+    ssh.run(f"grep -q 'github.com' {remote_ssh_dir}/known_hosts 2>/dev/null || echo '{github_key}' >> {remote_ssh_dir}/known_hosts", sudo=False)
+
+    # Configure SSH config
+    ssh_config_block = f"""
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile {remote_key_path}
+    IdentitiesOnly yes
 """
-    
-    # Write temporary playbook
-    temp_playbook = "/tmp/github_ssh_setup.yml"
-    try:
-        with open(temp_playbook, 'w') as f:
-            f.write(playbook_content)
-    except Exception as e:
-        console.print(f"[red]Failed to create temporary playbook: {e}[/red]")
+    encoded_config = base64.b64encode(ssh_config_block.encode()).decode()
+    ssh.run(f"echo '{encoded_config}' | base64 -d >> {remote_ssh_dir}/config && chmod 600 {remote_ssh_dir}/config", sudo=False)
+
+    # Test connection
+    console.print("[yellow]Testing GitHub SSH connection...[/yellow]")
+    result = ssh.run("ssh -T git@github.com", hide=True, sudo=False)
+    # ssh -T git@github.com returns 1 on success for some reason, but prints a welcome message
+    stderr = getattr(result, "stderr", "")
+    if "Hi" in stderr or "successfully authenticated" in stderr:
+        console.print("[green]✓ GitHub SSH setup completed successfully![/green]")
+    else:
+        console.print(f"[red]✗ Connection test failed:[/red]\n{stderr}")
         raise typer.Exit(1)
-    
-    # Run ansible playbook
-    console.print("[yellow]Running Ansible playbook for GitHub SSH setup...[/yellow]")
-    try:
-        cmd = [
-            "ansible-playbook",
-            "-i", inventory_path,
-            temp_playbook,
-            "-v"
-        ]
-        
-        # Set environment to use our ansible.cfg
-        env = os.environ.copy()
-        env['ANSIBLE_CONFIG'] = '/etc/cstation/ansible/ansible.cfg'
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        
-        if result.returncode == 0:
-            console.print("[green]GitHub SSH setup completed successfully![/green]")
-            console.print("\n[bold]You can now clone repositories using:[/bold]")
-            console.print(f"git clone git@github.com:{github_user}/repository.git")
-        else:
-            console.print(f"[red]Ansible playbook failed:[/red]")
-            console.print(result.stderr)
-            raise typer.Exit(1)
-            
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Failed to run ansible playbook: {e}[/red]")
-        raise typer.Exit(1)
-    except FileNotFoundError:
-        console.print(f"[red]ansible-playbook command not found. Please install Ansible.[/red]")
-        raise typer.Exit(1)
-    finally:
-        # Clean up temporary playbook
-        if os.path.exists(temp_playbook):
-            os.remove(temp_playbook)
-    
-    console.print("\n[green]GitHub SSH setup process completed![/green]")
-    console.print(f"\n[blue]Next steps:[/blue]")
-    console.print(f"1. SSH to {hostname}")
-    console.print(f"2. Test GitHub access: ssh -T git@github.com")
-    console.print(f"3. Clone repositories: git clone git@github.com:{github_user}/repo.git")
+
+    console.print(f"\n[blue]You can now clone repositories on {vps_data.identity.name} using:[/blue]")
+    console.print(f"git clone git@github.com:{github_user}/repository.git")
