@@ -47,12 +47,15 @@ def odoo_backup(
 
     backup_path = None
     for d in BACKUP_DIRS:
-        result = ssh.run(
-            f"docker exec {container} sh -c 'ls -1t {d}/{dbname}_*.zip 2>/dev/null | head -1'",
-            hide=True,
-        )
-        if result and getattr(result, "stdout", "").strip():
-            backup_path = result.stdout.strip()
+        for pattern in [f"{dbname}_*.zip", f"*_{dbname}.zip"]:
+            result = ssh.run(
+                f"docker exec {container} sh -c 'ls -1t {d}/{pattern} 2>/dev/null | head -1'",
+                hide=True,
+            )
+            if result and getattr(result, "stdout", "").strip():
+                backup_path = result.stdout.strip()
+                break
+        if backup_path:
             break
 
     if not backup_path:
@@ -281,6 +284,39 @@ def odoo_restore(
         hide=True,
     )
     console.print(f"  [green]✓[/green] Restored dump.sql into {dest_dbname}")
+
+    console.print(f"  [dim]Reassigning table ownership to {db_user}...[/dim]")
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"REASSIGN OWNED BY CURRENT_USER TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"{dest_dbname}\\\" TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
+        f" -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \\\"{db_user}\\\";\"",
+        sudo=True,
+    )
+    console.print(f"  [green]✓[/green] Reassigned ownership to {db_user}")
 
     console.print(f"  [dim]Copying filestore...[/dim]")
     ssh.run(f"mkdir -p {filestore_dir}", sudo=True)

@@ -68,6 +68,25 @@ docker:
   networks: [PW_NET]
 ```
 
+### Image Management
+- **`image build <name>`**: Build multi-arch Docker image from `config/images/<name>/` and push to registry.
+- **`image list`**: List available image configs in `config/images/`.
+
+Images are defined in `config/images/<name>/image.yaml`. See `synercatalyst-odoo.13.0` for a full example with Python compatibility patches, dummy deb packages, and pip pinning.
+
 ## Command Separation
 - `cstation vps apply`: OS + Docker infrastructure setup.
 - `cstation docker apply`: Container deployment (depends on `vps apply` having run first).
+- `cstation image build`: Build and push Docker images (depends on Docker buildx and registry credentials).
+
+## Docker Image Build — Known Compatibility Issues (Odoo 13 on Python 3.10)
+
+See `docs/specs/2026-05-03-odoo-13-docker-image.md` for full details.
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| `werkzeug.contrib` not found | Removed in werkzeug 1.0+ | Pin `werkzeug<1.0` via pip, delete system werkzeug |
+| `setrlimit` TypeError (float) | Python 3.10 requires int | Patch `server.py`: cast args with `int()` |
+| `inspect.formatargspec` removed | Python 3.12+ | Use Ubuntu 22.04 (Python 3.10) |
+| `python3-vatnumber` missing | pip `vatnumber` uses `use_2to3` | Dummy deb via `equivs` |
+| `reportlab.graphics.barcode` missing | Minimal system package | Install `reportlab` via pip |
