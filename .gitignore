@@ -11,3 +11,9 @@ wheels/
 config/
 # Environment variables
 .env
+
+# Odoo backup archives
+*.zip
+
+# macOS
+.DS_Store

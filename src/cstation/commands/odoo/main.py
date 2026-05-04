@@ -326,6 +326,15 @@ def odoo_restore(
     ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}", sudo=True)
     console.print(f"  [green]✓[/green] Copied filestore")
 
+    console.print(f"  [dim]Creating checklist directory...[/dim]")
+    ssh.run(f"mkdir -p {filestore_dir}/checklist", sudo=True)
+    ssh.run(
+        f"bash -c 'cd {filestore_dir}/checklist && for i in $(seq 0 255); do mkdir -p $(printf \"%02x\" $i); done'",
+        sudo=True,
+    )
+    ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}/checklist", sudo=True)
+    console.print(f"  [green]✓[/green] Created checklist directory (256 subdirs)")
+
     console.print(f"  [dim]Cleaning up temp files...[/dim]")
     ssh.run(f"rm -rf {restore_dir}", sudo=True)
 
