@@ -111,14 +111,27 @@ def _get_service_instance(name: str, kind: str, config: ContainerConfig | None =
         return svc_cls()
     except ValueError:
         pass
-    
+
+    if config and config.image:
+        image_lower = config.image.lower()
+        for svc_name in available_services():
+            if svc_name in image_lower:
+                try:
+                    svc_cls = get_service(svc_name)
+                    svc = svc_cls()
+                    svc.name = name
+                    svc.kind = kind
+                    return svc
+                except ValueError:
+                    pass
+
     if config and config.odoo_conf:
         from .services.odoo import OdooService
         svc = OdooService()
     else:
         from .services.image_service import ImageService
         svc = ImageService()
-        
+
     svc.name = name
     svc.kind = kind
     return svc

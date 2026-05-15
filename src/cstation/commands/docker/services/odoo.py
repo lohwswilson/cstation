@@ -143,8 +143,9 @@ class OdooService(ImageService):
             f"EXCEPTION WHEN duplicate_object THEN NULL; "
             f"END $$;"
         )
+        escaped_sql = sql.replace("$$", "\\$\\$")
         ssh.run(
-            f"docker exec {db_container} psql -U postgres -c \"{sql}\"",
+            f"docker exec {db_container} psql -U postgres -c \"{escaped_sql}\"",
             sudo=True,
         )
         console.print(f"  [green]✓[/green] created DB user {db_user}")

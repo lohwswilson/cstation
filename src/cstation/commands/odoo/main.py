@@ -10,15 +10,16 @@ import yaml
 from rich.console import Console
 
 from cstation.ssh import SSHManager
-from cstation.config import get_vps_secrets
+from cstation.config import get_vps_secrets, get_config
 from cstation.models import VPSConfig, ContainerConfig
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
+from cstation.commands.pw.sync import PWSync
 
 console = Console()
 
 odoo_app = typer.Typer(
     name="odoo",
-    help="Odoo database backup and restore",
+    help="Odoo database backup, restore, and source code sync",
     invoke_without_command=True,
 )
 
@@ -322,8 +323,6 @@ def odoo_restore(
     ssh.run(f"mkdir -p {filestore_dir}", sudo=True)
     source_filestore = f"{restore_dir}/filestore"
     ssh.run(f"cp -r {source_filestore}/* {filestore_dir}/", sudo=True)
-    owner_parts = owner.split(":")
-    ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}", sudo=True)
     console.print(f"  [green]✓[/green] Copied filestore")
 
     console.print(f"  [dim]Creating checklist directory...[/dim]")
@@ -332,8 +331,11 @@ def odoo_restore(
         f"bash -c 'cd {filestore_dir}/checklist && for i in $(seq 0 255); do mkdir -p $(printf \"%02x\" $i); done'",
         sudo=True,
     )
-    ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}/checklist", sudo=True)
     console.print(f"  [green]✓[/green] Created checklist directory (256 subdirs)")
+
+    owner_parts = owner.split(":")
+    ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}", sudo=True)
+    console.print(f"  [green]✓[/green] Set filestore ownership to {owner}")
 
     console.print(f"  [dim]Cleaning up temp files...[/dim]")
     ssh.run(f"rm -rf {restore_dir}", sudo=True)
@@ -347,3 +349,35 @@ def odoo_restore(
     console.print(f"  Database: {dest_dbname}")
     console.print(f"  Container: {container}")
     console.print(f"  VPS: {identity_name}")
+
+
+@odoo_app.command("sync")
+def odoo_sync(
+    host: str = typer.Argument(..., help="Target hostname (e.g. sg06)"),
+    version: str = typer.Argument(..., help="PW version (e.g. 3.0, 18.0)"),
+    port: int = typer.Option(22, "--port", "-p", help="SSH port"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be synced without executing"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+) -> None:
+    """Sync Odoo PW source code and addons to a VPS for Docker container access."""
+    config = get_config()
+    pw_sync = PWSync(config, console)
+
+    try:
+        success = pw_sync.sync_files(
+            host=host,
+            version=version,
+            port=port,
+            dry_run=dry_run,
+            verbose=verbose,
+            exclude_cache=True,
+            progress=None,
+        )
+        if success:
+            console.print(f"[green]✓[/green] Synced PW.{version} and PW_ADDONS.{version} to {host}")
+        else:
+            console.print(f"[red]✗[/red] Sync failed for {host}")
+            raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)

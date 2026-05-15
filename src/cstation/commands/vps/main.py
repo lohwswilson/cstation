@@ -24,7 +24,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-from cstation.config import get_config
+from cstation.config import get_config, CSTATION_VPS_DIR
 from cstation.ssh import SSHManager
 from cstation.models import VPSConfig
 from cstation.providers.hetzner import HetznerProvider
@@ -749,7 +749,7 @@ def vps_status(
 ) -> None:
     """Show detailed live status for a specific VPS instance via SSH."""
     # Try to resolve as a local VPS name first (silent check)
-    vps_dir = Path("config/vps") / target
+    vps_dir = CSTATION_VPS_DIR / target
     if vps_dir.is_dir() and (vps_dir / "vps.yaml").exists():
         try:
             vps_data = _load_vps_config(vps_dir)
@@ -806,7 +806,7 @@ def vps_status(
         _print_vps_status_table(v)
     except ProviderNotFoundError as e:
         console.print(f"[red]✗[/red] {e}")
-        console.print("[dim]If this is a managed server, ensure its directory name in config/vps/ matches exactly.[/dim]")
+        console.print("[dim]If this is a managed server, ensure its directory name in ~/.config/cstation/vps/ matches exactly.[/dim]")
         raise typer.Exit(3)
     except ProviderAuthError as e:
         console.print(f"[red]✗[/red] {e}")
@@ -895,16 +895,16 @@ def _resolve_vps_dir(vps_arg: Path) -> Path:
     """Resolve a VPS argument to a config directory.
 
     Accepts:
-    - A directory path: config/vps/eu01.synercatalyst.com/
-    - A VPS name: eu01.synercatalyst.com (searches config/vps/)
+    - A directory path: ~/.config/cstation/vps/eu01.synercatalyst.com/
+    - A VPS name: eu01.synercatalyst.com (searches ~/.config/cstation/vps/)
     """
     if vps_arg.is_dir():
         return vps_arg
-    candidate = Path("config/vps") / str(vps_arg)
+    candidate = CSTATION_VPS_DIR / str(vps_arg)
     if candidate.is_dir():
         return candidate
     console.print(f"[red]✗[/red] VPS directory not found: {vps_arg}")
-    console.print(f"[dim]Searched: {vps_arg} (direct), {candidate} (config/vps/)[/dim]")
+    console.print(f"[dim]Searched: {vps_arg} (direct), {candidate} (~/.config/cstation/vps/)[/dim]")
     raise typer.Exit(6)
 
 
@@ -1454,7 +1454,7 @@ def _apply_docker_directories(ssh: SSHManager, directories: list[str], *, dry_ru
 
 @vps_app.command("plan")
 def vps_plan(
-    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or config/vps/eu01.synercatalyst.com)"),
+    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)"),
 ) -> None:
     """
     Dry-run: show what would be applied to the VPS without making changes.
@@ -1463,12 +1463,13 @@ def vps_plan(
     printing a summary of actions that `apply` would perform.
     """
     vps_dir = _resolve_vps_dir(Path(vps))
-    data = _load_vps_config(vps_dir)
+    model = _load_vps_config(vps_dir)
+    data = model.model_dump()
     identity = data.get("identity", {})
     name = identity.get("name", vps_dir.name)
     console.print(f"\n[bold]VPS Plan: {name}[/bold] [dim]({vps_dir}/vps.yaml)[/dim]\n")
 
-    ssh = _ssh_from_config(data)
+    ssh = _ssh_from_config(model)
     baseline = data.get("os", {}).get("baseline", {})
     docker_config = data.get("docker", {})
 
@@ -1530,7 +1531,7 @@ def vps_plan(
 
 @vps_app.command("apply")
 def vps_apply(
-    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or config/vps/eu01.synercatalyst.com)"),
+    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: upgrade_all, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories"),
 ) -> None:
@@ -1547,12 +1548,13 @@ def vps_apply(
       cstation vps apply eu01.synercatalyst.com --phase docker_daemon
     """
     vps_dir = _resolve_vps_dir(Path(vps))
-    data = _load_vps_config(vps_dir)
+    model = _load_vps_config(vps_dir)
+    data = model.model_dump()
     identity = data.get("identity", {})
     name = identity.get("name", vps_dir.name)
     console.print(f"\n[bold]VPS Apply: {name}[/bold] [dim]({vps_dir}/vps.yaml)[/dim]\n")
 
-    ssh = _ssh_from_config(data)
+    ssh = _ssh_from_config(model)
     baseline = data.get("os", {}).get("baseline", {})
     docker_config = data.get("docker", {})
 
@@ -1799,7 +1801,7 @@ def vps_init(
 
     resolved_name = vps.name
     resolved_region = vps.region or "unknown"
-    output_path = output_path or Path("config") / "vps" / resolved_name / "vps.yaml"
+    output_path = output_path or CSTATION_VPS_DIR / resolved_name / "vps.yaml"
 
     if output_path.exists() and not force:
         console.print(f"[red]✗[/red] Output file already exists: {output_path}")
@@ -1914,7 +1916,7 @@ def vps_remove(
 
     Examples:
       cstation vps remove eu01.synercatalyst.com
-      cstation vps remove config/vps/eu01.synercatalyst.com --yes
+      cstation vps remove ~/.config/cstation/vps/eu01.synercatalyst.com --yes
       cstation vps remove eu01.synercatalyst.com --skip-check
     """
     vps_dir = _resolve_vps_dir(Path(vps))
