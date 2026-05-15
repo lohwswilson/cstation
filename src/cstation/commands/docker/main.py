@@ -13,6 +13,7 @@ from cstation.config import get_vps_secrets
 from cstation.models import VPSConfig, ContainerConfig
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 from .services.registry import get_service, available_services
+from .services.image_service import ImageService
 from .services import TraefikService, PortainerService  # noqa: F401 — auto-register
 
 console = Console()
@@ -179,6 +180,13 @@ def docker_plan(
             console.print(f"[red]✗[/red] Port collision: {c}")
         raise typer.Exit(1)
 
+    for name, data, status in fragments:
+        if status == "enabled" and 'traefik' in name.lower():
+            svc = _get_service_instance(name, data.kind, data)
+            if hasattr(svc, '_resolve_and_cache_traefik_conf_dir'):
+                svc._resolve_and_cache_traefik_conf_dir(data)
+            break
+
     has_changes = False
     for name, data, status in fragments:
         if status == "disabled":
@@ -198,6 +206,7 @@ def docker_plan(
     if not has_changes:
         console.print("\n[green]✓ All services configured — no changes needed.[/green]")
 
+    ImageService.reset_traefik_conf_dir()
     console.print(f"\n[dim]Run 'cstation docker apply {identity_name}' to deploy changes.[/dim]")
 
 
@@ -232,6 +241,13 @@ def docker_apply(
             console.print(f"[red]✗[/red] Port collision: {c}")
         raise typer.Exit(1)
 
+    for name, data, status in fragments:
+        if status == "enabled" and 'traefik' in name.lower():
+            svc = _get_service_instance(name, data.kind, data)
+            if hasattr(svc, '_resolve_and_cache_traefik_conf_dir'):
+                svc._resolve_and_cache_traefik_conf_dir(data)
+            break
+
     enabled_fragments = [(n, d) for n, d, s in fragments if s == "enabled"]
     if not enabled_fragments:
         console.print("[dim]No enabled services to deploy.[/dim]")
@@ -255,6 +271,7 @@ def docker_apply(
         svc.apply(ssh, data)
         console.print()
 
+    ImageService.reset_traefik_conf_dir()
     console.print(f"[green]✓[/green] Docker apply complete for [bold]{identity_name}[/bold]")
 
 

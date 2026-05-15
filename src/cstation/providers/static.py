@@ -8,8 +8,7 @@ import yaml
 
 from cstation.providers.base import VPS, VPSProvider, VPSStatus
 from cstation.facts import load_cached_facts, format_facts_summary
-
-CONFIG_VPS_DIR = Path("config/vps")
+from cstation.config import CSTATION_VPS_DIR
 
 
 @dataclass
@@ -18,9 +17,9 @@ class StaticProvider(VPSProvider):
 
     def list_vps(self) -> list[VPS]:
         results: list[VPS] = []
-        if not CONFIG_VPS_DIR.is_dir():
+        if not CSTATION_VPS_DIR.is_dir():
             return results
-        for entry in sorted(CONFIG_VPS_DIR.iterdir()):
+        for entry in sorted(CSTATION_VPS_DIR.iterdir()):
             if not entry.is_dir():
                 continue
             vps_yaml = entry / "vps.yaml"
@@ -67,7 +66,7 @@ class StaticProvider(VPSProvider):
             from cstation.providers.errors import ProviderError
             raise ProviderError("Host or IP must be provided for static provider")
 
-        vps_dir = CONFIG_VPS_DIR / host
+        vps_dir = CSTATION_VPS_DIR / host
         summary = None
         if vps_dir.is_dir():
             cached = load_cached_facts(vps_dir)

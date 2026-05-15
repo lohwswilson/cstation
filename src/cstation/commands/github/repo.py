@@ -27,7 +27,7 @@ def manage_repo(
     action: Optional[str] = typer.Argument(None, help="Action: list, sync, clone"),
     repo_name: Optional[str] = typer.Argument(None, help="Repository name (for sync/clone action)"),
     config_file: Optional[str] = typer.Option(
-        "/etc/cstation/github/odoo_repos.sync.yml",
+        str(Path.home() / ".config" / "cstation" / "github" / "odoo_repos.sync.yml"),
         "-c", "--config",
         help="GitHub repositories configuration file"
     ),
@@ -304,7 +304,8 @@ def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_di
                             console.print(f"[yellow]    {merge_result.stderr.strip()}[/yellow]")
                     else:
                         console.print(f"[yellow]  ⚠ Warning: Failed to fetch from upstream[/yellow]")
-                        
+                        console.print(f"[yellow]    {fetch_upstream_result.stderr.strip()}[/yellow]")
+
                 except subprocess.TimeoutExpired:
                     console.print(f"[yellow]  ⚠ Warning: Upstream fetch timed out after 120 seconds[/yellow]")
                     console.print(f"[yellow]  Failed to fetch from upstream[/yellow]")

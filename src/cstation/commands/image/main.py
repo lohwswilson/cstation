@@ -11,11 +11,11 @@ from rich.console import Console
 from rich.table import Table
 
 from cstation.models import DockerImageConfig
-from cstation.config import get_config
+from cstation.config import get_config, CSTATION_IMAGES_DIR
 
 console = Console()
 
-IMAGES_DIR = Path("config/images")
+IMAGES_DIR = CSTATION_IMAGES_DIR
 
 
 def _discover_images(name_filter: Optional[str] = None) -> list[tuple[DockerImageConfig, Path]]:
@@ -96,7 +96,7 @@ def image_list() -> None:
     """List declared Docker images."""
     images = _discover_images()
     if not images:
-        console.print("[dim]No Docker image definitions found in config/images/[/dim]")
+        console.print("[dim]No Docker image definitions found in ~/.config/cstation/images/[/dim]")
         raise typer.Exit(0)
 
     table = Table(title="Docker Images")
@@ -130,7 +130,7 @@ def image_build(
     """
     images = _discover_images(name)
     if not images:
-        console.print(f"[red]✗[/red] No image definition found for '{name}' in config/images/")
+        console.print(f"[red]✗[/red] No image definition found for '{name}' in ~/.config/cstation/images/")
         raise typer.Exit(1)
 
     config, image_yaml = images[0]

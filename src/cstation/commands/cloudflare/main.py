@@ -3,7 +3,7 @@
 Cloudflare DNS management commands for CStation CLI
 
 Supports two modes:
-  1. Domain-based (recommended): reads from config/dns/<domain>.yaml
+  1. Domain-based (recommended): reads from ~/.config/cstation/dns/<domain>.yaml
   2. VPS-based (legacy): reads from config/vps/<vps>/dns.yaml
 """
 
@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from pydantic import ValidationError
-from cstation.config import get_config
+from cstation.config import get_config, CSTATION_DNS_DIR
 from cstation.models import DNSConfig, DNSRecordConfig
 from cstation.providers.cloudflare import CloudflareProvider, DNSRecord, DNSZone
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
@@ -31,7 +31,7 @@ cloudflare_app = typer.Typer(
     invoke_without_command=True,
 )
 
-DNS_DIR = Path("config/dns")
+DNS_DIR = CSTATION_DNS_DIR
 
 
 def _load_domain_config(domain: str) -> DNSConfig:
@@ -210,18 +210,18 @@ def list_zones() -> None:
 
 @cloudflare_app.command("plan")
 def cloudflarePlan(
-    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to plan. Defaults to all domains in config/dns/"),
+    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to plan. Defaults to all domains in ~/.config/cstation/dns/"),
 ) -> None:
     """
     Dry-run: compare DNS config against Cloudflare and show drift.
 
-    Reads from config/dns/<domain>.yaml files. If no domains specified,
-    plans all domains found in config/dns/.
+    Reads from ~/.config/cstation/dns/<domain>.yaml files. If no domains specified,
+    plans all domains found in ~/.config/cstation/dns/.
     """
     if not domains:
         domains = _list_available_domains()
         if not domains:
-            console.print("[dim]No domain config files found in config/dns/.[/dim]")
+            console.print("[dim]No domain config files found in ~/.config/cstation/dns/.[/dim]")
             return
 
     local_records = _collect_records(domains)
@@ -230,7 +230,7 @@ def cloudflarePlan(
         return
 
     provider = _get_provider()
-    console.print(f"\n[bold]Cloudflare DNS Plan[/bold] [dim](config/dns/)[/dim]\n")
+    console.print(f"\n[bold]Cloudflare DNS Plan[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
 
     zone_cache: dict[str, str] = {}
 
@@ -284,12 +284,12 @@ def cloudflarePlan(
 
 @cloudflare_app.command("apply")
 def cloudflareApply(
-    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to apply. Defaults to all domains in config/dns/"),
+    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to apply. Defaults to all domains in ~/.config/cstation/dns/"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     delete: bool = typer.Option(False, "--delete", help="Delete remote records not in dns.yaml"),
 ) -> None:
     """
-    Apply DNS records from config/dns/ to Cloudflare.
+    Apply DNS records from ~/.config/cstation/dns/ to Cloudflare.
 
     Creates missing records, updates changed records. By default does NOT
     delete records that exist in Cloudflare but not in config (use --delete
@@ -298,7 +298,7 @@ def cloudflareApply(
     if not domains:
         domains = _list_available_domains()
         if not domains:
-            console.print("[dim]No domain config files found in config/dns/.[/dim]")
+            console.print("[dim]No domain config files found in ~/.config/cstation/dns/.[/dim]")
             return
 
     local_records = _collect_records(domains)
@@ -307,7 +307,7 @@ def cloudflareApply(
         return
 
     provider = _get_provider()
-    console.print(f"\n[bold]Cloudflare DNS Apply[/bold] [dim](config/dns/)[/dim]\n")
+    console.print(f"\n[bold]Cloudflare DNS Apply[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
 
     zone_cache: dict[str, str] = {}
 

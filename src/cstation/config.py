@@ -85,6 +85,11 @@ class ConfigurationError(Exception):
     pass
 
 
+CSTATION_VPS_DIR = Path.home() / ".config" / "cstation" / "vps"
+CSTATION_DNS_DIR = Path.home() / ".config" / "cstation" / "dns"
+CSTATION_IMAGES_DIR = Path.home() / ".config" / "cstation" / "images"
+
+
 def get_vps_secrets(vps_name: str, service_name: str) -> dict[str, str]:
     try:
         return config_manager.config_data["vps"]["secrets"][vps_name][service_name]

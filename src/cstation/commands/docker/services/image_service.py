@@ -24,10 +24,35 @@ class ImageService:
     name: str = ""
     subdirs: list[str] = []
     compose_subdir: str = ""
+    _traefik_conf_dir: str | None = None
 
     def __post_init_subclass__(self) -> None:
         if self.name:
             register_service(self.name, self.__class__)
+
+    @classmethod
+    def set_traefik_conf_dir(cls, path: str) -> None:
+        cls._traefik_conf_dir = path
+
+    @classmethod
+    def reset_traefik_conf_dir(cls) -> None:
+        cls._traefik_conf_dir = None
+
+    @staticmethod
+    def _resolve_host_path(config: ContainerConfig, container_path: str) -> str | None:
+        best_host = None
+        best_cont_len = 0
+        for volume in config.volumes:
+            if not isinstance(volume, str) or ':' not in volume:
+                continue
+            host, cont = volume.split(':', 1)
+            if cont == container_path:
+                return host
+            if container_path.startswith(cont + '/'):
+                if len(cont) > best_cont_len:
+                    best_cont_len = len(cont)
+                    best_host = host + container_path[len(cont):]
+        return best_host
 
     @property
     def service_dir(self) -> str:
@@ -107,6 +132,8 @@ class ImageService:
 
     def _traefik_conf_path(self, config: ContainerConfig) -> str:
         name = config.container_name or self.name
+        if ImageService._traefik_conf_dir:
+            return f"{ImageService._traefik_conf_dir}/{name}.yml"
         return f"/var/lib/traefik/conf/{name}.yml"
 
     def _write_static_configs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
