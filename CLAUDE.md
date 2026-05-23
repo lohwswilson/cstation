@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## AgentOS Integration
+Read `/Users/wsloh/AgentOS/AGENTOS_BRIEF.md` for the full AgentOS system briefing — agent roster, vault structure, coordination protocols.
+
 ## Commands
 - Run all tests: `uv run pytest -q`
 - Run a single test: `uv run pytest -q tests/path/to/test_file.py::test_name`
