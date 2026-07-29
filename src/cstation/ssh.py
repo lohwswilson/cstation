@@ -7,6 +7,7 @@ replacing the dependency on Ansible.
 """
 
 import os
+import subprocess
 from fabric import Connection
 from invoke import UnexpectedExit
 from typing import Dict, List, Optional, Any
@@ -141,11 +142,47 @@ class SSHManager:
             return False
 
     def put(self, local_path: str, remote_path: str) -> bool:
+        """Upload a file to the remote host using scp."""
         try:
-            self.connection.put(local_path, remote_path)
+            cmd = ["scp"]
+            if self.port and self.port != 22:
+                cmd.extend(["-P", str(self.port)])
+            if self.key_filename:
+                cmd.extend(["-i", self.key_filename])
+            user_host = f"{self.user}@{self.host}" if self.user else self.host
+            cmd.extend([local_path, f"{user_host}:{remote_path}"])
+            result = subprocess.run(cmd, timeout=5400)
+            if result.returncode != 0:
+                console.print(f"[red]Failed to upload {local_path} to {remote_path}[/red]")
+                return False
             return True
+        except subprocess.TimeoutExpired:
+            console.print(f"[red]Upload timed out after 90 minutes: {local_path}[/red]")
+            return False
         except Exception as e:
             console.print(f"[red]Failed to upload {local_path} to {remote_path}: {e}[/red]")
+            return False
+
+    def get(self, remote_path: str, local_path: str) -> bool:
+        """Download a file from the remote host using scp."""
+        try:
+            cmd = ["scp"]
+            if self.port and self.port != 22:
+                cmd.extend(["-P", str(self.port)])
+            if self.key_filename:
+                cmd.extend(["-i", self.key_filename])
+            user_host = f"{self.user}@{self.host}" if self.user else self.host
+            cmd.extend([f"{user_host}:{remote_path}", local_path])
+            result = subprocess.run(cmd, timeout=5400)
+            if result.returncode != 0:
+                console.print(f"[red]Failed to download {remote_path} to {local_path}[/red]")
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            console.print(f"[red]Download timed out after 90 minutes: {remote_path}[/red]")
+            return False
+        except Exception as e:
+            console.print(f"[red]Failed to download {remote_path} to {local_path}: {e}[/red]")
             return False
 
     def write_file(self, content: str, remote_path: str, mode: str = '0600', sudo: bool = False) -> bool:

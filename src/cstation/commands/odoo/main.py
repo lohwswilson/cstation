@@ -95,7 +95,7 @@ def odoo_backup(
     local_path = Path.cwd() / backup_basename
     console.print(f"  [dim]Downloading to local machine...[/dim]")
     try:
-        ssh.connection.get(host_tmp, str(local_path))
+        ssh.get(host_tmp, str(local_path))
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to download backup: {e}")
         ssh.run(f"rm -f {host_tmp}", sudo=True)
