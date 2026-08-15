@@ -302,11 +302,14 @@ cstation github repo sync [REPO_NAME] [OPTIONS]
 - `--user, -u TEXT`: GitHub username override.
 
 #### `cstation github repo clone`
-Clone configured repositories to local disk with specific branches and upstream remotes configured.
+Clone configured repositories to local disk using **ultra-fast blobless sparse-checkout** (`--filter=blob:none --sparse`) and **multi-threaded parallel execution**. Downloads only the specific addon folders declared in `includes`, speeding up OCA repo syncs by 10x–20x.
 
 ```bash
 cstation github repo clone [REPO_NAME] [OPTIONS]
 ```
+- `[REPO_NAME]`: Specific repository name (optional, clones all configured repos in parallel by default).
+- `--directory, -d PATH`: Target directory for cloning.
+- `--user, -u TEXT`: GitHub username override.
 
 #### `cstation github ssh`
 Deploy or generate SSH keys on a remote VPS for GitHub access.

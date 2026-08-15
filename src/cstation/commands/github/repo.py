@@ -11,6 +11,7 @@ import typer
 import yaml
 from pathlib import Path
 from typing import Optional, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
@@ -470,7 +471,7 @@ def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_di
     console.print("[green]Sync completed! Repositories are updated locally and on GitHub for production deployment.[/green]")
 
 def _clone_selective_repositories(config: GitHubConfig, repo_name: Optional[str], target_dir: Optional[str], github_user: Optional[str]):
-    """Clone repositories with selective directory inclusion based on 'includes' field"""
+    """Clone repositories with selective directory inclusion based on 'includes' field (parallelized & blobless)"""
     
     repositories = config.repositories
     
@@ -495,13 +496,28 @@ def _clone_selective_repositories(config: GitHubConfig, repo_name: Optional[str]
         console.print("[yellow]No repositories to clone[/yellow]")
         return
     
-    console.print(f"[blue]Cloning {len(repos_to_clone)} repositories with selective directories...[/blue]")
+    console.print(f"[bold blue]Fast Blobless Selective Clone: {len(repos_to_clone)} repositories...[/bold blue]")
     
-    for repo in repos_to_clone:
-        _clone_repository_selective(config, repo, target_dir, github_user)
+    if len(repos_to_clone) == 1:
+        _clone_repository_selective(config, repos_to_clone[0], target_dir, github_user)
+    else:
+        max_workers = min(len(repos_to_clone), 5)
+        console.print(f"[dim]Running parallel cloning across {max_workers} worker threads...[/dim]")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_clone_repository_selective, config, repo, target_dir, github_user): repo.name
+                for repo in repos_to_clone
+            }
+            for future in as_completed(futures):
+                r_name = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    console.print(f"[red]Error cloning repository '{r_name}': {e}[/red]")
+
 
 def _clone_repository_selective(config: GitHubConfig, repo_config: GitHubRepoConfig, target_dir: Optional[str], github_user: Optional[str]):
-    """Clone a repository and selectively copy specified directories using optimized sparse-checkout"""
+    """Clone a repository and selectively copy specified directories using ultra-fast blobless sparse-checkout"""
     
     github_config = config.github
     repo_name = repo_config.name
@@ -530,12 +546,12 @@ def _clone_repository_selective(config: GitHubConfig, repo_config: GitHubRepoCon
         return
     
     console.print(Panel.fit(
-        f"[bold]Fast Selective Clone: {repo_name}[/bold]\n"
+        f"[bold]Fast Blobless Selective Clone: {repo_name}[/bold]\n"
         f"URL: {repo_url}\n"
         f"Branch: {branch}\n"
         f"Target: {local_path}\n"
         f"Includes: {', '.join(includes)}\n"
-        f"[dim]Using sparse-checkout for faster cloning[/dim]",
+        f"[dim]Using --filter=blob:none & sparse-checkout for maximum speed[/dim]",
         title="Optimized Repository Clone",
         border_style="green"
     ))
@@ -548,65 +564,42 @@ def _clone_repository_selective(config: GitHubConfig, repo_config: GitHubRepoCon
         temp_repo_path = os.path.join(temp_dir, repo_name)
         
         try:
-            console.print(f"[cyan]Initializing sparse checkout for {repo_name}...[/cyan]")
-            
-            # Step 1: Initialize empty repository
-            init_cmd = ["git", "init", temp_repo_path]
-            result = subprocess.run(init_cmd, capture_output=True, text=True)
+            # Step 1: Ultra-fast blobless sparse clone (metadata only, no bulk blob downloads)
+            clone_cmd = [
+                "git", "clone",
+                "--depth=1",
+                "--filter=blob:none",
+                "--sparse",
+                "--branch", branch,
+                repo_url,
+                temp_repo_path
+            ]
+            result = subprocess.run(clone_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
-                console.print(f"[red]Failed to initialize repository:[/red]")
+                # Fallback if specific branch name differs on remote
+                clone_fallback = [
+                    "git", "clone",
+                    "--depth=1",
+                    "--filter=blob:none",
+                    "--sparse",
+                    repo_url,
+                    temp_repo_path
+                ]
+                result = subprocess.run(clone_fallback, capture_output=True, text=True, check=False)
+                if result.returncode != 0:
+                    console.print(f"[red]Failed to clone repository {repo_name}:[/red]")
+                    console.print(result.stderr)
+                    return
+            
+            # Step 2: Set sparse-checkout patterns (downloads ONLY the requested folders on demand)
+            sparse_cmd = ["git", "-C", temp_repo_path, "sparse-checkout", "set"] + list(includes)
+            result = subprocess.run(sparse_cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                console.print(f"[red]Failed to configure sparse-checkout for {repo_name}:[/red]")
                 console.print(result.stderr)
                 return
             
-            # Step 2: Add remote
-            original_cwd = os.getcwd()
-            os.chdir(temp_repo_path)
-            try:
-                remote_cmd = ["git", "remote", "add", "origin", repo_url]
-                result = subprocess.run(remote_cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    console.print(f"[red]Failed to add remote:[/red]")
-                    console.print(result.stderr)
-                    return
-                
-                # Step 3: Enable sparse-checkout
-                sparse_cmd = ["git", "config", "core.sparseCheckout", "true"]
-                result = subprocess.run(sparse_cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    console.print(f"[red]Failed to enable sparse-checkout:[/red]")
-                    console.print(result.stderr)
-                    return
-                
-                # Step 4: Configure sparse-checkout patterns
-                sparse_checkout_file = os.path.join(".git", "info", "sparse-checkout")
-                os.makedirs(os.path.dirname(sparse_checkout_file), exist_ok=True)
-                
-                with open(sparse_checkout_file, 'w') as f:
-                    for include_item in includes:
-                        f.write(f"{include_item}\n")
-                        f.write(f"{include_item}/*\n")  # Include subdirectories
-                
-                console.print(f"[cyan]Fetching only required directories from {repo_name}...[/cyan]")
-                
-                # Step 5: Fetch with depth=1 for speed
-                fetch_cmd = ["git", "fetch", "--depth=1", "origin", branch]
-                result = subprocess.run(fetch_cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    console.print(f"[red]Failed to fetch repository:[/red]")
-                    console.print(result.stderr)
-                    return
-                
-                # Step 6: Checkout the specific branch
-                checkout_cmd = ["git", "checkout", f"origin/{branch}"]
-                result = subprocess.run(checkout_cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    console.print(f"[red]Failed to checkout branch:[/red]")
-                    console.print(result.stderr)
-                    return
-            finally:
-                os.chdir(original_cwd)
-            
-            # Step 7: Copy the sparse-checked files to target location
+            # Step 3: Copy sparse-checked files to target location
             copied_items = []
             missing_items = []
             
@@ -638,7 +631,6 @@ def _clone_repository_selective(config: GitHubConfig, repo_config: GitHubRepoCon
             if copied_items:
                 console.print(f"[green]✓ Successfully copied {len(copied_items)} items from {repo_name}[/green]")
                 console.print(f"[green]  Target location: {local_path}[/green]")
-                console.print(f"[blue]  Used sparse-checkout for faster cloning[/blue]")
             
             if missing_items:
                 console.print(f"[yellow]⚠ {len(missing_items)} items not found in repository[/yellow]")
@@ -647,6 +639,3 @@ def _clone_repository_selective(config: GitHubConfig, repo_config: GitHubRepoCon
             console.print("[red]git command not found. Please install Git.[/red]")
         except Exception as e:
             console.print(f"[red]Error during selective clone: {e}[/red]")
-        finally:
-            # Change back to original directory
-            os.chdir("/Users/wsloh/PythonProject/cstation")

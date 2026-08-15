@@ -136,17 +136,20 @@ cstation image list
 cstation image build synercatalyst-odoo.13.0
 ```
 
-### 6. GitHub Repository Upstream Sync
+### 6. GitHub Repository Management & Fast Selective Clone
 
 ```bash
 # View configured repository mapping
 cstation github repo list
 
+# Fast selective clone (blobless --filter=blob:none & parallel worker threads)
+cstation github repo clone
+
+# Clone a single specific repository (e.g. OCA rest-framework)
+cstation github repo clone rest-framework
+
 # Fetch upstream (odoo/odoo), merge, pull origin, and push to GitHub fork
 cstation github repo sync
-
-# Sync a specific repository
-cstation github repo sync PW.18.0
 ```
 
 ---
