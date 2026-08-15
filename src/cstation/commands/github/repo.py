@@ -27,7 +27,7 @@ DEFAULT_CONFIG_PATH = str(Path.home() / ".config" / "cstation" / "github" / "odo
 
 repo_app = typer.Typer(
     name="repo",
-    help="Manage GitHub repositories: list, clone, sync configurations",
+    help="Manage & update OCA / Odoo modules: fast blobless sparse clone, upstream sync, and listings",
     invoke_without_command=True,
 )
 
@@ -40,7 +40,7 @@ def repo_list(
         help="GitHub repositories configuration file"
     ),
 ):
-    """List configured repositories."""
+    """List configured OCA and Odoo repositories with their included modules."""
     config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
     _list_repositories(config)
 
@@ -64,7 +64,7 @@ def repo_sync(
         help="GitHub username (uses config if not provided)"
     ),
 ):
-    """Sync repositories (fetch upstream, merge, pull origin, push to fork)."""
+    """Sync OCA & Odoo repositories (fetch upstream, merge, pull origin, push to fork)."""
     config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
     _sync_repositories(config, repo_name, target_dir, user)
 
@@ -88,14 +88,14 @@ def repo_clone(
         help="GitHub username (uses config if not provided)"
     ),
 ):
-    """Clone configured repositories."""
+    """Clone & update OCA and Odoo modules using fast blobless sparse-checkout (--filter=blob:none)."""
     config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
     _clone_selective_repositories(config, repo_name, target_dir, user)
 
 
 @repo_app.callback()
 def repo_callback(ctx: typer.Context):
-    """Manage GitHub repositories: list, clone, sync configurations"""
+    """Manage and update OCA / Odoo module repositories: list, clone, sync configurations"""
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
         raise typer.Exit(0)
@@ -121,7 +121,7 @@ def manage_repo(
         help="GitHub username (will use config if not provided)"
     )
 ):
-    """Manage GitHub repositories: list, clone, sync configurations"""
+    """Manage and update OCA / Odoo module repositories: list, clone, sync configurations"""
     if action is None:
         console.print(ctx.get_help())
         raise typer.Exit(0)
