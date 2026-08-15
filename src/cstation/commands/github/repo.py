@@ -22,12 +22,90 @@ from cstation.models import GitHubConfig, GitHubRepoConfig
 
 console = Console()
 
+DEFAULT_CONFIG_PATH = str(Path.home() / ".config" / "cstation" / "github" / "odoo_repos.sync.yml")
+
+repo_app = typer.Typer(
+    name="repo",
+    help="Manage GitHub repositories: list, clone, sync configurations",
+    invoke_without_command=True,
+)
+
+
+@repo_app.command("list")
+def repo_list(
+    config_file: Optional[str] = typer.Option(
+        DEFAULT_CONFIG_PATH,
+        "-c", "--config",
+        help="GitHub repositories configuration file"
+    ),
+):
+    """List configured repositories."""
+    config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
+    _list_repositories(config)
+
+
+@repo_app.command("sync")
+def repo_sync(
+    repo_name: Optional[str] = typer.Argument(None, help="Repository name to sync (optional, syncs all auto_sync repos by default)"),
+    config_file: Optional[str] = typer.Option(
+        DEFAULT_CONFIG_PATH,
+        "-c", "--config",
+        help="GitHub repositories configuration file"
+    ),
+    target_dir: Optional[str] = typer.Option(
+        None,
+        "-d", "--directory",
+        help="Target directory for cloning if not present"
+    ),
+    user: Optional[str] = typer.Option(
+        None,
+        "-u", "--user",
+        help="GitHub username (uses config if not provided)"
+    ),
+):
+    """Sync repositories (fetch upstream, merge, pull origin, push to fork)."""
+    config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
+    _sync_repositories(config, repo_name, target_dir, user)
+
+
+@repo_app.command("clone")
+def repo_clone(
+    repo_name: Optional[str] = typer.Argument(None, help="Repository name to clone (optional, interactive selection by default)"),
+    config_file: Optional[str] = typer.Option(
+        DEFAULT_CONFIG_PATH,
+        "-c", "--config",
+        help="GitHub repositories configuration file"
+    ),
+    target_dir: Optional[str] = typer.Option(
+        None,
+        "-d", "--directory",
+        help="Target directory for cloning"
+    ),
+    user: Optional[str] = typer.Option(
+        None,
+        "-u", "--user",
+        help="GitHub username (uses config if not provided)"
+    ),
+):
+    """Clone configured repositories."""
+    config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
+    _clone_selective_repositories(config, repo_name, target_dir, user)
+
+
+@repo_app.callback()
+def repo_callback(ctx: typer.Context):
+    """Manage GitHub repositories: list, clone, sync configurations"""
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+        raise typer.Exit(0)
+
+
 def manage_repo(
     ctx: typer.Context,
     action: Optional[str] = typer.Argument(None, help="Action: list, sync, clone"),
     repo_name: Optional[str] = typer.Argument(None, help="Repository name (for sync/clone action)"),
     config_file: Optional[str] = typer.Option(
-        str(Path.home() / ".config" / "cstation" / "github" / "odoo_repos.sync.yml"),
+        DEFAULT_CONFIG_PATH,
         "-c", "--config",
         help="GitHub repositories configuration file"
     ),
@@ -42,11 +120,7 @@ def manage_repo(
         help="GitHub username (will use config if not provided)"
     )
 ):
-    """
-    Manage GitHub repositories: list, clone, sync configurations
-    """
-    
-    # Show help when no action is provided
+    """Manage GitHub repositories: list, clone, sync configurations"""
     if action is None:
         console.print(ctx.get_help())
         raise typer.Exit(0)
@@ -54,11 +128,9 @@ def manage_repo(
     if action not in ["list", "sync", "clone"]:
         console.print(f"[red]Invalid action: {action}[/red]")
         console.print("[yellow]Available actions: list, sync, clone[/yellow]")
-        console.print("\n[blue]Use --help for more information[/blue]")
         raise typer.Exit(1)
     
-    # Load configuration
-    config = _load_github_config(config_file)
+    config = _load_github_config(config_file or DEFAULT_CONFIG_PATH)
     
     if action == "list":
         _list_repositories(config)

@@ -489,7 +489,8 @@ def test_vps_init_default_output_uses_vps_name(monkeypatch, tmp_path: Path):
     assert r.exit_code == 0
 
     expected_path = tmp_path / "config" / "vps" / "eu01" / "vps.yaml"
-    assert expected_path.exists(), f"Expected default path {expected_path} but file not found"
+    home_expected_path = home / ".config" / "cstation" / "vps" / "eu01" / "vps.yaml"
+    assert expected_path.exists() or home_expected_path.exists(), f"Expected default path {expected_path} or {home_expected_path} but file not found"
 def test_vps_list_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
 

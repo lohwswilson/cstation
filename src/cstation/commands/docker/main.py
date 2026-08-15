@@ -106,7 +106,11 @@ def _check_port_collisions(ssh: SSHManager, fragments: list[tuple[str, Container
     return []
 
 
-def _get_service_instance(name: str, kind: str, config: ContainerConfig | None = None):
+def _get_service_instance(name: str, kind: str, config: ContainerConfig | dict | None = None):
+    if isinstance(config, dict):
+        from .services.image_service import _ensure_config
+        config = _ensure_config(config)
+
     try:
         svc_cls = get_service(name)
         return svc_cls()

@@ -1921,8 +1921,7 @@ def vps_remove(
     """
     vps_dir = _resolve_vps_dir(Path(vps))
     data = _load_vps_config(vps_dir)
-    identity = data.get("identity", {})
-    name = identity.get("name", vps_dir.name)
+    name = data.identity.name or vps_dir.name
 
     console.print(f"\n[bold]VPS Remove: {name}[/bold]\n")
 

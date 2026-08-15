@@ -11,14 +11,17 @@ from rich import print as rprint
 # Import configuration management
 from .config import initialize_configuration, get_config
 
-# Import command modules
 from .commands.version.main import version
 from .commands.github.main import github_app
 from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
+from .commands.dns.main import dns_app
 from .commands.cloudflare.main import cloudflare_app
 from .commands.odoo.main import odoo_app
 from .commands.image.main import image_app
+from .commands.auth.main import auth_app
+from .commands.netcup.main import netcup_app
+from .commands.server.main import server_app
 
 
 def version_callback(value: bool):
@@ -41,9 +44,13 @@ app.command()(version)
 app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
+app.add_typer(dns_app)
 app.add_typer(cloudflare_app)
 app.add_typer(odoo_app)
 app.add_typer(image_app)
+app.add_typer(auth_app)
+app.add_typer(netcup_app)
+app.add_typer(server_app)
 
 
 @app.callback()

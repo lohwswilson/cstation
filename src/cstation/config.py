@@ -85,9 +85,85 @@ class ConfigurationError(Exception):
     pass
 
 
-CSTATION_VPS_DIR = Path.home() / ".config" / "cstation" / "vps"
-CSTATION_DNS_DIR = Path.home() / ".config" / "cstation" / "dns"
-CSTATION_IMAGES_DIR = Path.home() / ".config" / "cstation" / "images"
+def get_cstation_config_dir() -> Path:
+    """Get the base configuration directory for cstation."""
+    env_dir = os.environ.get("CSTATION_CONFIG_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".config" / "cstation"
+
+
+def get_vps_dir() -> Path:
+    """Get the directory containing VPS configurations."""
+    base = get_cstation_config_dir() / "vps"
+    if base.exists() and any(base.iterdir()):
+        return base
+    legacy = Path.cwd() / "config" / "vps"
+    if legacy.exists():
+        return legacy
+    return base
+
+
+def get_dns_dir() -> Path:
+    """Get the directory containing DNS configurations."""
+    base = get_cstation_config_dir() / "dns"
+    if base.exists() and any(base.iterdir()):
+        return base
+    legacy = Path.cwd() / "config" / "dns"
+    if legacy.exists():
+        return legacy
+    return base
+
+
+def get_images_dir() -> Path:
+    """Get the directory containing Docker image configurations."""
+    base = get_cstation_config_dir() / "images"
+    if base.exists() and any(base.iterdir()):
+        return base
+    legacy = Path.cwd() / "config" / "images"
+    if legacy.exists():
+        return legacy
+    return base
+
+
+class _DynamicPath:
+    """Proxy object that resolves the Path dynamically at runtime."""
+
+    def __init__(self, getter):
+        self._getter = getter
+
+    @property
+    def _path(self) -> Path:
+        return self._getter()
+
+    def __truediv__(self, other):
+        return self._path / other
+
+    def __rtruediv__(self, other):
+        return Path(other) / self._path
+
+    def __fspath__(self):
+        return os.fspath(self._path)
+
+    def __str__(self):
+        return str(self._path)
+
+    def __repr__(self):
+        return repr(self._path)
+
+    def __eq__(self, other):
+        return self._path == other or str(self._path) == str(other)
+
+    def __hash__(self):
+        return hash(self._path)
+
+    def __getattr__(self, item):
+        return getattr(self._path, item)
+
+
+CSTATION_VPS_DIR: Path = _DynamicPath(get_vps_dir)  # type: ignore[assignment]
+CSTATION_DNS_DIR: Path = _DynamicPath(get_dns_dir)  # type: ignore[assignment]
+CSTATION_IMAGES_DIR: Path = _DynamicPath(get_images_dir)  # type: ignore[assignment]
 
 
 def get_vps_secrets(vps_name: str, service_name: str) -> dict[str, str]:
@@ -135,7 +211,7 @@ class ConfigManager:
             user_config = Path(os.environ.get('APPDATA', '')) / "cstation"
         else:
             # Unix-like user configuration
-            user_config = Path.home() / ".config" / "cstation"
+            user_config = get_cstation_config_dir()
         paths.append(user_config)
         
         return paths

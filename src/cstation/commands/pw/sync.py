@@ -59,49 +59,31 @@ class PWSync:
             bool: True if successful, False otherwise
         """
         try:
-            # Step 1: Prepare local files
             if progress:
-                task1 = progress.add_task("Preparing local PW files...", total=None)
-            
-            local_pw_path = self._prepare_pw_files(version, exclude_cache, verbose)
-            if not local_pw_path:
-                return False
-            
-            if progress:
-                progress.update(task1, description="✓ Local PW files prepared")
-                progress.remove_task(task1)
                 task2 = progress.add_task("Syncing PW files to server...", total=None)
-            
-            # Step 2: Sync PW files
+
+            # Step 1: Sync PW files directly
             success = self._sync_pw_to_server(
-                local_pw_path, host, version, port, dry_run, verbose
+                Path(), host, version, port, dry_run, verbose
             )
-            
+
             if not success:
                 return False
-            
+
             if progress:
                 progress.update(task2, description="✓ PW files synced")
                 progress.remove_task(task2)
                 task3 = progress.add_task("Syncing PW_ADDONS to server...", total=None)
-            
-            # Step 3: Sync PW_ADDONS
+
+            # Step 2: Sync PW_ADDONS
             success = self._sync_addons_to_server(
                 host, version, port, dry_run, verbose, exclude_cache
             )
-            
+
             if progress:
                 progress.update(task3, description="✓ PW_ADDONS synced")
                 progress.remove_task(task3)
-                task4 = progress.add_task("Cleaning up temporary files...", total=None)
-            
-            # Step 4: Cleanup
-            self._cleanup_temp_files(version)
-            
-            if progress:
-                progress.update(task4, description="✓ Cleanup completed")
-                progress.remove_task(task4)
-            
+
             return success
             
         except Exception as e:
@@ -110,7 +92,7 @@ class PWSync:
     
     def _prepare_pw_files(self, version: str, exclude_cache: bool, verbose: bool) -> Optional[Path]:
         """Prepare PW files for syncing by copying and reorganizing them."""
-        source_path = Path(f"/opt/PW/PW.{version}")
+        source_path = get_source_path(version)
         temp_pw_path = self.temp_dir / f"PW.{version}"
         
         if not source_path.exists():
@@ -193,49 +175,47 @@ class PWSync:
     def _sync_pw_to_server(
         self, local_path: Path, host: str, version: str, port: int, dry_run: bool, verbose: bool
     ) -> bool:
-        """Sync prepared PW files to remote server."""
+        """Sync PW source files directly to remote server."""
+        source_path = get_source_path(version)
         remote_host = get_remote_host(host)
         remote_dir = get_remote_pw_path(version)
         remote_path = f"root@{remote_host}:{remote_dir}"
-        odoo_path = local_path / "odoo"
-        
-        if not odoo_path.exists():
-            rprint(f"[red]Error:[/red] Odoo directory not found in {local_path}")
+
+        if not source_path.exists():
+            rprint(f"[red]Error:[/red] PW source path {source_path} does not exist")
             return False
-        
-        # Ensure remote directory exists before rsync
+
         if not self._ensure_remote_dir(remote_host, remote_dir, port, dry_run, verbose):
             return False
 
-        # Build rsync command using common base options
         rsync_cmd = get_rsync_command_base(port, dry_run)
-        rsync_cmd.extend([f"{odoo_path}/", remote_path])
-        
+        rsync_cmd.extend(["--exclude", "__pycache__", f"{source_path}/", remote_path])
+
         if verbose or dry_run:
             rprint(f"[dim]Running: {' '.join(rsync_cmd)}[/dim]")
-        
+
         try:
             result = subprocess.run(rsync_cmd, capture_output=True, text=True)
-            
+
             if verbose:
                 if result.stdout:
                     rprint(f"[dim]{result.stdout}[/dim]")
-            
+
             if result.returncode != 0:
                 rprint(f"[red]Error syncing PW files:[/red] {result.stderr}")
                 return False
-            
+
             return True
-            
+
         except Exception as e:
             rprint(f"[red]Error during PW sync:[/red] {str(e)}")
             return False
-    
+
     def _sync_addons_to_server(
         self, host: str, version: str, port: int, dry_run: bool, verbose: bool, exclude_cache: bool
     ) -> bool:
         """Sync PW_ADDONS to remote server."""
-        source_path = Path(f"/opt/PW/PW_ADDONS.{version}")
+        source_path = get_addons_path(version)
         remote_host = get_remote_host(host)
         remote_dir = get_remote_addons_path(version)
         remote_path = f"root@{remote_host}:{remote_dir}"

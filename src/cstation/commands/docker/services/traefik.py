@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import yaml
-from typing import Any, TYPE_CHECKING
+from typing import Any, Union, TYPE_CHECKING
 
 from rich.console import Console
 
 from cstation.ssh import SSHManager
-if TYPE_CHECKING:
-    from cstation.models import ContainerConfig
+from cstation.models import ContainerConfig
 
 from .registry import register_service
-from .image_service import ImageService
+from .image_service import ImageService, _ensure_config
 
 console = Console()
 
@@ -67,28 +66,30 @@ class TraefikService(ImageService):
     name = "traefik"
     subdirs = ["etc", "conf", "letsencrypt", "logs"]
 
-    def _resolve_traefik_yml_path(self, config: ContainerConfig) -> str:
+    def _resolve_traefik_yml_path(self, config: Union[ContainerConfig, dict]) -> str:
+        cfg = _ensure_config(config)
         # 1. Explicit file mount for /etc/traefik/traefik.yml (US02-style)
-        for volume in config.volumes:
+        for volume in cfg.volumes:
             if isinstance(volume, str) and ':' in volume:
                 host, cont = volume.split(':', 1)
                 if cont == "/etc/traefik/traefik.yml":
                     return host
 
         # 2. Directory mount for /etc/traefik, derive traefik.yml path (SG06/SG07-style)
-        host_dir = self._resolve_host_path(config, "/etc/traefik")
+        host_dir = self._resolve_host_path(cfg, "/etc/traefik")
         if host_dir:
             return f"{host_dir}/traefik.yml"
 
         # 3. Fallback
         return f"{self.service_dir}/etc/traefik.yml"
 
-    def _resolve_and_cache_traefik_conf_dir(self, config: ContainerConfig) -> str:
-        host_conf = self._resolve_host_path(config, "/etc/traefik/conf")
+    def _resolve_and_cache_traefik_conf_dir(self, config: Union[ContainerConfig, dict]) -> str:
+        cfg = _ensure_config(config)
+        host_conf = self._resolve_host_path(cfg, "/etc/traefik/conf")
         if host_conf:
             ImageService.set_traefik_conf_dir(host_conf)
             return host_conf
-        host_dir = self._resolve_host_path(config, "/etc/traefik")
+        host_dir = self._resolve_host_path(cfg, "/etc/traefik")
         if host_dir:
             conf_dir = f"{host_dir}/conf"
             ImageService.set_traefik_conf_dir(conf_dir)
@@ -97,26 +98,29 @@ class TraefikService(ImageService):
         ImageService.set_traefik_conf_dir(fallback)
         return fallback
 
-    def _render_compose(self, config: ContainerConfig) -> str:
-        if not config.command and not config.static_config:
-            config.command = TRAEFIK_DEFAULT_ARGS
-        return super()._render_compose(config)
+    def _render_compose(self, config: Union[ContainerConfig, dict]) -> str:
+        cfg = _ensure_config(config)
+        if not cfg.command and not cfg.static_config:
+            cfg.command = TRAEFIK_DEFAULT_ARGS
+        return super()._render_compose(cfg)
 
-    def _write_static_configs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
-        written = super()._write_static_configs(ssh, config)
-        if config.static_config:
-            traefik_yml_path = self._resolve_traefik_yml_path(config)
-            content = yaml.dump(config.static_config, sort_keys=False, default_flow_style=False)
+    def _write_static_configs(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
+        written = super()._write_static_configs(ssh, cfg)
+        if cfg.static_config:
+            traefik_yml_path = self._resolve_traefik_yml_path(cfg)
+            content = yaml.dump(cfg.static_config, sort_keys=False, default_flow_style=False)
             ssh.run(f"bash -c 'cat > {traefik_yml_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'", sudo=True)
             console.print(f"  [green]✓[/green] wrote {traefik_yml_path}")
             written.append(traefik_yml_path)
         return written
 
-    def _plan_static_configs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
-        actions = super()._plan_static_configs(ssh, config)
-        if config.static_config:
-            traefik_yml_path = self._resolve_traefik_yml_path(config)
-            desired = yaml.dump(config.static_config, sort_keys=False, default_flow_style=False).strip()
+    def _plan_static_configs(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
+        actions = super()._plan_static_configs(ssh, cfg)
+        if cfg.static_config:
+            traefik_yml_path = self._resolve_traefik_yml_path(cfg)
+            desired = yaml.dump(cfg.static_config, sort_keys=False, default_flow_style=False).strip()
             result = ssh.run(f"cat {traefik_yml_path} 2>/dev/null", hide=True, sudo=True)
             current = getattr(result, "stdout", "").strip() if result else ""
             if current != desired:

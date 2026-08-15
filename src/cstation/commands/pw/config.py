@@ -64,7 +64,12 @@ class PWConfig(BaseModel):
 
 def get_pw_config() -> PWConfig:
     """Get PW configuration instance."""
-    return PWConfig()
+    base_path = Path("/opt/PW")
+    if not base_path.exists():
+        user_pw = Path.home() / "PerfectWork"
+        if user_pw.exists():
+            base_path = user_pw
+    return PWConfig(pw_base_path=base_path)
 
 
 def validate_version(version: str) -> bool:
@@ -77,12 +82,20 @@ def validate_version(version: str) -> bool:
 def get_source_path(version: str) -> Path:
     """Get the source path for a specific PW version."""
     config = get_pw_config()
+    if not config.pw_base_path.exists():
+        user_pw = Path.home() / "PerfectWork"
+        if user_pw.exists():
+            return user_pw / f"PW.{version}"
     return config.pw_base_path / f"PW.{version}"
 
 
 def get_addons_path(version: str) -> Path:
     """Get the addons path for a specific PW version."""
     config = get_pw_config()
+    if not config.pw_base_path.exists():
+        user_pw = Path.home() / "PerfectWork"
+        if user_pw.exists():
+            return user_pw / f"PW_ADDONS.{version}"
     return config.pw_base_path / f"PW_ADDONS.{version}"
 
 
@@ -99,10 +112,17 @@ def get_remote_addons_path(version: str) -> str:
 
 
 def get_remote_host(hostname: str) -> str:
-    """Get the full remote hostname with domain suffix."""
-    config = get_pw_config()
-    if config.domain_suffix in hostname:
+    """Get the full remote hostname by checking VPS config directory or domain suffix."""
+    if "." in hostname:
         return hostname
+
+    from ...config import CSTATION_VPS_DIR
+    if CSTATION_VPS_DIR.exists():
+        for d in CSTATION_VPS_DIR.iterdir():
+            if d.is_dir() and d.name.startswith(f"{hostname}."):
+                return d.name
+
+    config = get_pw_config()
     return f"{hostname}{config.domain_suffix}"
 
 

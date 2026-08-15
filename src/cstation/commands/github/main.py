@@ -8,7 +8,7 @@ from rich import print as rprint
 
 # Import subcommands
 from .ssh import setup_github_ssh
-from .repo import manage_repo
+from .repo import repo_app
 
 # Create GitHub app
 github_app = typer.Typer(
@@ -19,7 +19,7 @@ github_app = typer.Typer(
 
 # Add commands to the app
 github_app.command("ssh")(setup_github_ssh)
-github_app.command("repo")(manage_repo)
+github_app.add_typer(repo_app, name="repo")
 
 @github_app.callback()
 def github_callback(ctx: typer.Context):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json as jsonlib
-from typing import Any
+from typing import Any, Union
 
 import yaml
 from rich.console import Console
@@ -17,6 +17,19 @@ from ..compose.env_writer import render_env, render_secrets_env
 console = Console()
 
 _COMPOSE_BASE_DIR = "/var/lib"
+
+
+def _ensure_config(config: Union[ContainerConfig, dict]) -> ContainerConfig:
+    if isinstance(config, ContainerConfig):
+        return config
+    if isinstance(config, dict):
+        c = config.copy()
+        resolved = c.pop("_resolved_secrets", None)
+        model = ContainerConfig(**c)
+        if resolved is not None:
+            setattr(model, "_resolved_secrets", resolved)
+        return model
+    return config
 
 
 class ImageService:
@@ -39,10 +52,11 @@ class ImageService:
         cls._traefik_conf_dir = None
 
     @staticmethod
-    def _resolve_host_path(config: ContainerConfig, container_path: str) -> str | None:
+    def _resolve_host_path(config: Union[ContainerConfig, dict], container_path: str) -> str | None:
+        cfg = _ensure_config(config)
         best_host = None
         best_cont_len = 0
-        for volume in config.volumes:
+        for volume in cfg.volumes:
             if not isinstance(volume, str) or ':' not in volume:
                 continue
             host, cont = volume.split(':', 1)
@@ -68,37 +82,43 @@ class ImageService:
         d = self.compose_subdir or self.service_dir
         return f"{d}/.env"
 
-    def _data_volume_path(self, config) -> str | None:
-        volumes = config.volumes if hasattr(config, 'volumes') else config.get('volumes', [])
-        for vol in volumes:
+    def _data_volume_path(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        for vol in cfg.volumes:
             if isinstance(vol, str) and ":/var/lib/odoo" in vol:
                 return vol.split(":")[0]
         return None
 
-    def _render_compose(self, config: ContainerConfig) -> str:
-        network = config.network or "PW_NET"
+    def _render_compose(self, config: Union[ContainerConfig, dict]) -> str:
+        cfg = _ensure_config(config)
+        network = cfg.network or "PW_NET"
         service_def: dict[str, Any] = {
-            "image": config.image,
+            "image": cfg.image,
         }
-        if config.container_name or True:
-            service_def["container_name"] = config.container_name or self.name
-        if config.restart:
-            service_def["restart"] = config.restart
-        if config.ports:
-            service_def["ports"] = config.ports
-        if config.volumes:
-            service_def["volumes"] = config.volumes
-        if config.env:
-            service_def["environment"] = config.env
+        if cfg.container_name or True:
+            service_def["container_name"] = cfg.container_name or self.name
+        if cfg.restart or cfg.restart_policy:
+            service_def["restart"] = cfg.restart_policy or cfg.restart
+        if cfg.ports:
+            service_def["ports"] = cfg.ports
+        if cfg.volumes:
+            service_def["volumes"] = cfg.volumes
+        if cfg.env:
+            service_def["environment"] = cfg.env
 
-        if config.secrets or config.env:
+        if getattr(cfg, "privileged", None) is not None:
+            service_def["privileged"] = cfg.privileged
+
+        if cfg.env_file:
+            service_def["env_file"] = cfg.env_file
+        elif cfg.secrets or cfg.env:
             service_def["env_file"] = ".env"
 
-        if config.command:
-            service_def["command"] = config.command
+        if cfg.command:
+            service_def["command"] = cfg.command
 
-        if config.labels:
-            service_def["labels"] = config.labels
+        if cfg.labels:
+            service_def["labels"] = cfg.labels
 
         service_def["networks"] = [network]
         compose = {
@@ -107,40 +127,44 @@ class ImageService:
         }
         return render_compose(compose)
 
-    def _render_env(self, config: ContainerConfig) -> str | None:
-        env = config.env or {}
-        resolved = getattr(config, "_resolved_secrets", {})
+    def _render_env(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        env = cfg.env or {}
+        resolved = getattr(cfg, "_resolved_secrets", {})
         if resolved:
             merged = {**env, **resolved}
         else:
-            if config.secrets:
-                merged = {**env, **{k: "REPLACE_ME" for k in config.secrets}}
+            if cfg.secrets:
+                merged = {**env, **{k: "REPLACE_ME" for k in cfg.secrets}}
             elif env:
                 merged = env
             else:
                 return None
         return render_env(merged)
 
-    def _create_dirs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
+    def _create_dirs(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
         dirs = [self.compose_subdir or self.service_dir]
-        subdirs = config.subdirs or self.subdirs
+        subdirs = cfg.subdirs or self.subdirs
         for sd in subdirs:
             dirs.append(f"{self.service_dir}/{sd}")
-        for d in config.extra_dirs:
+        for d in cfg.extra_dirs:
             dirs.append(d)
         return dirs
 
-    def _traefik_conf_path(self, config: ContainerConfig) -> str:
-        name = config.container_name or self.name
+    def _traefik_conf_path(self, config: Union[ContainerConfig, dict]) -> str:
+        cfg = _ensure_config(config)
+        name = cfg.container_name or self.name
         if ImageService._traefik_conf_dir:
             return f"{ImageService._traefik_conf_dir}/{name}.yml"
         return f"/var/lib/traefik/conf/{name}.yml"
 
-    def _write_static_configs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
+    def _write_static_configs(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
         written = []
-        if config.traefik:
-            traefik_conf_path = self._traefik_conf_path(config)
-            content = yaml.dump(config.traefik, sort_keys=False, default_flow_style=False)
+        if cfg.traefik:
+            traefik_conf_path = self._traefik_conf_path(cfg)
+            content = yaml.dump(cfg.traefik, sort_keys=False, default_flow_style=False)
             encoded = base64.b64encode(content.encode()).decode()
             ssh.run(
                 f"echo {encoded} | base64 -d | sudo tee {traefik_conf_path} > /dev/null",
@@ -149,42 +173,45 @@ class ImageService:
             written.append(traefik_conf_path)
         return written
 
-    def _plan_static_configs(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
+    def _plan_static_configs(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
         actions = []
-        if config.traefik:
-            traefik_conf_path = self._traefik_conf_path(config)
-            desired = yaml.dump(config.traefik, sort_keys=False, default_flow_style=False).strip()
+        if cfg.traefik:
+            traefik_conf_path = self._traefik_conf_path(cfg)
+            desired = yaml.dump(cfg.traefik, sort_keys=False, default_flow_style=False).strip()
             result = ssh.run(f"cat {traefik_conf_path} 2>/dev/null", hide=True, sudo=True)
             current = getattr(result, "stdout", "").strip() if result else ""
             if current != desired:
                 actions.append(f"would write {traefik_conf_path}")
         return actions
 
-    def _render_secrets_env(self, config: ContainerConfig) -> str | None:
-        resolved = getattr(config, "_resolved_secrets", {})
-        if not resolved and not config.secrets:
+    def _render_secrets_env(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        resolved = getattr(cfg, "_resolved_secrets", {})
+        if not resolved and not cfg.secrets:
             return None
         if resolved:
             return render_secrets_env(resolved)
-        return render_secrets_env({k: "REPLACE_ME" for k in config.secrets})
+        return render_secrets_env({k: "REPLACE_ME" for k in cfg.secrets})
 
-    def plan(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
+    def plan(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
         actions: list[str] = []
-        dirs = self._create_dirs(ssh, config)
+        dirs = self._create_dirs(ssh, cfg)
         for d in dirs:
             result = ssh.run(f"test -d {d} && echo exists || echo missing", hide=True)
             status = getattr(result, "stdout", "").strip() if result else "missing"
             if status != "exists":
                 actions.append(f"would create directory {d}")
 
-        desired_compose = self._render_compose(config)
+        desired_compose = self._render_compose(cfg)
         result = ssh.run(f"cat {self.compose_path} 2>/dev/null", hide=True, sudo=True)
         current_compose = getattr(result, "stdout", "").strip() if result else ""
         if current_compose != desired_compose:
             actions.append(f"would write {self.compose_path}")
 
-        desired_env = self._render_env(config)
-        secrets_env = self._render_secrets_env(config)
+        desired_env = self._render_env(cfg)
+        secrets_env = self._render_secrets_env(cfg)
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
             result = ssh.run(f"cat {self.env_path} 2>/dev/null", hide=True)
@@ -192,24 +219,24 @@ class ImageService:
             if current_env != desired_env:
                 actions.append(f"would write {self.env_path}")
 
-        resolved = getattr(config, "_resolved_secrets", {})
-        if config.secrets and not resolved:
+        resolved = getattr(cfg, "_resolved_secrets", {})
+        if cfg.secrets and not resolved:
             result = ssh.run(f"cat {self.env_path} 2>/dev/null", hide=True)
             env_content = getattr(result, "stdout", "") if result else ""
-            missing = [k for k in config.secrets if f"{k}=REPLACE_ME" in env_content or k not in env_content]
+            missing = [k for k in cfg.secrets if f"{k}=REPLACE_ME" in env_content or k not in env_content]
             if missing:
                 actions.append(f"[yellow]⚠[/yellow] secrets not configured in config.yaml: {', '.join(missing)}")
 
-        static_actions = self._plan_static_configs(ssh, config)
+        static_actions = self._plan_static_configs(ssh, cfg)
         actions.extend(static_actions)
 
-        if config.owner:
-            actions.append(f"would chown -R {config.owner} {self.service_dir}")
+        if cfg.owner:
+            actions.append(f"would chown -R {cfg.owner} {self.service_dir}")
 
-        if config.chmod:
-            data_path = self._data_volume_path(config)
+        if cfg.chmod:
+            data_path = self._data_volume_path(cfg)
             if data_path:
-                actions.append(f"would chmod -R {config.chmod} {data_path}")
+                actions.append(f"would chmod -R {cfg.chmod} {data_path}")
 
         result = ssh.run(f"docker compose -f {self.compose_path} ps -q 2>/dev/null", hide=True, sudo=True)
         running = getattr(result, "stdout", "").strip() if result else ""
@@ -218,50 +245,52 @@ class ImageService:
 
         return actions
 
-    def _start(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def _start(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
         console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
 
-    def apply(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
+        cfg = _ensure_config(config)
         console.print(f"  [bold]Applying {self.name}[/bold] (kind: Container)")
 
-        dirs = self._create_dirs(ssh, config)
+        dirs = self._create_dirs(ssh, cfg)
         for d in dirs:
             ssh.run(f"mkdir -p {d}", sudo=True)
             console.print(f"  [green]✓[/green] created directory {d}")
 
-        desired_compose = self._render_compose(config)
+        desired_compose = self._render_compose(cfg)
         ssh.run(f"bash -c 'cat > {self.compose_path} << \"CSCOMPOSE\"\n{desired_compose}\nCSCOMPOSE'", sudo=True)
         console.print(f"  [green]✓[/green] wrote {self.compose_path}")
 
-        desired_env = self._render_env(config)
-        secrets_env = self._render_secrets_env(config)
+        desired_env = self._render_env(cfg)
+        secrets_env = self._render_secrets_env(cfg)
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
             ssh.run(f"bash -c 'cat > {self.env_path} << \"CSENV\"\n{desired_env}\nCSENV'", sudo=True)
-            resolved = getattr(config, "_resolved_secrets", {})
+            resolved = getattr(cfg, "_resolved_secrets", {})
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")
-            elif config.secrets:
+            elif cfg.secrets:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)")
             else:
                 console.print(f"  [green]✓[/green] wrote {self.env_path}")
 
-        self._write_static_configs(ssh, config)
+        self._write_static_configs(ssh, cfg)
 
-        if config.owner:
-            ssh.run(f"chown -R {config.owner} {self.service_dir}", sudo=True)
-            console.print(f"  [green]✓[/green] chown {self.service_dir} to {config.owner}")
+        if cfg.owner:
+            ssh.run(f"chown -R {cfg.owner} {self.service_dir}", sudo=True)
+            console.print(f"  [green]✓[/green] chown {self.service_dir} to {cfg.owner}")
 
-        if config.chmod:
-            data_path = self._data_volume_path(config)
+        if cfg.chmod:
+            data_path = self._data_volume_path(cfg)
             if data_path:
-                ssh.run(f"chmod -R {config.chmod} {data_path}", sudo=True)
-                console.print(f"  [green]✓[/green] chmod {config.chmod} {data_path}")
+                ssh.run(f"chmod -R {cfg.chmod} {data_path}", sudo=True)
+                console.print(f"  [green]✓[/green] chmod {cfg.chmod} {data_path}")
 
-        self._start(ssh, config)
+        self._start(ssh, cfg)
 
-    def status(self, ssh: SSHManager, config: ContainerConfig) -> dict:
+    def status(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> dict:
+        cfg = _ensure_config(config)
         # 1. Try docker compose first (managed state)
         result = ssh.run(f"docker compose -f {self.compose_path} ps --format json 2>/dev/null", hide=True, sudo=True)
         containers = []
@@ -278,7 +307,7 @@ class ImageService:
             return {
                 "name": self.name,
                 "kind": self.kind,
-                "enabled": config.enabled,
+                "enabled": cfg.enabled,
                 "state": state,
                 "containers": len(containers),
                 "running": running_count,
@@ -286,7 +315,7 @@ class ImageService:
             }
 
         # 2. Fallback to raw docker inspect (imported/unmanaged state)
-        c_name = config.container_name or self.name
+        c_name = cfg.container_name or self.name
         result = ssh.run(f"docker inspect --format '{{{{.State.Status}}}}' {c_name} 2>/dev/null", hide=True, sudo=True)
         raw_state = getattr(result, "stdout", "").strip() if result else ""
 
@@ -295,7 +324,7 @@ class ImageService:
             return {
                 "name": self.name,
                 "kind": self.kind,
-                "enabled": config.enabled,
+                "enabled": cfg.enabled,
                 "state": f"{state} (unmanaged)",
                 "containers": 1,
                 "running": 1 if state == "running" else 0,
@@ -305,22 +334,22 @@ class ImageService:
         return {
             "name": self.name,
             "kind": self.kind,
-            "enabled": config.enabled,
+            "enabled": cfg.enabled,
             "state": "missing",
             "containers": 0,
             "running": 0,
             "managed": False
         }
 
-    def stop(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def stop(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         ssh.run(f"docker compose -f {self.compose_path} stop", sudo=True)
         console.print(f"  [green]✓[/green] stopped {self.name}")
 
-    def restart(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def restart(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         ssh.run(f"docker compose -f {self.compose_path} restart", sudo=True)
         console.print(f"  [green]✓[/green] restarted {self.name}")
 
-    def remove(self, ssh: SSHManager, config: ContainerConfig, purge: bool = False) -> None:
+    def remove(self, ssh: SSHManager, config: Union[ContainerConfig, dict], purge: bool = False) -> None:
         flag = "-v" if purge else ""
         ssh.run(f"docker compose -f {self.compose_path} down {flag}", sudo=True)
         if purge:
@@ -329,7 +358,7 @@ class ImageService:
         else:
             console.print(f"  [green]✓[/green] removed {self.name}")
 
-    def upgrade(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def upgrade(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         ssh.run(f"docker compose -f {self.compose_path} pull", sudo=True)
         ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
         console.print(f"  [green]✓[/green] upgraded {self.name}")

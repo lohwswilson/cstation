@@ -12,7 +12,6 @@ from .status import server_status
 from .ls import server_list
 from .playbook import playbook_app
 from .remove import server_remove
-from ..pw.main import app as pw_app
 
 
 # Create Server app
@@ -28,7 +27,6 @@ server_app.command("status")(server_status)
 server_app.command("ls")(server_list)
 server_app.add_typer(playbook_app, name="playbook")
 server_app.command("rm")(server_remove)
-server_app.add_typer(pw_app, name="pw")
 
 
 @server_app.callback()

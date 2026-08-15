@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from typing import Union
 from rich.console import Console
 
 from cstation.ssh import SSHManager
 from cstation.models import ContainerConfig
 
 from .registry import register_service
-from .image_service import ImageService
+from .image_service import ImageService, _ensure_config
 
 console = Console()
 
@@ -102,37 +103,43 @@ def _render_odoo_conf(odoo_conf: dict) -> str:
 
 class OdooService(ImageService):
 
-    def _render_odoo_conf(self, config: ContainerConfig) -> str | None:
-        if not config.odoo_conf:
+    def _render_odoo_conf(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        if not cfg.odoo_conf:
             return None
-        return _render_odoo_conf(config.odoo_conf)
+        return _render_odoo_conf(cfg.odoo_conf)
 
-    def _odoo_conf_path(self, config: ContainerConfig) -> str | None:
-        data_path = self._data_volume_path(config)
+    def _odoo_conf_path(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        data_path = self._data_volume_path(cfg)
         if data_path:
             return f"{data_path}/odoo.conf"
         return None
 
-    def _db_container(self, config: ContainerConfig) -> str | None:
-        return config.env.get("HOST")
+    def _db_container(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        return cfg.env.get("HOST")
 
-    def _db_user(self, config: ContainerConfig) -> str | None:
-        if config.odoo_conf and config.odoo_conf.get("db_user"):
-            return config.odoo_conf["db_user"]
-        return config.env.get("USER")
+    def _db_user(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        if cfg.odoo_conf and cfg.odoo_conf.get("db_user"):
+            return cfg.odoo_conf["db_user"]
+        return cfg.env.get("USER")
 
-    def _db_password(self, config: ContainerConfig) -> str | None:
-        resolved = getattr(config, "_resolved_secrets", {})
+    def _db_password(self, config: Union[ContainerConfig, dict]) -> str | None:
+        cfg = _ensure_config(config)
+        resolved = getattr(cfg, "_resolved_secrets", {})
         if resolved.get("PASSWORD"):
             return resolved["PASSWORD"]
-        if config.env.get("PASSWORD"):
-            return config.env["PASSWORD"]
+        if cfg.env.get("PASSWORD"):
+            return cfg.env["PASSWORD"]
         return None
 
-    def _create_db_user(self, ssh: SSHManager, config: ContainerConfig) -> None:
-        db_container = self._db_container(config)
-        db_user = self._db_user(config)
-        db_password = self._db_password(config)
+    def _create_db_user(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
+        cfg = _ensure_config(config)
+        db_container = self._db_container(cfg)
+        db_user = self._db_user(cfg)
+        db_password = self._db_password(cfg)
         if not db_container or not db_user:
             console.print("  [yellow]⚠[/yellow] skipping DB user creation: missing HOST or USER")
             return
@@ -150,12 +157,13 @@ class OdooService(ImageService):
         )
         console.print(f"  [green]✓[/green] created DB user {db_user}")
 
-    def _create_db_database(self, ssh: SSHManager, config: ContainerConfig) -> None:
-        if not config.odoo_db:
+    def _create_db_database(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
+        cfg = _ensure_config(config)
+        if not cfg.odoo_db:
             return
-        db_container = self._db_container(config)
-        dbname = config.odoo_db.get("name") if isinstance(config.odoo_db, dict) else config.odoo_db
-        owner = config.odoo_db.get("owner", self._db_user(config)) if isinstance(config.odoo_db, dict) else self._db_user(config)
+        db_container = self._db_container(cfg)
+        dbname = cfg.odoo_db.get("name") if isinstance(cfg.odoo_db, dict) else cfg.odoo_db
+        owner = cfg.odoo_db.get("owner", self._db_user(cfg)) if isinstance(cfg.odoo_db, dict) else self._db_user(cfg)
         if not db_container or not dbname:
             return
         ssh.run(
@@ -164,24 +172,25 @@ class OdooService(ImageService):
         )
         console.print(f"  [green]✓[/green] created DB {dbname} owned by {owner}")
 
-    def plan(self, ssh: SSHManager, config: ContainerConfig) -> list[str]:
+    def plan(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
+        cfg = _ensure_config(config)
         actions: list[str] = []
 
-        dirs = self._create_dirs(ssh, config)
+        dirs = self._create_dirs(ssh, cfg)
         for d in dirs:
             result = ssh.run(f"test -d {d} && echo exists || echo missing", hide=True)
             status = getattr(result, "stdout", "").strip() if result else "missing"
             if status != "exists":
                 actions.append(f"would create directory {d}")
 
-        desired_compose = self._render_compose(config)
+        desired_compose = self._render_compose(cfg)
         result = ssh.run(f"cat {self.compose_path} 2>/dev/null", hide=True, sudo=True)
         current_compose = getattr(result, "stdout", "").strip() if result else ""
         if current_compose != desired_compose:
             actions.append(f"would write {self.compose_path}")
 
-        desired_env = self._render_env(config)
-        secrets_env = self._render_secrets_env(config)
+        desired_env = self._render_env(cfg)
+        secrets_env = self._render_secrets_env(cfg)
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
             result = ssh.run(f"cat {self.env_path} 2>/dev/null", hide=True)
@@ -189,28 +198,28 @@ class OdooService(ImageService):
             if current_env != desired_env:
                 actions.append(f"would write {self.env_path}")
 
-        resolved = getattr(config, "_resolved_secrets", {})
-        if config.secrets and not resolved:
+        resolved = getattr(cfg, "_resolved_secrets", {})
+        if cfg.secrets and not resolved:
             result = ssh.run(f"cat {self.env_path} 2>/dev/null", hide=True)
             env_content = getattr(result, "stdout", "") if result else ""
-            missing = [k for k in config.secrets if f"{k}=REPLACE_ME" in env_content or k not in env_content]
+            missing = [k for k in cfg.secrets if f"{k}=REPLACE_ME" in env_content or k not in env_content]
             if missing:
                 actions.append(f"[yellow]⚠[/yellow] secrets not configured in config.yaml: {', '.join(missing)}")
 
-        static_actions = self._plan_static_configs(ssh, config)
+        static_actions = self._plan_static_configs(ssh, cfg)
         actions.extend(static_actions)
 
-        odoo_conf_content = self._render_odoo_conf(config)
+        odoo_conf_content = self._render_odoo_conf(cfg)
         if odoo_conf_content:
-            odoo_conf_path = self._odoo_conf_path(config)
+            odoo_conf_path = self._odoo_conf_path(cfg)
             if odoo_conf_path:
                 result = ssh.run(f"cat {odoo_conf_path} 2>/dev/null", hide=True, sudo=True)
                 current = getattr(result, "stdout", "").strip() if result else ""
                 if current != odoo_conf_content.strip():
                     actions.append(f"would write {odoo_conf_path}")
 
-            db_user = self._db_user(config)
-            db_container = self._db_container(config)
+            db_user = self._db_user(cfg)
+            db_container = self._db_container(cfg)
             if db_container and db_user:
                 result = ssh.run(
                     f'docker exec {db_container} psql -U postgres -c "SELECT 1 FROM pg_roles WHERE rolname=\'{db_user}\'" -t 2>/dev/null',
@@ -220,9 +229,9 @@ class OdooService(ImageService):
                 if "1" not in output:
                     actions.append(f"would create DB user {db_user}")
 
-            if config.odoo_db:
-                dbname = config.odoo_db.get("name") if isinstance(config.odoo_db, dict) else config.odoo_db
-                db_container = self._db_container(config)
+            if cfg.odoo_db:
+                dbname = cfg.odoo_db.get("name") if isinstance(cfg.odoo_db, dict) else cfg.odoo_db
+                db_container = self._db_container(cfg)
                 if db_container and dbname:
                     result = ssh.run(
                         f'docker exec {db_container} psql -U postgres -c "SELECT 1 FROM pg_database WHERE datname=\'{dbname}\'" -t 2>/dev/null',
@@ -232,13 +241,13 @@ class OdooService(ImageService):
                     if "1" not in output:
                         actions.append(f"would create DB database {dbname}")
 
-        if config.owner:
-            actions.append(f"would chown -R {config.owner} {self.service_dir}")
+        if cfg.owner:
+            actions.append(f"would chown -R {cfg.owner} {self.service_dir}")
 
-        if config.chmod:
-            data_path = self._data_volume_path(config)
+        if cfg.chmod:
+            data_path = self._data_volume_path(cfg)
             if data_path:
-                actions.append(f"would chmod -R {config.chmod} {data_path}")
+                actions.append(f"would chmod -R {cfg.chmod} {data_path}")
 
         result = ssh.run(f"docker compose -f {self.compose_path} ps -q 2>/dev/null", hide=True, sudo=True)
         running = getattr(result, "stdout", "").strip() if result else ""
@@ -247,37 +256,38 @@ class OdooService(ImageService):
 
         return actions
 
-    def apply(self, ssh: SSHManager, config: ContainerConfig) -> None:
+    def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
+        cfg = _ensure_config(config)
         console.print(f"  [bold]Applying {self.name}[/bold] (kind: Container, service: Odoo)")
 
-        dirs = self._create_dirs(ssh, config)
+        dirs = self._create_dirs(ssh, cfg)
         for d in dirs:
             ssh.run(f"mkdir -p {d}", sudo=True)
             console.print(f"  [green]✓[/green] created directory {d}")
 
-        desired_compose = self._render_compose(config)
+        desired_compose = self._render_compose(cfg)
         ssh.run(f"bash -c 'cat > {self.compose_path} << \"CSCOMPOSE\"\n{desired_compose}\nCSCOMPOSE'", sudo=True)
         console.print(f"  [green]✓[/green] wrote {self.compose_path}")
 
-        desired_env = self._render_env(config)
-        secrets_env = self._render_secrets_env(config)
+        desired_env = self._render_env(cfg)
+        secrets_env = self._render_secrets_env(cfg)
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
             ssh.run(f"bash -c 'cat > {self.env_path} << \"CSENV\"\n{desired_env}\nCSENV'", sudo=True)
-            resolved = getattr(config, "_resolved_secrets", {})
+            resolved = getattr(cfg, "_resolved_secrets", {})
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")
-            elif config.secrets:
+            elif cfg.secrets:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)")
             else:
                 console.print(f"  [green]✓[/green] wrote {self.env_path}")
 
-        self._write_static_configs(ssh, config)
+        self._write_static_configs(ssh, cfg)
 
-        odoo_conf_content = self._render_odoo_conf(config)
+        odoo_conf_content = self._render_odoo_conf(cfg)
         if odoo_conf_content:
-            odoo_conf_path = self._odoo_conf_path(config)
-            data_path = self._data_volume_path(config)
+            odoo_conf_path = self._odoo_conf_path(cfg)
+            data_path = self._data_volume_path(cfg)
             if odoo_conf_path and data_path:
                 ssh.run(f"mkdir -p {data_path}", sudo=True)
                 ssh.run(
@@ -286,21 +296,21 @@ class OdooService(ImageService):
                 )
                 console.print(f"  [green]✓[/green] wrote {odoo_conf_path}")
 
-                if config.owner:
-                    ssh.run(f"chown {config.owner} {odoo_conf_path}", sudo=True)
+                if cfg.owner:
+                    ssh.run(f"chown {cfg.owner} {odoo_conf_path}", sudo=True)
 
-        self._create_db_user(ssh, config)
-        self._create_db_database(ssh, config)
+        self._create_db_user(ssh, cfg)
+        self._create_db_database(ssh, cfg)
 
-        if config.owner:
-            ssh.run(f"chown -R {config.owner} {self.service_dir}", sudo=True)
-            console.print(f"  [green]✓[/green] chown {self.service_dir} to {config.owner}")
+        if cfg.owner:
+            ssh.run(f"chown -R {cfg.owner} {self.service_dir}", sudo=True)
+            console.print(f"  [green]✓[/green] chown {self.service_dir} to {cfg.owner}")
 
-        if config.chmod:
-            data_path = self._data_volume_path(config)
+        if cfg.chmod:
+            data_path = self._data_volume_path(cfg)
             if data_path:
-                ssh.run(f"chmod -R {config.chmod} {data_path}", sudo=True)
-                console.print(f"  [green]✓[/green] chmod {config.chmod} {data_path}")
+                ssh.run(f"chmod -R {cfg.chmod} {data_path}", sudo=True)
+                console.print(f"  [green]✓[/green] chmod {cfg.chmod} {data_path}")
 
         ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
         console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")

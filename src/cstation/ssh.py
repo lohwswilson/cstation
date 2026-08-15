@@ -121,11 +121,17 @@ class SSHManager:
         Equivalent to ansible.builtin.authorized_key
         """
         try:
+            clean_key = public_key.strip()
+            if not clean_key:
+                return False
+            import shlex
+            quoted_key = shlex.quote(clean_key)
             # Ensure .ssh exists
-            self.run(f"mkdir -p ~/.ssh && chmod 700 ~/.ssh", sudo=True)
-            # Add key
-            self.run(f"echo '{public_key}' >> ~/.ssh/authorized_keys", sudo=True)
-            self.run(f"chmod 600 ~/.ssh/authorized_keys", sudo=True)
+            self.run("mkdir -p ~/.ssh && chmod 700 ~/.ssh", sudo=True)
+            # Add key only if not already present
+            check_cmd = f"grep -qxF {quoted_key} ~/.ssh/authorized_keys 2>/dev/null || echo {quoted_key} >> ~/.ssh/authorized_keys"
+            self.run(check_cmd, sudo=True)
+            self.run("chmod 600 ~/.ssh/authorized_keys", sudo=True)
             return True
         except Exception as e:
             console.print(f"[red]Failed to setup SSH key: {e}[/red]")
@@ -188,13 +194,22 @@ class SSHManager:
     def write_file(self, content: str, remote_path: str, mode: str = '0600', sudo: bool = False) -> bool:
         """
         Write string content to a remote file.
+        If sudo=True, safely uploads to a temporary file first, then uses sudo install to place it.
         """
         try:
             import io
-            f = io.StringIO(content)
-            self.connection.put(f, remote_path)
-            self.run(f"chmod {mode} {remote_path}", sudo=sudo)
-            return True
+            import uuid
+            if sudo:
+                tmp_remote = f"/tmp/.cs_tmp_{uuid.uuid4().hex[:12]}"
+                f = io.StringIO(content)
+                self.connection.put(f, tmp_remote)
+                self.run(f"sudo install -m {mode} {tmp_remote} {remote_path} && rm -f {tmp_remote}", sudo=True)
+                return True
+            else:
+                f = io.StringIO(content)
+                self.connection.put(f, remote_path)
+                self.run(f"chmod {mode} {remote_path}", sudo=False)
+                return True
         except Exception as e:
             console.print(f"[red]Failed to write to {remote_path}: {e}[/red]")
             return False

@@ -25,12 +25,13 @@ Current groups (registered in `main.py`):
 | `vps` | `commands/vps/main.py` | VPS lifecycle (init / plan / apply / status / list) |
 | `docker` | `commands/docker/main.py` | Declarative container deployment |
 | `image` | `commands/image/main.py` | Multi-arch Docker image build & push |
-| `github` | `commands/github/main.py` | GitHub SSH-key & repo helpers |
-| `cloudflare` | `commands/cloudflare/main.py` | Cloudflare DNS adapter |
-| `netcup` | `commands/netcup/main.py` | Netcup domain adapter |
-| `odoo` | `commands/odoo/main.py` | Odoo-specific workflows |
-| `server` | `commands/server/main.py` | Server subcommands (`playbook`, `pw`) |
-| `pw` | `commands/pw/main.py` | Standalone `pw` command |
+| `github` | `commands/github/main.py` | GitHub SSH-key & repo helpers (list / sync / clone) |
+| `dns` | `commands/dns/main.py` | DNS zone and record management |
+| `cloudflare` | `commands/cloudflare/main.py` | Cloudflare DNS adapter (legacy alias for `dns`) |
+| `auth` | `commands/auth/main.py` | Provider authentication management (`netcup`) |
+| `netcup` | `commands/netcup/main.py` | Netcup provider adapter (legacy alias for `auth netcup`) |
+| `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / sync) |
+| `server` | `commands/server/main.py` | Server subcommands (`playbook`, `ssh`, `status`, `ls`, `rm`) |
 
 **Adding a new command group**
 
