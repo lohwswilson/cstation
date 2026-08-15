@@ -1,0 +1,333 @@
+# CStation CLI Reference Manual
+
+`cstation` is a local-first DevOps command-line interface for managing VPS infrastructure, declarative Docker container stacks, DNS records, Odoo applications, Docker images, and GitHub repositories.
+
+---
+
+## Table of Contents
+
+1. [Global Options](#global-options)
+2. [`cstation vps` - VPS Lifecycle & Infrastructure](#cstation-vps)
+3. [`cstation docker` - Declarative Container Stacks](#cstation-docker)
+4. [`cstation odoo` - Odoo Application Workflows](#cstation-odoo)
+5. [`cstation image` - Docker Image Build & Push](#cstation-image)
+6. [`cstation dns` - DNS Zone & Record Management](#cstation-dns)
+7. [`cstation auth` - Provider Authentication](#cstation-auth)
+8. [`cstation github` - GitHub Repositories & SSH Keys](#cstation-github)
+9. [`cstation server` - Ansible & Server Management](#cstation-server)
+
+---
+
+## Global Options
+
+```bash
+cstation [OPTIONS] COMMAND [ARGS]...
+```
+
+- `--version`: Print CLI version and exit.
+- `--help`: Show top-level help and list available command groups.
+
+---
+
+## `cstation vps`
+
+Manage the lifecycle, security baseline, and OS-level configuration of remote servers.
+
+### Commands
+
+#### `cstation vps list`
+List all managed VPS instances with live or cached health metrics (load average, memory, disk, Docker status).
+
+```bash
+cstation vps list [OPTIONS]
+```
+- `--refresh, -r`: Force live SSH connection and bypass `.facts.json` cache.
+- `--filter, -f TEXT`: Filter VPS instances by name, provider, or stage.
+
+#### `cstation vps status`
+Show an interactive rich status dashboard for a specific VPS instance.
+
+```bash
+cstation vps status <vps-name-or-path> [OPTIONS]
+```
+- `--refresh, -r`: Fetch live metrics instead of using cached facts.
+
+#### `cstation vps init`
+Initialize a new local VPS configuration by scanning a remote server via SSH (or cloud API).
+
+```bash
+cstation vps init <target> [OPTIONS]
+```
+- `<target>`: Server identifier (e.g. `sg01.synercatalyst.com` for static SSH, or `hetzner/ANSIS:123456`).
+- `--port, -p INT`: SSH port (default: `22`).
+- `--user, -u TEXT`: SSH user (default: `root`).
+- `--key, -k PATH`: Private SSH key path (default: `~/.ssh/id_rsa`).
+- `--force`: Overwrite existing local configuration if it already exists.
+
+#### `cstation vps plan`
+Dry-run the 12-phase OS setup pipeline to preview what changes would be made on the server.
+
+```bash
+cstation vps plan <vps-name-or-path>
+```
+
+#### `cstation vps apply`
+Execute the 12-phase OS setup pipeline over SSH to bring the VPS into the declared state.
+
+```bash
+cstation vps apply <vps-name-or-path> [OPTIONS]
+```
+- `--yes, -y`: Skip confirmation prompt.
+- `--phase TEXT`: Execute only a specific phase (e.g. `packages`, `sshd`, `firewall`, `docker_daemon`).
+
+#### `cstation vps remove`
+Remove a VPS configuration from the local configuration directory.
+
+```bash
+cstation vps remove <vps-name-or-path> [OPTIONS]
+```
+- `--skip-check`: Skip checking if containers are still running on the remote host before removal.
+- `--force, -f`: Confirm deletion without interactive prompt.
+
+---
+
+## `cstation docker`
+
+Declarative multi-container management using YAML fragments and SSH Compose orchestration.
+
+### Commands
+
+#### `cstation docker import`
+Scrape running containers on a VPS and generate local YAML fragments.
+
+```bash
+cstation docker import <vps-name> [CONTAINER_NAME] [OPTIONS]
+```
+- `--all`: Import all running containers found on the host.
+
+#### `cstation docker status`
+Display running vs declared container status on the target VPS.
+
+```bash
+cstation docker status <vps-name>
+```
+
+#### `cstation docker plan`
+Compare declared container fragments against the remote host and preview deployment actions (create dirs, write `.env`, compose generation).
+
+```bash
+cstation docker plan <vps-name> [OPTIONS]
+```
+- `--service, -s TEXT`: Plan a single container service.
+
+#### `cstation docker apply`
+Deploy, update, or restart declared container services on the VPS.
+
+```bash
+cstation docker apply <vps-name> [OPTIONS]
+```
+- `--yes, -y`: Skip confirmation prompt.
+- `--service, -s TEXT`: Apply only a single container service.
+
+#### `cstation docker down`
+Stop and remove container services on the VPS.
+
+```bash
+cstation docker down <vps-name> [SERVICE_NAME]
+```
+
+#### `cstation docker restart`
+Restart container services on the VPS.
+
+```bash
+cstation docker restart <vps-name> [SERVICE_NAME]
+```
+
+---
+
+## `cstation odoo`
+
+Unified workflows for Odoo source code synchronization, database backups, and full restores.
+
+### Commands
+
+#### `cstation odoo sync`
+Sync Odoo core code (`PW.<version>`) and custom addons (`PW_ADDONS.<version>`) to a remote VPS using high-speed incremental `rsync`.
+
+```bash
+cstation odoo sync <host> <version> [OPTIONS]
+```
+- `<host>`: Target VPS hostname (e.g. `sg06` or `sg06.ansis.com.sg`).
+- `<version>`: Odoo/PW version (e.g. `14.0`, `16.0`, `18.0`).
+- `--port, -p INT`: SSH port (default: `22`).
+- `--dry-run, -n`: Show what files would be transferred without modifying the server.
+- `--verbose, -v`: Enable verbose file-by-file `rsync` progress output.
+
+#### `cstation odoo backup`
+Locate and download the latest automated database backup zip from a remote Odoo container.
+
+```bash
+cstation odoo backup <vps> <container> <dbname>
+```
+- `<vps>`: VPS hostname or config path.
+- `<container>`: Running Odoo container name (e.g. `US02_DEV8_US02DB`).
+- `<dbname>`: PostgreSQL database name.
+
+#### `cstation odoo restore`
+Restore an Odoo backup zip archive (database SQL dump + filestore + checklist directories) into a remote container.
+
+```bash
+cstation odoo restore <vps> <container> <backup-file> [OPTIONS]
+```
+- `--dest-db, -d TEXT`: Target database name (defaults to source DB name from archive manifest).
+- `--yes, -y`: Skip confirmation prompt.
+
+---
+
+## `cstation image`
+
+Build multi-architecture Docker images with custom patches and push to registries.
+
+### Commands
+
+#### `cstation image list`
+List all image definitions configured in `~/.config/cstation/images/`.
+
+```bash
+cstation image list
+```
+
+#### `cstation image show`
+Display detailed configuration, base images, and build arguments for an image.
+
+```bash
+cstation image show <image-name>
+```
+
+#### `cstation image build`
+Build a multi-architecture Docker image (supports Docker Buildx and Podman) and push to the container registry.
+
+```bash
+cstation image build <image-name> [OPTIONS]
+```
+- `--push / --no-push`: Push image to registry after building (default: `--push`).
+- `--tag, -t TEXT`: Additional custom tag to apply.
+
+---
+
+## `cstation dns`
+
+Declarative DNS record and zone management via Cloudflare.
+
+### Commands
+
+#### `cstation dns zones`
+List all DNS zones accessible by the configured API token.
+
+```bash
+cstation dns zones
+```
+
+#### `cstation dns plan`
+Dry-run comparison between local `~/.config/cstation/dns/<domain>.yaml` files and remote Cloudflare records.
+
+```bash
+cstation dns plan [DOMAINS]...
+```
+
+#### `cstation dns apply`
+Synchronize local DNS declarations to Cloudflare.
+
+```bash
+cstation dns apply [DOMAINS]... [OPTIONS]
+```
+- `--yes, -y`: Skip confirmation prompt.
+- `--delete`: Delete remote records that are not defined in the local configuration file.
+
+*(Note: `cstation cloudflare` is available as a backward-compatible alias)*
+
+---
+
+## `cstation auth`
+
+Provider authentication management for interactive services.
+
+### Commands
+
+#### `cstation auth netcup login`
+Authenticate with Netcup SCP via OAuth2 Device Code flow.
+
+```bash
+cstation auth netcup login
+```
+
+#### `cstation auth netcup logout`
+Revoke active refresh tokens and clear stored credentials.
+
+```bash
+cstation auth netcup logout
+```
+
+#### `cstation auth netcup status`
+Show authentication status and verify token retrieval.
+
+```bash
+cstation auth netcup status
+```
+
+---
+
+## `cstation github`
+
+Declarative Git repository management and remote SSH key deployment.
+
+### Commands
+
+#### `cstation github repo list`
+List all repositories configured in `~/.config/cstation/github/odoo_repos.sync.yml`.
+
+```bash
+cstation github repo list [OPTIONS]
+```
+- `--config, -c PATH`: Custom configuration file path.
+
+#### `cstation github repo sync`
+Sync repositories with upstream (e.g. `odoo/odoo`, `OCA/OpenUpgrade`), merge updates, pull origin, and push back to your GitHub fork.
+
+```bash
+cstation github repo sync [REPO_NAME] [OPTIONS]
+```
+- `[REPO_NAME]`: Specific repository name (syncs all `auto_sync: true` repos by default).
+- `--directory, -d PATH`: Target local clone path.
+- `--user, -u TEXT`: GitHub username override.
+
+#### `cstation github repo clone`
+Clone configured repositories to local disk with specific branches and upstream remotes configured.
+
+```bash
+cstation github repo clone [REPO_NAME] [OPTIONS]
+```
+
+#### `cstation github ssh`
+Deploy or generate SSH keys on a remote VPS for GitHub access.
+
+```bash
+cstation github ssh <vps-hostname> [OPTIONS]
+```
+- `--key-path, -k PATH`: Local private SSH key to copy (default: `~/.ssh/id_rsa`).
+- `--generate`: Generate a new SSH key pair directly on the remote VPS.
+- `--add-to-github`: Print instructions and public key for GitHub Deploy Keys.
+
+---
+
+## `cstation server`
+
+Ansible playbook execution and legacy inventory management.
+
+### Commands
+
+- `cstation server ls`: List servers in Ansible inventory.
+- `cstation server status`: Ping and check server health using Ansible.
+- `cstation server ssh <target>`: Configure SSH key authentication via Ansible.
+- `cstation server playbook list`: List available playbooks.
+- `cstation server playbook run <playbook>`: Execute an Ansible playbook against an inventory.

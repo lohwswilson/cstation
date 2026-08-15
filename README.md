@@ -1,186 +1,193 @@
-# CStation - Infrastructure Management CLI
+# CStation 🚀
 
-A DevOps CLI tool for managing VPS infrastructure, Docker container services, and deployments. Built with Python 3.13, Typer, and uv.
+**CStation** is a modern, local-first DevOps CLI for managing VPS infrastructure, declarative Docker container stacks, multi-arch Docker image builds, Cloudflare DNS records, and Odoo deployments.
 
-## Prerequisites
+Built with Python 3.13, Typer, Pydantic V2, and `uv`.
 
-- Python 3.13+
-- [uv](https://docs.astral.sh/uv/) package manager
+---
 
-## Installation
+## ✨ Key Highlights
+
+- **⚡ Blazing Fast (<100ms)**: Employs bundled SSH batch execution (`run_batch`) and local fact caching (`.facts.json`) for instant status dashboards and zero-latency fleet listings.
+- **🛡️ Declarative & Safe**: 100% typed with Pydantic V2. Every command supports dry-run `plan` modes before executing `apply`.
+- **💻 Local-First Architecture**: Your `~/.config/cstation/` directory is the single source of truth—commit it to Git to manage infrastructure as code.
+- **📦 Declarative Docker Orchestration**: Declare container stacks as lightweight YAML fragments alongside VPS definitions. Compose files are generated and applied on-the-fly over SSH.
+- **🔄 Complete Odoo Workflows**: High-speed delta `rsync` code synchronization, automated container backup fetching, and full database + filestore restores.
+- **🌐 Vendor-Neutral DNS & Auth**: Declarative DNS record synchronization via Cloudflare, and automated OAuth2 device-flow authentication for Netcup SCP.
+
+---
+
+## 📦 Installation & Setup
+
+### Prerequisites
+- Python **3.13+**
+- [`uv`](https://docs.astral.sh/uv/) package manager
+
+### Installation
 
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/lohwswilson/cstation.git
 cd cstation
 
 # Install in editable mode
 uv pip install -e .
 
-# Install with test dependencies
+# (Optional) Install test dependencies
 uv pip install -e ".[test]"
 
-# Verify
-uv run cstation --help
+# Verify installation
+cstation --version
+cstation --help
 ```
 
-## Quick Start
+---
 
-```bash
-# List managed VPS instances
-uv run cstation vps list
+## 🛠️ Command Overview
 
-# Initialize a new VPS config using just SSH access
-uv run cstation vps init your-server.com --port 8288
-
-# Show live health dashboard for a server
-uv run cstation vps status your-server.com
-
-# Import existing containers from a VPS
-uv run cstation docker import your-server.com
+```
+cstation
+├── vps          # VPS lifecycle (init, plan, apply, status, list, rm)
+├── docker       # Declarative container stacks (plan, apply, status, import, restart)
+├── odoo         # Odoo workflows (sync, backup, restore)
+├── image        # Docker image build & registry push (build, list, show)
+├── dns          # DNS zone & record management (zones, plan, apply)
+├── auth         # Provider authentication (netcup login, logout, status)
+├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
+├── server       # Ansible playbook runner & server tools
+└── version      # Print CStation version
 ```
 
-## Key Features
+---
 
-- **🚀 High-Performance SSH:** Uses bundled command execution (SSH Batching) and local fact caching to provide near-instantaneous status reports (<100ms).
-- **🛡️ Universal Schema Safety:** *Every* configuration (VPS, Container, DNS, GitHub) is validated using Pydantic, catching errors before they touch your servers.
-- **⚡ Native Orchestration:** Performs remote setup (OS hardening, Docker, GitHub SSH) directly via high-speed SSH. No Ansible dependency required for daily operations.
-- **📦 Declarative Docker:** Manage containers as code. Import existing containers, plan changes with dry-runs, and apply updates via SSH-based Compose orchestration.
-- **💻 Local-First:** Your `config/` directory is the single source of truth. Version control your infrastructure with Git.
+## 🚀 Quickstart Guide
 
-## Installation
+### 1. VPS Management
 
 ```bash
-git clone <repository-url>
-cd cstation
+# 1. Initialize a new VPS config via live SSH scan
+cstation vps init sg01.synercatalyst.com --port 22 --user root
 
-# Install using uv
-uv pip install -e .
+# 2. Preview 12-phase OS setup (packages, firewall, sshd, swap, tuning, docker)
+cstation vps plan sg01.synercatalyst.com
 
-# Verify
-uv run cstation --help
-```
+# 3. Apply baseline configuration
+cstation vps apply sg01.synercatalyst.com --yes
 
-## Usage
-
-### VPS Management
-
-CStation uses a **"Local-First"** architecture. It performs parallel SSH checks but prioritizes local caching for speed.
-
-```bash
-# List all managed VPS instances (instantly shows cached health metrics)
-cstation vps list
-
-# Show live health dashboard (Load Avg, RAM, Disk, Docker status)
+# 4. View real-time VPS health dashboard (CPU, RAM, Disk, Docker)
 cstation vps status sg01.synercatalyst.com
 
-# Force a live refresh (bypasses local cache)
-cstation vps status sg01.synercatalyst.com --refresh
-
-# Initialize a new VPS config via SSH scan
-cstation vps init sg01.synercatalyst.com --port 22 --user root
+# 5. List all managed VPS instances
+cstation vps list
 ```
 
-### Docker Service Management
-
-Manage your containers declaratively using YAML fragments.
+### 2. Declarative Docker Containers
 
 ```bash
-# 1. Scrape existing containers from a VPS into local YAML files
+# 1. Scrape existing containers from a VPS into local YAML fragments
 cstation docker import sg01.synercatalyst.com --all
 
-# 2. View current container state (detects both managed and unmanaged containers)
+# 2. Check running vs declared container state
 cstation docker status sg01.synercatalyst.com
 
-# 3. Dry-run: see what would happen if you applied local configs
+# 3. Dry-run container changes
 cstation docker plan sg01.synercatalyst.com
 
-# 4. Deploy/Update: launch containers via SSH-based Compose orchestration
+# 4. Deploy or update containers via SSH
 cstation docker apply sg01.synercatalyst.com --yes
 ```
 
-## Advanced Features
+### 3. Odoo Code Sync & Database Backups
 
-### Fact Caching
-To ensure the CLI feels snappy, `cstation` stores the latest hardware and performance metrics in a hidden `.facts.json` file inside each VPS directory.
-- `vps list` displays these metrics in a "Live Metrics (Cached)" column.
-- `vps status` displays them instantly and shows the age of the cache.
-- Background tasks (or manual `-r` flags) keep the cache fresh.
+```bash
+# Sync local PW.18.0 and addons to VPS via optimized rsync
+cstation odoo sync sg06 18.0
 
-### Schema Validation
-Config files are strictly validated. If you have an error in your `vps.yaml`, you'll get a detailed report:
-```text
-✗ Schema validation failed for config/vps/sg01.synercatalyst.com/vps.yaml:
-  - access.host: Field required
-  - identity.region: Input should be a valid string
+# Preview sync without touching remote files
+cstation odoo sync sg06 18.0 --dry-run
+
+# Download the latest auto-backup from a running container
+cstation odoo backup sg01 SG01_PROD my_database
+
+# Restore a full backup zip (database dump + filestore)
+cstation odoo restore sg01 SG01_PROD backup.zip --yes
 ```
 
-### Cloudflare DNS Management
-
-Manage DNS records declaratively from `config/dns/` YAML files.
+### 4. Declarative DNS (Cloudflare)
 
 ```bash
 # List all Cloudflare DNS zones
-cstation cloudflare zones
+cstation dns zones
 
-# Apply DNS records from config/dns/ to Cloudflare
-cstation cloudflare apply example.com --yes
+# Dry-run DNS drift against ~/.config/cstation/dns/
+cstation dns plan synercatalyst.com
+
+# Apply DNS records
+cstation dns apply synercatalyst.com --yes
 ```
 
-### GitHub & Odoo Management
+### 5. Multi-Arch Docker Image Builds
 
 ```bash
-# Setup SSH keys for GitHub access on a remote VPS (native SSH)
-cstation github ssh sg01.synercatalyst.com --generate
+# List available image recipes in ~/.config/cstation/images/
+cstation image list
 
-# Download an Odoo database backup from a remote container
-cstation odoo backup sg01.synercatalyst.com my-odoo-container my_db
-
-# Restore a local Odoo backup zip to a remote VPS
-cstation odoo restore sg01.synercatalyst.com target-container backup.zip
+# Build multi-arch image and push to registry
+cstation image build synercatalyst-odoo.13.0
 ```
 
-## Configuration
-
-CStation loads configuration from these locations (highest precedence first):
-
-1. `./etc/` — project-local
-2. `/etc/cstation/` — system-wide
-3. `~/.config/cstation/` — user-level
-
-Provider tokens are optional and only needed for the initial `vps init` if using Cloud APIs:
-
-```yaml
-vps:
-  default_provider: hetzner
-  providers:
-    hetzner:
-      accounts:
-        personal:
-          token: "your-hetzner-token"
-```
-
-## VPS Config Structure
-
-Each VPS has its own directory under `config/vps/` containing a main `vps.yaml` and fragment files:
-
-```
-config/vps/
-├── sg01.synercatalyst.com/
-│   ├── vps.yaml              ← infrastructure (access, facts, os)
-│   ├── SG01_TRAEFIK.yaml     ← kind: Container
-│   └── SG01_DB.yaml          ← kind: Container (PostgreSQL)
-├── us02.synercatalyst.com/
-│   ├── vps.yaml              ← infrastructure (access, facts, os)
-│   ├── US02_traefik.yaml     ← kind: Container
-│   └── US02_DB.yaml          ← kind: Container (PostgreSQL)
-```
-
-## Development
+### 6. GitHub Repository Upstream Sync
 
 ```bash
-# Run all tests
-uv run pytest -q
+# View configured repository mapping
+cstation github repo list
 
-# Run CLI directly
-uv run cstation vps list
+# Fetch upstream (odoo/odoo), merge, pull origin, and push to GitHub fork
+cstation github repo sync
+
+# Sync a specific repository
+cstation github repo sync PW.18.0
 ```
+
+---
+
+## 📂 Configuration Structure
+
+Live configurations are stored under `~/.config/cstation/`:
+
+```
+~/.config/cstation/
+├── config.yaml                     # Global credentials, secrets, & API tokens
+├── vps/                            # Server configs & container stacks
+│   ├── sg01.synercatalyst.com/
+│   │   ├── vps.yaml                # Infrastructure definition
+│   │   ├── traefik.yaml            # Traefik reverse proxy fragment
+│   │   ├── db.yaml                 # PostgreSQL container fragment
+│   │   └── sg01_prod.yaml          # Odoo application fragment
+│   └── us02.synercatalyst.com/
+├── dns/                            # Declarative DNS zones (synercatalyst.com.yaml)
+├── github/                         # Git repository sync definitions (odoo_repos.sync.yml)
+└── images/                         # Multi-arch Docker image recipes
+```
+
+See the [Configuration Guide](docs/configuration-guide.md) for full schema specifications.
+
+---
+
+## 🧪 Testing & Development
+
+```bash
+# Run entire test suite (192 unit & integration tests)
+uv run pytest -v
+
+# Run single test module
+uv run pytest tests/commands/test_vps_cli.py
+```
+
+---
+
+## 📚 Detailed Documentation
+
+- 📖 [CLI Command Reference](docs/cli-reference.md)
+- ⚙️ [Configuration & Schema Guide](docs/configuration-guide.md)
+- 🤖 [Coding Agent Guidance (AGENTS.md)](AGENTS.md)
