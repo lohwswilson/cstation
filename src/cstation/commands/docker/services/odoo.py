@@ -243,6 +243,9 @@ class OdooService(ImageService):
 
         if cfg.owner:
             actions.append(f"would chown -R {cfg.owner} {self.service_dir}")
+            data_path = self._data_volume_path(cfg)
+            if data_path:
+                actions.append(f"would chown -R {cfg.owner} {data_path}")
 
         if cfg.chmod:
             data_path = self._data_volume_path(cfg)
@@ -305,6 +308,10 @@ class OdooService(ImageService):
         if cfg.owner:
             ssh.run(f"chown -R {cfg.owner} {self.service_dir}", sudo=True)
             console.print(f"  [green]✓[/green] chown {self.service_dir} to {cfg.owner}")
+            data_path = self._data_volume_path(cfg)
+            if data_path:
+                ssh.run(f"chown -R {cfg.owner} {data_path}", sudo=True)
+                console.print(f"  [green]✓[/green] chown {data_path} to {cfg.owner}")
 
         if cfg.chmod:
             data_path = self._data_volume_path(cfg)
