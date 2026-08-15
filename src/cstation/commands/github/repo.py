@@ -284,6 +284,20 @@ def _clone_repository(config: GitHubConfig, repo_name: str, target_dir: Optional
         console.print(f"[red]Error cloning repository: {e}[/red]")
         raise typer.Exit(1)
 
+def _clean_stale_git_locks(local_path: str) -> None:
+    """Clean up stale .git/*.lock files (e.g. from previous crashed or timed-out processes)."""
+    git_dir = Path(local_path) / ".git"
+    if not git_dir.exists():
+        return
+    for lock_file in git_dir.glob("**/*.lock"):
+        if lock_file.is_file():
+            try:
+                lock_file.unlink()
+                console.print(f"[dim]  Cleaned stale git lock: {lock_file.name}[/dim]")
+            except Exception:
+                pass
+
+
 def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_dir: Optional[str], github_user: Optional[str]):
     """Sync repositories (fetch from upstream, pull latest changes, and push to GitHub)"""
     
@@ -320,6 +334,7 @@ def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_di
             continue
         
         console.print(f"[blue]Syncing {r_name}...[/blue]")
+        _clean_stale_git_locks(local_path)
         
         try:
             # Get current branch
@@ -344,10 +359,10 @@ def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_di
                     subprocess.run(add_upstream_cmd, capture_output=True, text=True)
                     console.print(f"[cyan]  Added upstream remote: {upstream_url}[/cyan]")
                 
-                # Fetch from upstream with shallow fetch and timeout (single branch only)
-                fetch_upstream_cmd = ["git", "-C", local_path, "fetch", "upstream", current_branch, "--depth=1"]
+                # Fetch from upstream with shallow fetch, no tags, and extended timeout
+                fetch_upstream_cmd = ["git", "-C", local_path, "fetch", "upstream", current_branch, "--depth=1", "--no-tags"]
                 try:
-                    fetch_upstream_result = subprocess.run(fetch_upstream_cmd, capture_output=True, text=True, timeout=120)
+                    fetch_upstream_result = subprocess.run(fetch_upstream_cmd, capture_output=True, text=True, timeout=300)
                     
                     if fetch_upstream_result.returncode == 0:
                         console.print(f"[cyan]  ✓ Fetched from upstream[/cyan]")
@@ -379,22 +394,19 @@ def _sync_repositories(config: GitHubConfig, repo_name: Optional[str], target_di
                         console.print(f"[yellow]    {fetch_upstream_result.stderr.strip()}[/yellow]")
 
                 except subprocess.TimeoutExpired:
-                    console.print(f"[yellow]  ⚠ Warning: Upstream fetch timed out after 120 seconds[/yellow]")
+                    console.print(f"[yellow]  ⚠ Warning: Upstream fetch timed out after 300 seconds[/yellow]")
                     console.print(f"[yellow]  Failed to fetch from upstream[/yellow]")
+                    _clean_stale_git_locks(local_path)
             
             # Fetch from origin with timeout
             console.print(f"[cyan]  Fetching from origin...[/cyan]")
             fetch_origin_cmd = ["git", "-C", local_path, "fetch", "origin", "--prune"]
             try:
-                fetch_origin_result = subprocess.run(fetch_origin_cmd, capture_output=True, text=True, timeout=60)
+                fetch_origin_result = subprocess.run(fetch_origin_cmd, capture_output=True, text=True, timeout=180)
             except subprocess.TimeoutExpired:
-                console.print(f"[yellow]  ⚠ Warning: Origin fetch timed out after 60 seconds[/yellow]")
+                console.print(f"[yellow]  ⚠ Warning: Origin fetch timed out after 180 seconds[/yellow]")
                 fetch_origin_result = subprocess.CompletedProcess(fetch_origin_cmd, 1, "", "Timeout expired")
-            
-            if fetch_origin_result.returncode == 0:
-                console.print(f"[cyan]  ✓ Fetched from origin[/cyan]")
-            else:
-                console.print(f"[yellow]  ⚠ Warning: Failed to fetch from origin[/yellow]")
+                _clean_stale_git_locks(local_path)
             
             # Pull latest changes from origin (if no upstream sync occurred)
             if not upstream_synced:
