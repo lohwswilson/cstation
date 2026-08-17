@@ -48,13 +48,13 @@ cstation --help
 ```
 cstation
 ├── vps          # VPS lifecycle (init, plan, apply, status, list, rm)
-├── docker       # Declarative container stacks (plan, apply, status, import, restart)
+├── docker       # Declarative container stacks (plan, apply, status, import)
 ├── odoo         # Odoo workflows (sync, backup, restore)
-├── image        # Docker image build & registry push (build, list, show)
+├── image        # Docker image build & registry push (list, build)
 ├── dns          # DNS zone & record management (zones, plan, apply)
 ├── auth         # Provider authentication (netcup login, logout, status)
 ├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
-├── server       # Ansible playbook runner & server tools
+├── server       # Server tools (ssh-setup, status, ls, rm, playbook, pw sync)
 └── version      # Print CStation version
 ```
 

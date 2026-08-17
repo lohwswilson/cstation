@@ -25,7 +25,9 @@ cstation [OPTIONS] COMMAND [ARGS]...
 ```
 
 - `--version`: Print CLI version and exit.
+- `--verbose, -v`: Show configuration loading details (also surfaces full tracebacks on errors).
 - `--help`: Show top-level help and list available command groups.
+- `--install-completion` / `--show-completion`: Install or display shell completion scripts.
 
 ---
 
@@ -80,11 +82,11 @@ cstation vps apply <vps-name-or-path> [OPTIONS]
 - `--yes, -y`: Skip confirmation prompt.
 - `--phase TEXT`: Execute only a specific phase (e.g. `packages`, `sshd`, `firewall`, `docker_daemon`).
 
-#### `cstation vps remove`
+#### `cstation vps rm`
 Remove a VPS configuration from the local configuration directory.
 
 ```bash
-cstation vps remove <vps-name-or-path> [OPTIONS]
+cstation vps rm <vps-name-or-path> [OPTIONS]
 ```
 - `--skip-check`: Skip checking if containers are still running on the remote host before removal.
 - `--force, -f`: Confirm deletion without interactive prompt.
@@ -195,13 +197,6 @@ List all image definitions configured in `~/.config/cstation/images/`.
 
 ```bash
 cstation image list
-```
-
-#### `cstation image show`
-Display detailed configuration, base images, and build arguments for an image.
-
-```bash
-cstation image show <image-name>
 ```
 
 #### `cstation image build`
@@ -331,6 +326,7 @@ Ansible playbook execution and legacy inventory management.
 
 - `cstation server ls`: List servers in Ansible inventory.
 - `cstation server status`: Ping and check server health using Ansible.
-- `cstation server ssh <target>`: Configure SSH key authentication via Ansible.
+- `cstation server ssh-setup <target>`: Configure SSH key authentication via Ansible (`ssh` is a legacy alias).
 - `cstation server playbook list`: List available playbooks.
 - `cstation server playbook run <playbook>`: Execute an Ansible playbook against an inventory.
+- `cstation server pw sync <host> <version>`: Sync PerfectWork files to a remote host.

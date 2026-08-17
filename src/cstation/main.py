@@ -4,12 +4,12 @@ CStation - Infrastructure Management CLI
 A DevOps CLI tool for managing infrastructure using Ansible
 """
 
-import sys
+import click
 import typer
 from rich import print as rprint
 
 # Import configuration management
-from .config import initialize_configuration, get_config
+from .config import config_manager, initialize_configuration
 
 from .commands.version.main import version
 from .commands.github.main import github_app
@@ -35,7 +35,6 @@ def version_callback(value: bool):
 app = typer.Typer(
     name="cstation",
     help="Infrastructure Management CLI for DevOps",
-    add_completion=False,
     invoke_without_command=True
 )
 
@@ -45,11 +44,11 @@ app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
 app.add_typer(dns_app)
-app.add_typer(cloudflare_app)
+app.add_typer(cloudflare_app, hidden=True)  # legacy alias for dns
 app.add_typer(odoo_app)
 app.add_typer(image_app)
 app.add_typer(auth_app)
-app.add_typer(netcup_app)
+app.add_typer(netcup_app, hidden=True)  # legacy alias for auth netcup
 app.add_typer(server_app)
 
 
@@ -57,22 +56,31 @@ app.add_typer(server_app)
 def main_callback(
     ctx: typer.Context,
     version: bool = typer.Option(None, "--version", callback=version_callback, is_eager=True),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show configuration loading details"),
 ):
     """Infrastructure Management CLI for DevOps"""
-    # Initialize configuration on first run
-    config_manager = get_config()
-    
     if ctx.invoked_subcommand is None:
         # Show help when no subcommand is provided
         rprint(ctx.get_help())
         raise typer.Exit(0)
 
+    # Initialize configuration (quiet unless --verbose)
+    initialize_configuration(verbose=verbose)
+
 
 def main():
     """Main entry point for the CLI application"""
-    # Initialize configuration
-    initialize_configuration()
-    app()
+    try:
+        app()
+    except (typer.Exit, click.Abort):
+        # Normal CLI control flow — let Click handle exit codes.
+        raise
+    except Exception as e:
+        if config_manager.verbose:
+            # --verbose: surface the full traceback for debugging.
+            raise
+        rprint(f"[red]✗[/red] {e}")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

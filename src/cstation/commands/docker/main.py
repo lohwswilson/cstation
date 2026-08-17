@@ -99,7 +99,8 @@ def _check_port_collisions(ssh: SSHManager, fragments: list[tuple[str, Container
         if status == "disabled":
             continue
         for port_spec in config.ports:
-            host_port = port_spec.split(":")[0] if ":" in port_spec else port_spec
+            parts = port_spec.split(":")
+            host_port = parts[-2] if len(parts) >= 2 else parts[0]
             if host_port in declared_ports:
                 return [f"Port {host_port} declared by both {declared_ports[host_port]} and {name}"]
             declared_ports[host_port] = name

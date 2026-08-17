@@ -5,7 +5,7 @@ description = "Infrastructure Management CLI for DevOps - A powerful tool for ma
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
-    {name = "DevOps Team", email = "devops@example.com"}
+    {name = "WS Loh", email = "wsloh@perfectwork.com"}
 ]
 keywords = ["devops", "infrastructure", "ansible", "docker", "cli"]
 classifiers = [
@@ -38,9 +38,9 @@ test = [
 cstation = "cstation.main:main"
 
 [project.urls]
-Homepage = "https://github.com/example/cstation"
-Repository = "https://github.com/example/cstation.git"
-Issues = "https://github.com/example/cstation/issues"
+Homepage = "https://github.com/lohwswilson/cstation"
+Repository = "https://github.com/lohwswilson/cstation.git"
+Issues = "https://github.com/lohwswilson/cstation/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -51,11 +51,6 @@ packages = ["src/cstation"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/"]
-
-[tool.uv.workspace]
-members = [
-    "cstation-cli",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

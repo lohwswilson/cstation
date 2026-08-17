@@ -58,7 +58,7 @@ class SSHManager:
         """Execute a single command."""
         import sys
         try:
-            if sudo:
+            if sudo and self.user != "root" and self.host not in ("127.0.0.1", "localhost"):
                 return self.connection.sudo(command, hide=hide, warn=True)
             return self.connection.run(command, hide=hide, warn=True)
         except UnexpectedExit as e:

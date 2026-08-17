@@ -164,7 +164,7 @@ def _disabled_mailcow_fragment() -> str:
 
 
 def _setup_vps_dir(tmp_path: Path) -> Path:
-    vps_dir = tmp_path / "config" / "vps" / "test-vps"
+    vps_dir = tmp_path / "cstation" / "vps" / "test-vps"
     _write(vps_dir / "vps.yaml", _full_vps_yaml())
     _write(vps_dir / "traefik.yaml", _traefik_fragment())
     _write(vps_dir / "portainer.yaml", _portainer_fragment())
@@ -319,7 +319,7 @@ def test_docker_vps_name_resolution(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
     _mock_ssh_run(monkeypatch)
 
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CSTATION_CONFIG_DIR", str(tmp_path / "cstation"))
 
     r = runner.invoke(app, ["docker", "plan", "test-vps"])
     assert r.exit_code == 0
@@ -327,7 +327,7 @@ def test_docker_vps_name_resolution(tmp_path, monkeypatch):
 
 
 def test_docker_fragment_discovery(tmp_path):
-    vps_dir = tmp_path / "config" / "vps" / "my-vps"
+    vps_dir = tmp_path / "cstation" / "vps" / "my-vps"
     _write(vps_dir / "vps.yaml", _full_vps_yaml())
     _write(vps_dir / "traefik.yaml", _traefik_fragment())
     _write(vps_dir / "some-notes.txt", "not a yaml")
@@ -339,7 +339,7 @@ def test_docker_fragment_discovery(tmp_path):
 
 
 def test_docker_load_fragments_skips_vps_yaml(tmp_path):
-    vps_dir = tmp_path / "config" / "vps" / "my-vps"
+    vps_dir = tmp_path / "cstation" / "vps" / "my-vps"
     _write(vps_dir / "vps.yaml", _full_vps_yaml())
     _write(vps_dir / "traefik.yaml", _traefik_fragment())
 
@@ -694,7 +694,7 @@ def _stalwart_fragment() -> str:
 
 
 def _setup_vps_dir_with_stalwart(tmp_path: Path) -> Path:
-    vps_dir = tmp_path / "config" / "vps" / "test-vps"
+    vps_dir = tmp_path / "cstation" / "vps" / "test-vps"
     _write(vps_dir / "vps.yaml", _full_vps_yaml())
     _write(vps_dir / "traefik.yaml", _traefik_fragment())
     _write(vps_dir / "stalwart.yaml", _stalwart_fragment())
@@ -1219,7 +1219,7 @@ def test_traefik_compose_uses_self_name():
 
 
 def test_preflight_reads_network_from_vps_config(tmp_path, monkeypatch):
-    vps_dir = tmp_path / "config" / "vps" / "test-vps"
+    vps_dir = tmp_path / "cstation" / "vps" / "test-vps"
     vps_yaml = _full_vps_yaml().replace("networks: [PW_NET]", "networks: [CUSTOM_NET]")
     _write(vps_dir / "vps.yaml", vps_yaml)
     _write(vps_dir / "traefik.yaml", _traefik_fragment())

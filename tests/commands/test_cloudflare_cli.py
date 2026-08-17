@@ -43,7 +43,7 @@ def test_cloudflare_plan_no_domain_config(tmp_path, monkeypatch):
 
 
 def test_cloudflare_apply_no_token(tmp_path, monkeypatch):
-    dns_dir = tmp_path / "config" / "dns"
+    dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
     _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
     home = tmp_path / "home"
@@ -80,7 +80,7 @@ def test_cloudflare_zones_with_token(tmp_path, monkeypatch):
 
 
 def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
-    dns_dir = tmp_path / "config" / "dns"
+    dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
     _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
     home = tmp_path / "home"
@@ -104,7 +104,7 @@ def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
 
 
 def test_cloudflare_plan_all_domains(tmp_path, monkeypatch):
-    dns_dir = tmp_path / "config" / "dns"
+    dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
     _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: ''\n    type: MX\n    value: mail.example.com\n    priority: 10\n    ttl: 300\n")
     _write(dns_dir / "test.org.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: test.org\nrecords:\n  - name: ''\n    type: A\n    value: 5.6.7.8\n    ttl: 300\n")

@@ -23,6 +23,8 @@ def isolate_cstation_test_env(tmp_path_factory, monkeypatch):
     # Reset config_manager state
     config_manager.config_data = {}
     config_manager.config_sources = []
+    config_manager.verbose = False
     yield
     config_manager.config_data = {}
     config_manager.config_sources = []
+    config_manager.verbose = False

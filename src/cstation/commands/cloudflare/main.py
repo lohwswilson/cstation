@@ -27,7 +27,7 @@ console = Console()
 
 cloudflare_app = typer.Typer(
     name="cloudflare",
-    help="Cloudflare DNS management",
+    help="Cloudflare DNS management (deprecated alias for dns)",
     invoke_without_command=True,
 )
 
@@ -279,7 +279,7 @@ def cloudflarePlan(
         console.print("[green]✓[/green] All DNS records are up to date.")
     else:
         console.print(f"[bold]Summary:[/bold] {len(all_to_create)} to create, {len(all_to_update)} to update, {len(all_to_delete)} unmanaged in Cloudflare")
-        console.print("[dim]Run 'cstation cloudflare apply <domain>' to create/update records.[/dim]")
+        console.print("[dim]Run 'cstation dns apply <domain>' to create/update records.[/dim]")
 
 
 @cloudflare_app.command("apply")

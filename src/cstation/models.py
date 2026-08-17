@@ -91,6 +91,7 @@ class ContainerConfig(BaseModel):
     subdirs: List[str] = Field(default_factory=list)
     extra_dirs: List[str] = Field(default_factory=list)
     container_name: Optional[str] = None
+    compose_dir: Optional[str] = None
     network: Optional[str] = None
     # Stack-specific fields (for kind: Stack)
     git_repo: Optional[str] = None

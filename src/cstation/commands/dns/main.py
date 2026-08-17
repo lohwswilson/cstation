@@ -19,9 +19,9 @@ dns_app = typer.Typer(
     invoke_without_command=True,
 )
 
-dns_app.command("zones")(list_zones)
-dns_app.command("plan")(dns_plan)
-dns_app.command("apply")(dns_apply)
+dns_app.command("zones", help="List DNS zones")(list_zones)
+dns_app.command("plan", help="Dry-run: compare DNS config against the provider and show drift")(dns_plan)
+dns_app.command("apply", help="Apply DNS records from ~/.config/cstation/dns/ to the provider")(dns_apply)
 
 
 @dns_app.callback()

@@ -26,7 +26,7 @@ console = Console()
 
 netcup_app = typer.Typer(
     name="netcup",
-    help="Netcup SCP provider management",
+    help="Netcup SCP provider management (deprecated alias for auth netcup)",
     invoke_without_command=True,
 )
 

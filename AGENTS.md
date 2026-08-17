@@ -31,7 +31,7 @@ Current groups (registered in `main.py`):
 | `auth` | `commands/auth/main.py` | Provider authentication management (`netcup`) |
 | `netcup` | `commands/netcup/main.py` | Netcup provider adapter (legacy alias for `auth netcup`) |
 | `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / sync) |
-| `server` | `commands/server/main.py` | Server subcommands (`playbook`, `ssh`, `status`, `ls`, `rm`) |
+| `server` | `commands/server/main.py` | Server subcommands (`ssh-setup`, `status`, `ls`, `rm`, `playbook`, `pw`) |
 
 **Adding a new command group**
 
@@ -44,7 +44,7 @@ Current groups (registered in `main.py`):
 
 **SSH layer** — `src/cstation/ssh.py` (`SSHManager`) wraps Fabric/Paramiko. The critical method is `run_batch()`: it bundles multiple shell commands into a single SSH round-trip using `==CS_SEP==` as a separator. All fact collection is built on top of this to minimise latency.
 
-**Config flow** — `src/cstation/config.py`. `ConfigManager` merges YAML configs from `./etc/`, `/etc/cstation/`, and `~/.config/cstation/` (lowest → highest precedence). `initialize_configuration()` is called once at startup in `main()`. Per the recent flatten (2026-07-07), live state lives under `~/.config/cstation/` — do not reintroduce legacy config paths.
+**Config flow** — `src/cstation/config.py`. `ConfigManager` merges YAML configs from `./etc/`, `/etc/cstation/`, and `~/.config/cstation/` — the user config (`~/.config/cstation/`) has **highest** precedence (local-first), then `/etc/cstation/`, then `./etc/` (lowest). `initialize_configuration()` is called from the main callback (quiet unless `--verbose`; load-once per process). Per the recent flatten (2026-07-07), live state lives under `~/.config/cstation/` — do not reintroduce legacy config paths (the `./config/` fallbacks were removed).
 
 **Models** — `src/cstation/models.py`. Pydantic models for `VPSConfig`, `ContainerConfig`, `DockerImageConfig`, `DNSConfig`, `GitHubConfig`. `ContainerConfig` uses `extra = "allow"` to support service-specific fields (`odoo_conf`, `traefik`, `static_config`). Every load boundary must catch `ValidationError` and render location + message per error to the user.
 
@@ -63,7 +63,7 @@ Source of truth: `~/.config/cstation/vps/`.
 
 | Command | Behaviour |
 |---------|-----------|
-| `vps list` | Scans the config dir and runs parallel SSH uptime checks (cached facts). |
+| `vps list` | Lists VPS instances from configured cloud providers (`hetzner`/`vultr`/`netcup`) plus `static` config-dir entries, in parallel (cached facts only via `.facts.json` for `status`). |
 | `vps status <host>` | Shows live Load Avg, Memory, Disk, Docker stats. `--refresh` forces live collection. |
 | `vps init <host>` | Defaults to `static` provider; discovery via live SSH scan. |
 | `vps plan <host>` | Dry-run of `apply` — shows what would change. |

@@ -1506,7 +1506,7 @@ def test_vps_list_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
     _reset_config()
     initialize_configuration()
 
-    vps_dir = tmp_path / "config" / "vps" / "static-srv"
+    vps_dir = tmp_path / "home" / ".config" / "cstation" / "vps" / "static-srv"
     vps_dir.mkdir(parents=True)
     (vps_dir / "vps.yaml").write_text(
         _yaml.dump({
@@ -1534,7 +1534,7 @@ def test_vps_list_static_filter(monkeypatch, tmp_path: Path):
     _reset_config()
     initialize_configuration()
 
-    vps_dir = tmp_path / "config" / "vps" / "static-srv"
+    vps_dir = tmp_path / "home" / ".config" / "cstation" / "vps" / "static-srv"
     vps_dir.mkdir(parents=True)
     (vps_dir / "vps.yaml").write_text(
         _yaml.dump({

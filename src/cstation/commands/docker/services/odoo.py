@@ -174,6 +174,8 @@ class OdooService(ImageService):
 
     def plan(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
         cfg = _ensure_config(config)
+        if getattr(cfg, "compose_dir", None):
+            self.compose_subdir = cfg.compose_dir
         actions: list[str] = []
 
         dirs = self._create_dirs(ssh, cfg)
@@ -261,6 +263,8 @@ class OdooService(ImageService):
 
     def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         cfg = _ensure_config(config)
+        if getattr(cfg, "compose_dir", None):
+            self.compose_subdir = cfg.compose_dir
         console.print(f"  [bold]Applying {self.name}[/bold] (kind: Container, service: Odoo)")
 
         dirs = self._create_dirs(ssh, cfg)

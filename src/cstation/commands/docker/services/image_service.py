@@ -196,6 +196,8 @@ class ImageService:
 
     def plan(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> list[str]:
         cfg = _ensure_config(config)
+        if getattr(cfg, "compose_dir", None):
+            self.compose_subdir = cfg.compose_dir
         actions: list[str] = []
         dirs = self._create_dirs(ssh, cfg)
         for d in dirs:
@@ -251,6 +253,8 @@ class ImageService:
 
     def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         cfg = _ensure_config(config)
+        if getattr(cfg, "compose_dir", None):
+            self.compose_subdir = cfg.compose_dir
         console.print(f"  [bold]Applying {self.name}[/bold] (kind: Container)")
 
         dirs = self._create_dirs(ssh, cfg)
@@ -291,6 +295,8 @@ class ImageService:
 
     def status(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> dict:
         cfg = _ensure_config(config)
+        if getattr(cfg, "compose_dir", None):
+            self.compose_subdir = cfg.compose_dir
         # 1. Try docker compose first (managed state)
         result = ssh.run(f"docker compose -f {self.compose_path} ps --format json 2>/dev/null", hide=True, sudo=True)
         containers = []
