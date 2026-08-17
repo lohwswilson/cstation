@@ -1,4 +1,0 @@
-#!/bin/bash
-# Ansible-lint wrapper for uv environment
-cd "$(dirname "$0")/.."
-exec uv run ansible-lint "$@"

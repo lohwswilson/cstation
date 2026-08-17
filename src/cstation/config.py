@@ -95,35 +95,26 @@ def get_cstation_config_dir() -> Path:
 
 def get_vps_dir() -> Path:
     """Get the directory containing VPS configurations."""
-    base = get_cstation_config_dir() / "vps"
-    if base.exists() and any(base.iterdir()):
-        return base
-    legacy = Path.cwd() / "config" / "vps"
-    if legacy.exists():
-        return legacy
-    return base
+    return get_cstation_config_dir() / "vps"
 
 
 def get_dns_dir() -> Path:
     """Get the directory containing DNS configurations."""
-    base = get_cstation_config_dir() / "dns"
-    if base.exists() and any(base.iterdir()):
-        return base
-    legacy = Path.cwd() / "config" / "dns"
-    if legacy.exists():
-        return legacy
-    return base
+    return get_cstation_config_dir() / "dns"
 
 
 def get_images_dir() -> Path:
     """Get the directory containing Docker image configurations."""
-    base = get_cstation_config_dir() / "images"
-    if base.exists() and any(base.iterdir()):
-        return base
-    legacy = Path.cwd() / "config" / "images"
-    if legacy.exists():
-        return legacy
-    return base
+    env_dir = os.environ.get("CSTATION_IMAGES_DIR")
+    if env_dir:
+        return Path(env_dir)
+    opt_images = Path("/opt/cstation/images")
+    if opt_images.exists():
+        return opt_images
+    repo_images = Path(__file__).resolve().parent.parent.parent / "images"
+    if repo_images.exists():
+        return repo_images
+    return get_cstation_config_dir() / "images"
 
 
 class _DynamicPath:
@@ -182,20 +173,26 @@ class ConfigManager:
     def __init__(self):
         self.config_data: Dict[str, Any] = {}
         self.config_sources: List[str] = []
+        self.verbose: bool = False
         
     def get_config_search_paths(self) -> List[Path]:
         """
         Get configuration search paths in order of precedence (highest to lowest):
-        1. Current working directory ./etc/
+        1. User home directory ~/.config/cstation/ (Unix) or %APPDATA%/cstation/ (Windows)
         2. System-wide /etc/cstation/ (Unix) or %PROGRAMDATA%/cstation/ (Windows)
-        3. User home directory ~/.config/cstation/ (Unix) or %APPDATA%/cstation/ (Windows)
+        3. Current working directory ./etc/ (lowest precedence)
         """
         paths = []
-        
-        # 1. Local configuration (highest precedence)
-        local_config = Path.cwd() / "etc"
-        paths.append(local_config)
-        
+
+        # 1. User configuration (highest precedence — local-first source of truth)
+        if sys.platform.startswith('win'):
+            # Windows user configuration
+            user_config = Path(os.environ.get('APPDATA', '')) / "cstation"
+        else:
+            # Unix-like user configuration
+            user_config = get_cstation_config_dir()
+        paths.append(user_config)
+
         # 2. System-wide configuration
         if sys.platform.startswith('win'):
             # Windows system configuration
@@ -204,16 +201,11 @@ class ConfigManager:
             # Unix-like system configuration
             system_config = Path("/etc/cstation")
         paths.append(system_config)
-        
-        # 3. User configuration (lowest precedence)
-        if sys.platform.startswith('win'):
-            # Windows user configuration
-            user_config = Path(os.environ.get('APPDATA', '')) / "cstation"
-        else:
-            # Unix-like user configuration
-            user_config = get_cstation_config_dir()
-        paths.append(user_config)
-        
+
+        # 3. Local configuration (lowest precedence)
+        local_config = Path.cwd() / "etc"
+        paths.append(local_config)
+
         return paths
     
     def find_ansible_config(self) -> Optional[Path]:
@@ -325,7 +317,8 @@ class ConfigManager:
                     try:
                         file_config = self.load_yaml_file(config_file)
                         merged_config = self.merge_configs(merged_config, file_config)
-                        console.print(f"[green]✓[/green] Loaded configuration from: {config_file}")
+                        if self.verbose:
+                            console.print(f"[green]✓[/green] Loaded configuration from: {config_file}")
                         break  # Use first found config file in this directory
                     except ConfigurationError as e:
                         console.print(f"[yellow]⚠[/yellow] Warning: {e}")
@@ -359,7 +352,8 @@ class ConfigManager:
             return
 
         os.environ["ANSIBLE_CONFIG"] = str(ansible_cfg)
-        console.print(f"[green]✓[/green] Set ANSIBLE_CONFIG to: {ansible_cfg}")
+        if self.verbose:
+            console.print(f"[green]✓[/green] Set ANSIBLE_CONFIG to: {ansible_cfg}")
     
     def get_config_value(self, key: str, default: Any = None) -> Any:
         """
@@ -428,13 +422,23 @@ class ConfigManager:
 config_manager = ConfigManager()
 
 
-def initialize_configuration() -> ConfigManager:
+def initialize_configuration(verbose: bool = False) -> ConfigManager:
     """
     Initialize the global configuration manager.
-    
+
+    Loads configuration once per process; subsequent calls are no-ops so that
+    pre-seeded config data (e.g. in tests) is not clobbered.
+
+    Args:
+        verbose: When True, print which config files were loaded.
+
     Returns:
         Configured ConfigManager instance
     """
+    config_manager.verbose = verbose
+    if config_manager.config_sources or config_manager.config_data:
+        # Already initialized (or pre-seeded) — do not reload.
+        return config_manager
     try:
         load_dotenv()
         config_manager.load_configuration()

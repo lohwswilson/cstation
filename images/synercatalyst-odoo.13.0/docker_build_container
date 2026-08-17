@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+IMAGE_NAME="synercatalyst/odoo.13.0"
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <tag>"
+    echo "  $0 latest"
+    echo "  $0 20250503"
+    exit 1
+fi
+
+TAG="$1"
+FULL_TAG="${IMAGE_NAME}:${TAG}"
+
+echo "Building ${FULL_TAG} for linux/amd64 + linux/arm64..."
+
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -t "${FULL_TAG}" \
+    --push \
+    .
+
+echo "✓ Built and pushed ${FULL_TAG}"

@@ -1,0 +1,7 @@
+apiVersion: cstation/v1
+kind: DockerImage
+name: synercatalyst-odoo.13.0
+image: synercatalyst/odoo.13.0
+platforms:
+  - linux/amd64
+  - linux/arm64

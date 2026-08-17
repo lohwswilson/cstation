@@ -1,0 +1,12 @@
+apispec
+cachetools
+cerberus
+jsondiff
+marshmallow
+marshmallow_objects
+pyquerystring
+parse-accept-language
+zoom_us
+openupgradelib
+werkzeug<1.0
+reportlab
