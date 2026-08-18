@@ -76,7 +76,8 @@ EXCLUDED_ODOO_KEYS = {"db_password"}
 
 def _render_odoo_conf(odoo_conf: dict) -> str:
     merged = {**ODOO_CONF_DEFAULTS, **{k: v for k, v in odoo_conf.items() if k not in EXCLUDED_ODOO_KEYS and not k.startswith("_")}}
-    merged["db_name"] = "False"
+    if "db_name" not in odoo_conf:
+        merged["db_name"] = "False"
 
     user_keys = [k for k in odoo_conf if k not in EXCLUDED_ODOO_KEYS and not k.startswith("_")]
     ordered_keys = []

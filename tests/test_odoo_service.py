@@ -88,6 +88,11 @@ def test_render_odoo_conf_includes_db_name_false():
     assert "db_name = False" in result
 
 
+def test_render_odoo_conf_allows_custom_db_name():
+    result = _render_odoo_conf({"db_host": "SG07_DB", "db_name": "SEQ8"})
+    assert "db_name = SEQ8" in result
+
+
 def test_render_odoo_conf_excludes_db_password():
     result = _render_odoo_conf({"db_host": "US02_DB", "db_password": "secret123"})
     assert "db_password" not in result
