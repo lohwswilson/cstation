@@ -477,3 +477,144 @@ def docker_callback(ctx: typer.Context) -> None:
 
 def rprint(help_text):
     console.print(help_text)
+def _remove_container_secrets(vps_name: str, container_name: str) -> bool:
+    config_path = Path.home() / ".config" / "cstation" / "config.yaml"
+    if not config_path.exists():
+        return False
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return False
+    vps_secrets = data.get("vps", {}).get("secrets", {}).get(vps_name, {})
+    if container_name not in vps_secrets:
+        return False
+    del vps_secrets[container_name]
+    if not vps_secrets:
+        data.get("vps", {}).get("secrets", {}).pop(vps_name, None)
+    try:
+        with config_path.open("w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        return True
+    except Exception:
+        return False
+
+
+def _find_container_yaml(vps_dir: Path, container: str) -> Optional[Path]:
+    # Exact filename match
+    exact = vps_dir / f"{container}.yaml"
+    if exact.exists():
+        return exact
+    exact_disabled = vps_dir / f"{container}.yaml.disabled"
+    if exact_disabled.exists():
+        return exact_disabled
+
+    # Search by metadata name inside files
+    for p in vps_dir.glob("*.yaml*"):
+        if p.name == "vps.yaml":
+            continue
+        try:
+            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            c_name = raw.get("name") or raw.get("container_name") or p.stem
+            if c_name == container or p.stem == container or p.stem.replace(".yaml", "") == container:
+                return p
+        except Exception:
+            continue
+    return None
+
+
+@docker_app.command("rm")
+@docker_app.command("remove", hidden=True)
+def docker_remove(
+    vps: str = typer.Argument(..., help="VPS name or directory path"),
+    container: str = typer.Argument(..., help="Container service name to remove"),
+    volumes: bool = typer.Option(False, "--volumes", "-v", help="Also remove named volumes associated with the container stack"),
+    purge_local: bool = typer.Option(True, "--purge-local/--keep-local", help="Delete local YAML configuration file"),
+    archive_local: bool = typer.Option(False, "--archive", help="Rename local YAML to .disabled instead of deleting"),
+    clean_secrets: bool = typer.Option(True, "--clean-secrets/--keep-secrets", help="Purge container secrets from config.yaml"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show actions without executing"),
+) -> None:
+    """
+    Stop and remove a container service on the remote VPS, and clean up local configs.
+    """
+    vps_dir = _resolve_vps_dir(Path(vps))
+    vps_data = _load_vps_config(vps_dir)
+    identity_name = vps_data.identity.name or vps_dir.name
+
+    console.print(f"\n[bold]Docker Remove: {container} on {identity_name}[/bold]\n")
+
+    yaml_file = _find_container_yaml(vps_dir, container)
+    config_obj: Optional[ContainerConfig] = None
+    kind = "generic"
+
+    if yaml_file and yaml_file.exists():
+        try:
+            raw_data = yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+            config_obj = ContainerConfig.model_validate(raw_data)
+            kind = config_obj.kind or "generic"
+        except Exception:
+            pass
+
+    if dry_run:
+        console.print("[bold yellow]Dry-run mode — actions that would be performed:[/bold yellow]")
+        console.print(f"  • Connect via SSH to {identity_name} ({vps_data.access.host}:{vps_data.access.port})")
+        console.print(f"  • Stop and remove container service '{container}' (volumes purge: {volumes})")
+        if yaml_file:
+            if archive_local:
+                console.print(f"  • Archive local file '{yaml_file.name}' to '{yaml_file.stem}.yaml.disabled'")
+            elif purge_local:
+                console.print(f"  • Delete local file '{yaml_file.name}'")
+        if clean_secrets:
+            console.print(f"  • Remove secrets for '{container}' from ~/.config/cstation/config.yaml")
+        return
+
+    if not yes:
+        console.print(f"[yellow]⚠[/yellow] This will stop and remove container [bold]{container}[/bold] on remote VPS [bold]{identity_name}[/bold].")
+        if volumes:
+            console.print("  [bold red]WARNING: Remote volumes and data will also be purged (-v)![/bold red]")
+        if yaml_file and purge_local:
+            if archive_local:
+                console.print(f"  Local config will be archived to: [dim]{yaml_file.stem}.yaml.disabled[/dim]")
+            else:
+                console.print(f"  Local config will be deleted: [dim]{yaml_file}[/dim]")
+        
+        confirm = typer.confirm("\nProceed with removal?", default=False)
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+        console.print()
+
+    # 1. Remote Teardown
+    try:
+        ssh = _ssh_from_config(vps_data)
+        if config_obj is None:
+            # Fallback ContainerConfig if yaml was already gone
+            config_obj = ContainerConfig(name=container, kind=kind)
+
+        svc = _get_service_instance(container, kind, config_obj)
+        svc.remove(ssh, config_obj, purge=volumes)
+    except Exception as e:
+        console.print(f"[red]✗[/red] Remote removal encountered an error: {e}")
+        if not typer.confirm("Continue with local cleanup anyway?", default=True):
+            raise typer.Exit(1)
+
+    # 2. Local YAML Cleanup
+    if yaml_file and yaml_file.exists() and purge_local:
+        try:
+            if archive_local:
+                new_path = yaml_file.parent / f"{yaml_file.stem}.yaml.disabled"
+                yaml_file.rename(new_path)
+                console.print(f"  [green]✓[/green] Archived local file to {new_path.name}")
+            else:
+                yaml_file.unlink()
+                console.print(f"  [green]✓[/green] Deleted local file {yaml_file.name}")
+        except Exception as e:
+            console.print(f"  [yellow]![/yellow] Could not clean up {yaml_file}: {e}")
+
+    # 3. Clean up Secrets
+    if clean_secrets:
+        if _remove_container_secrets(identity_name, container):
+            console.print(f"  [green]✓[/green] Removed secrets for {container} from config.yaml")
+
+    console.print(f"\n[bold green]✓ Container '{container}' successfully removed from {identity_name}.[/bold green]")

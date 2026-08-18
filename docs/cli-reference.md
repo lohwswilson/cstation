@@ -144,7 +144,24 @@ cstation docker import <vps-name> [CONTAINER_NAME] [OPTIONS]
 ```
 - `--all`: Import all running containers found on the host.
 
-#### `cstation docker status`
+#### `cstation docker rm` / `cstation docker remove`
+Stop and remove a container stack on the remote VPS, and clean up local configurations and secrets.
+
+```bash
+# Interactive confirmation
+cstation docker rm sg07.ansis.com.sg SG07_OLD_CONTAINER
+
+# Also purge named volumes/data (-v) and bypass prompt (-y)
+cstation docker rm sg07.ansis.com.sg SG07_OLD_CONTAINER -v -y
+
+# Archive local YAML to .disabled instead of deleting
+cstation docker rm sg07.ansis.com.sg SG07_OLD_CONTAINER --archive
+
+# Dry-run inspection
+cstation docker rm sg07.ansis.com.sg SG07_OLD_CONTAINER --dry-run
+```
+
+### `cstation docker status`
 Display running vs declared container status on the target VPS.
 
 ```bash

@@ -48,7 +48,7 @@ cstation --help
 ```
 cstation
 ├── vps          # VPS lifecycle (init, plan, apply, status, list, rm)
-├── docker       # Declarative container stacks (plan, apply, status, import)
+├── docker       # Declarative container stacks (plan, apply, status, import, rm)
 ├── odoo         # Odoo workflows (sync, backup, restore)
 ├── image        # Docker image build & registry push (list, build)
 ├── dns          # DNS zone & record management (zones, plan, apply)
