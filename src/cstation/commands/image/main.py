@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from cstation.models import DockerImageConfig
+from cstation.output import OutputFormat, print_formatted
 from cstation.config import get_config, CSTATION_IMAGES_DIR
 
 console = Console()
@@ -92,26 +93,49 @@ image_app = typer.Typer(
 
 
 @image_app.command("list")
-def image_list() -> None:
+def image_list(
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
+) -> None:
     """List declared Docker images."""
     images = _discover_images()
     if not images:
-        console.print("[dim]No Docker image definitions found in ~/.config/cstation/images/[/dim]")
+        if output == OutputFormat.TABLE:
+            console.print("[dim]No Docker image definitions found in ~/.config/cstation/images/[/dim]")
+        else:
+            print_formatted([], format_type=output)
         raise typer.Exit(0)
 
-    table = Table(title="Docker Images")
-    table.add_column("Name", style="cyan")
-    table.add_column("Image")
-    table.add_column("Directory")
-    table.add_column("Platforms")
-    for config, path in images:
-        table.add_row(
-            config.name,
-            config.image,
-            str(path.parent),
-            ", ".join(config.platforms),
-        )
-    console.print(table)
+    structured_data = [
+        {
+            "name": config.name,
+            "image": config.image,
+            "directory": str(path.parent),
+            "platforms": config.platforms,
+        }
+        for config, path in images
+    ]
+
+    def render_image_table():
+        table = Table(title="Docker Images")
+        table.add_column("Name", style="cyan")
+        table.add_column("Image")
+        table.add_column("Directory")
+        table.add_column("Platforms")
+        for config, path in images:
+            table.add_row(
+                config.name,
+                config.image,
+                str(path.parent),
+                ", ".join(config.platforms),
+            )
+        console.print(table)
+
+    print_formatted(structured_data, format_type=output, table_renderer=render_image_table)
 
 
 @image_app.command("build")

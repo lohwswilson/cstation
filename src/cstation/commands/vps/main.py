@@ -27,6 +27,7 @@ from rich.table import Table
 from cstation.config import get_config, CSTATION_VPS_DIR
 from cstation.ssh import SSHManager
 from cstation.models import VPSConfig
+from cstation.output import OutputFormat, print_formatted
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
 from cstation.providers.static import StaticProvider
@@ -386,6 +387,12 @@ def _split_account_target(target: str) -> tuple[Optional[str], str]:
 def vps_list(
     provider: str = typer.Option("all"),
     account: Optional[str] = typer.Option(None, "--account"),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
 ) -> None:
     """List all VPS instances from configured providers in parallel."""
     aggregate_mode = provider == "all" and account is None
@@ -474,54 +481,70 @@ def vps_list(
         console.print("[dim]No VPS instances found.[/dim]")
         return
 
-    table = Table(title="VPS")
-    distinct_providers = sorted({p for p, _, _ in rows})
-    show_provider = len(distinct_providers) > 1
-    show_account = any(acct is not None for _, acct, _ in rows)
-
-    if show_provider:
-        table.add_column("Provider")
-    if show_account:
-        table.add_column("Account")
-    table.add_column("ID", overflow="fold")
-    table.add_column("Name")
-    table.add_column("Region")
-    table.add_column("Status")
-    table.add_column("IPv4")
-    
-    show_metrics = any(v.facts_summary is not None for _, _, v in rows)
-    if show_metrics:
-        table.add_column("Live Metrics (Cached)")
-
+    structured_data = []
     for provider_name, acct_name, v in rows:
-        if show_provider and acct_name:
-            id_value = v.id
-        elif show_provider and not acct_name:
-            id_value = v.id
-        elif show_account and acct_name:
-            id_value = f"{acct_name}:{v.id}"
-        else:
-            id_value = v.id
+        structured_data.append({
+            "provider": provider_name,
+            "account": acct_name,
+            "id": v.id,
+            "name": v.name,
+            "region": v.region,
+            "status": getattr(v.status, "value", str(v.status)),
+            "ipv4": v.ipv4,
+            "metrics": v.facts_summary,
+        })
 
-        row: list[str] = []
+    def render_vps_list_table():
+        table = Table(title="VPS")
+        distinct_providers = sorted({p for p, _, _ in rows})
+        show_provider = len(distinct_providers) > 1
+        show_account = any(acct is not None for _, acct, _ in rows)
+
         if show_provider:
-            row.append(provider_name)
+            table.add_column("Provider")
         if show_account:
-            row.append(acct_name or "-")
+            table.add_column("Account")
+        table.add_column("ID", overflow="fold")
+        table.add_column("Name")
+        table.add_column("Region")
+        table.add_column("Status")
+        table.add_column("IPv4")
         
-        row.extend([
-            id_value,
-            v.name,
-            v.region or "-",
-            f"[green]{v.status.value}[/green]" if v.status.value == "running" else v.status.value,
-            v.ipv4 or "-",
-        ])
-        
+        show_metrics = any(v.facts_summary is not None for _, _, v in rows)
         if show_metrics:
-            row.append(v.facts_summary or "[dim]-[/dim]")
+            table.add_column("Live Metrics (Cached)")
+
+        for provider_name, acct_name, v in rows:
+            if show_provider and acct_name:
+                id_value = v.id
+            elif show_provider and not acct_name:
+                id_value = v.id
+            elif show_account and acct_name:
+                id_value = f"{acct_name}:{v.id}"
+            else:
+                id_value = v.id
+
+            row: list[str] = []
+            if show_provider:
+                row.append(provider_name)
+            if show_account:
+                row.append(acct_name or "-")
             
-        table.add_row(*row)
-    console.print(table)
+            row.extend([
+                id_value,
+                v.name,
+                v.region or "-",
+                f"[green]{v.status.value}[/green]" if v.status.value == "running" else v.status.value,
+                v.ipv4 or "-",
+            ])
+            
+            if show_metrics:
+                row.append(v.facts_summary or "[dim]-[/dim]")
+                
+            table.add_row(*row)
+        console.print(table)
+
+    print_formatted(structured_data, format_type=output, table_renderer=render_vps_list_table)
     for msg in auth_errors:
         console.print(f"[yellow]![/yellow] {msg}")
     for msg in provider_errors:
@@ -538,6 +561,12 @@ def vps_status(
     provider: Optional[str] = typer.Option(None, "--provider"),
     account: Optional[str] = typer.Option(None, "--account"),
     refresh: bool = typer.Option(False, "--refresh", "-r", help="Force a live SSH update even if cached data exists"),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
 ) -> None:
     """Show detailed live status for a specific VPS instance via SSH."""
     # Try to resolve as a local VPS name first (silent check)

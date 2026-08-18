@@ -54,6 +54,8 @@ cstation
 ├── dns          # DNS zone & record management (zones, plan, apply)
 ├── auth         # Provider authentication (netcup login, logout, status)
 ├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
+├── lint         # Offline pre-flight linter & schema validator (alias: check)
+├── completion   # Shell auto-completion helpers (install, show)
 ├── server       # Server tools (ssh-setup, status, ls, rm, playbook, pw sync)
 └── version      # Print CStation version
 ```

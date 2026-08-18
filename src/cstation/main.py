@@ -22,6 +22,8 @@ from .commands.image.main import image_app
 from .commands.auth.main import auth_app
 from .commands.netcup.main import netcup_app
 from .commands.server.main import server_app
+from .commands.lint.main import lint_app
+from .commands.completion.main import completion_app
 
 
 def version_callback(value: bool):
@@ -50,6 +52,9 @@ app.add_typer(image_app)
 app.add_typer(auth_app)
 app.add_typer(netcup_app, hidden=True)  # legacy alias for auth netcup
 app.add_typer(server_app)
+app.add_typer(lint_app)
+app.add_typer(lint_app, name="check", hidden=True)
+app.add_typer(completion_app)
 
 
 @app.callback()

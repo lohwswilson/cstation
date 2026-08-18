@@ -11,6 +11,7 @@ from rich.table import Table
 from cstation.ssh import SSHManager
 from cstation.config import get_vps_secrets
 from cstation.models import VPSConfig, ContainerConfig
+from cstation.output import OutputFormat, print_formatted
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 from .services.registry import get_service, available_services
 from .services.image_service import ImageService
@@ -284,34 +285,52 @@ def docker_apply(
 def docker_status(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Show a single container"),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
 ) -> None:
     """Show container service state on the VPS."""
     vps_dir = _resolve_vps_dir(Path(vps))
     vps_data = _load_vps_config(vps_dir)
 
     ssh = _ssh_from_config(vps_data)
-
     fragments = _load_fragments(vps_dir, container)
 
-    table = Table(title=f"Docker Services: {vps_data.identity.name}")
-    table.add_column("Service", style="cyan")
-    table.add_column("Kind")
-    table.add_column("Enabled")
-    table.add_column("State")
-    table.add_column("Image")
-
+    services_data = []
     for name, data, status in fragments:
         kind = data.kind
         enabled = status
         image = data.image
         if status == "disabled":
-            table.add_row(name, kind, enabled, "disabled", image)
-            continue
-        svc = _get_service_instance(name, kind, data)
-        state = svc.status(ssh, data)
-        table.add_row(name, kind, enabled, state.get("state", "unknown"), image)
+            state_val = "disabled"
+        else:
+            svc = _get_service_instance(name, kind, data)
+            state_res = svc.status(ssh, data)
+            state_val = state_res.get("state", "unknown") if isinstance(state_res, dict) else str(state_res)
+        
+        services_data.append({
+            "service": name,
+            "kind": kind,
+            "enabled": enabled,
+            "state": state_val,
+            "image": image,
+        })
 
-    console.print(table)
+    def render_docker_table():
+        table = Table(title=f"Docker Services: {vps_data.identity.name}")
+        table.add_column("Service", style="cyan")
+        table.add_column("Kind")
+        table.add_column("Enabled")
+        table.add_column("State")
+        table.add_column("Image")
+        for s in services_data:
+            table.add_row(s["service"], s["kind"], str(s["enabled"]), s["state"], s["image"] or "")
+        console.print(table)
+
+    print_formatted(services_data, format_type=output, table_renderer=render_docker_table)
 
 
 def _import_single_container(

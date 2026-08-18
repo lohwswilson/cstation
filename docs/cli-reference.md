@@ -1,3 +1,40 @@
+## Pre-flight Linting & Validation (`cstation lint`)
+
+### `cstation lint`
+Run offline pre-flight validation and schema checking across all VPS configurations, container fragments, port allocations, and secret bindings.
+
+```bash
+# Human-readable table
+cstation lint
+
+# Machine-readable JSON output
+cstation lint -o json
+
+# Machine-readable YAML output
+cstation lint -o yaml
+```
+
+---
+
+## Shell Auto-Completion (`cstation completion`)
+
+### `cstation completion install`
+Detects current shell (`zsh`, `bash`, `fish`) and automatically installs completion hooks into user rc files.
+
+```bash
+cstation completion install
+```
+
+### `cstation completion show [shell]`
+Prints raw completion script to standard output (e.g. for `eval "$(cstation completion show zsh)"`).
+
+```bash
+cstation completion show zsh
+cstation completion show bash
+cstation completion show fish
+```
+
+---
 # CStation CLI Reference Manual
 
 `cstation` is a local-first DevOps command-line interface for managing VPS infrastructure, declarative Docker container stacks, DNS records, Odoo applications, Docker images, and GitHub repositories.
