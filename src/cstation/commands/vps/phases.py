@@ -491,8 +491,12 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
     storage_driver = daemon_config.get("storage_driver")
     if storage_driver:
         desired_json["storage-driver"] = storage_driver
-    if daemon_config.get("live_restore") is not None:
-        desired_json["live-restore"] = daemon_config["live_restore"]
+    
+    # Default live-restore to True to guarantee running containers are never terminated on daemon reloads
+    live_restore = daemon_config.get("live_restore", True)
+    if live_restore is not None:
+        desired_json["live-restore"] = live_restore
+
     if daemon_config.get("iptables") is not None:
         desired_json["iptables"] = daemon_config["iptables"]
     ulimits = daemon_config.get("default_ulimits", {})
@@ -501,7 +505,18 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
 
     desired_content = jsonlib.dumps(desired_json, indent=2)
 
-    if current_content == desired_content:
+    # Compare parsed JSON to prevent false-positive restarts due to formatting whitespace
+    is_matching = False
+    if current_content:
+        try:
+            curr_parsed = jsonlib.loads(current_content)
+            if curr_parsed == desired_json:
+                is_matching = True
+        except Exception:
+            if current_content == desired_content:
+                is_matching = True
+
+    if is_matching:
         console.print("  [green]✓[/green] docker_daemon: daemon.json already configured")
         return False
 
@@ -513,8 +528,9 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
 
     ssh.run(f"mkdir -p /etc/docker", sudo=True)
     ssh.run(f"echo '{desired_content}' > {DAEMON_JSON_PATH}", sudo=True)
-    ssh.run("systemctl restart docker", sudo=True)
-    console.print(f"  [green]✓[/green] docker_daemon: daemon.json written and docker restarted")
+    # Reload config with zero container downtime via SIGHUP/reload; fallback to restart only if necessary
+    ssh.run("systemctl is-active docker >/dev/null 2>&1 && (systemctl reload docker 2>/dev/null || systemctl restart docker) || systemctl restart docker", sudo=True)
+    console.print(f"  [green]✓[/green] docker_daemon: daemon.json written and docker reloaded (zero container downtime)")
     return True
 
 

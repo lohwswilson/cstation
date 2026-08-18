@@ -43,7 +43,7 @@ class DockerDaemonConfig(BaseModel):
     log_driver: str = "json-file"
     log_opts: Dict[str, str] = Field(default_factory=lambda: {"max-size": "10m", "max-file": "3"})
     storage_driver: Optional[str] = None
-    live_restore: Optional[bool] = None
+    live_restore: bool = True
     iptables: Optional[bool] = None
     default_ulimits: Dict[str, Any] = Field(default_factory=dict)
 
