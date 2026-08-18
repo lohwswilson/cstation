@@ -310,11 +310,29 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
             "net_ipv4_tcp_max_syn_backlog": "net.ipv4.tcp_max_syn_backlog",
             "fs_inotify_max_user_watches": "fs.inotify.max_user_watches",
             "net_ipv4_tcp_keepalive_time": "net.ipv4.tcp_keepalive_time",
+            "net_core_default_qdisc": "net.core.default_qdisc",
+            "net_ipv4_tcp_congestion_control": "net.ipv4.tcp_congestion_control",
         }
+
+        desired_params = dict(tuning_config)
+        if desired_params.get("bbr") is True or desired_params.get("net_ipv4_tcp_congestion_control") == "bbr":
+            desired_params.setdefault("net_core_default_qdisc", "fq")
+            desired_params["net_ipv4_tcp_congestion_control"] = "bbr"
+
+            # Check if tcp_bbr kernel module is loaded
+            mod_check = ssh.run("lsmod 2>/dev/null | grep -c '^tcp_bbr' || true", hide=True, sudo=True)
+            mod_loaded = mod_check and getattr(mod_check, "stdout", "").strip() not in ("", "0")
+            if not mod_loaded:
+                if dry_run:
+                    console.print("  [yellow]⟳[/yellow] tuning: would load tcp_bbr kernel module and configure /etc/modules-load.d/bbr.conf")
+                else:
+                    ssh.run("modprobe tcp_bbr && (grep -q '^tcp_bbr' /etc/modules-load.d/bbr.conf 2>/dev/null || echo 'tcp_bbr' > /etc/modules-load.d/bbr.conf)", sudo=True)
+                    console.print("  [green]✓[/green] tuning: loaded tcp_bbr module and persisted in /etc/modules-load.d/bbr.conf")
+                changes = True
 
         needed: dict[str, Any] = {}
         for yaml_key, sysctl_key in param_to_sysctl.items():
-            desired = tuning_config.get(yaml_key)
+            desired = desired_params.get(yaml_key)
             if desired is None:
                 continue
             current_result = ssh.run(f"sysctl -n {sysctl_key} 2>/dev/null", hide=True)
@@ -333,7 +351,7 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
             if not dry_run:
                 lines = [f"{k} = {v}" for k, v in needed.items()]
                 conf_content = "\n".join(lines) + "\n"
-                ssh.run(f"bash -c 'cat > {CONF_PATH} << \"CSYSCTL\"\n{conf_content}CSYSCTL'", sudo=True)
+                ssh.run(f"echo '{conf_content}' > {CONF_PATH}", sudo=True)
                 ssh.run("sysctl --system", sudo=True, hide=True)
                 console.print("  [green]✓[/green] tuning: sysctl params applied")
             changes = True
@@ -360,7 +378,7 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
                 console.print(f"  [yellow]⟳[/yellow] tuning: would write {JOURNALD_PATH}")
             else:
                 ssh.run(f"mkdir -p {JOURNALD_DIR}", sudo=True)
-                ssh.run(f"bash -c 'cat > {JOURNALD_PATH} << \"CJOURNAL\"\n{desired_content}\nCJOURNAL'", sudo=True)
+                ssh.run(f"echo '{desired_content}' > {JOURNALD_PATH}", sudo=True)
                 ssh.run("systemctl restart systemd-journald", sudo=True)
                 console.print(f"  [green]✓[/green] tuning: journald configured and restarted")
             changes = True
@@ -401,7 +419,7 @@ def _apply_fail2ban(ssh: SSHManager, f2b_config: dict[str, Any], *, dry_run: boo
         console.print(f"    [dim]bantime={bantime}, findtime={findtime}, maxretry={maxretry}[/dim]")
         return True
 
-    ssh.run(f"bash -c 'cat > {JAIL_PATH} << \"CF2B\"\n{desired_content}CF2B'", sudo=True)
+    ssh.run(f"echo '{desired_content}' > {JAIL_PATH}", sudo=True)
     ssh.run("systemctl restart fail2ban", sudo=True)
     console.print(f"  [green]✓[/green] fail2ban: jail.local written and restarted")
     return True
@@ -468,7 +486,7 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
         return True
 
     ssh.run(f"mkdir -p /etc/docker", sudo=True)
-    ssh.run(f"bash -c 'cat > {DAEMON_JSON_PATH} << \"CDAEMON\"\n{desired_content}\nCDAEMON'", sudo=True)
+    ssh.run(f"echo '{desired_content}' > {DAEMON_JSON_PATH}", sudo=True)
     ssh.run("systemctl restart docker", sudo=True)
     console.print(f"  [green]✓[/green] docker_daemon: daemon.json written and docker restarted")
     return True

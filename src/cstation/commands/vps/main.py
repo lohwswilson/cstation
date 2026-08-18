@@ -162,6 +162,7 @@ def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
         "uptime": "uptime",
         "df": "df -h / --output=size,used,avail,pcent | tail -1",
         "docker_stats": "docker ps --format '{{.Status}}' 2>/dev/null",
+        "tcp_cc": "sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null",
         "pkg_apt": "command -v apt-get",
         "pkg_dnf": "command -v dnf",
         "pkg_yum": "command -v yum",
@@ -234,6 +235,7 @@ def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
             "pretty": os_release.get("PRETTY_NAME"),
             "kernel": kernel,
             "package_manager": pkg_mgr,
+            "tcp_congestion_control": results.get("tcp_cc", "").strip(),
         },
         "cpu": parsed_cpu,
         "memory": parsed_memory,
@@ -677,6 +679,10 @@ def _print_vps_live_status(name: str, region: str, access: dict, facts: dict) ->
     os_info = facts.get("os", {})
     table.add_row("OS", os_info.get("pretty", "-"))
     table.add_row("Kernel", os_info.get("kernel", "-"))
+    tcp_cc = os_info.get("tcp_congestion_control")
+    if tcp_cc:
+        cc_styled = f"[green]{tcp_cc}[/green]" if tcp_cc == "bbr" else f"[yellow]{tcp_cc}[/yellow]"
+        table.add_row("TCP Congestion", cc_styled)
     table.add_row("Load Avg", facts.get("load_avg", "-"))
     
     table.add_section()

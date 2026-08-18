@@ -117,7 +117,21 @@ Execute the 12-phase OS setup pipeline over SSH to bring the VPS into the declar
 cstation vps apply <vps-name-or-path> [OPTIONS]
 ```
 - `--yes, -y`: Skip confirmation prompt.
-- `--phase TEXT`: Execute only a specific phase (e.g. `packages`, `sshd`, `firewall`, `docker_daemon`).
+- `--phase TEXT`: Execute only a specific phase (`packages`, `upgrade_all`, `shell`, `terminal`, `sshd`, `firewall`, `swap`, `tuning`, `fail2ban`, `hostname`, `docker_daemon`, `docker_networks`, `docker_directories`).
+
+##### Declarative Tuning & BBR Network Acceleration (`vps.yaml`)
+```yaml
+os:
+  baseline:
+    swap:
+      size_gb: 8
+    tuning:
+      vm_swappiness: 10
+      bbr: true                     # Auto-loads tcp_bbr module & sets FQ + BBR
+      vm_overcommit_memory: 1
+      net_ipv4_tcp_max_syn_backlog: 4096
+      fs_inotify_max_user_watches: 524288
+```
 
 #### `cstation vps rm`
 Remove a VPS configuration from the local configuration directory.

@@ -1549,3 +1549,65 @@ def test_vps_list_static_filter(monkeypatch, tmp_path: Path):
     r = CliRunner().invoke(app, ["vps", "list", "--provider", "static"])
     assert r.exit_code == 0
     assert "static-srv" in r.output
+
+
+def test_vps_plan_tuning_with_bbr(monkeypatch, tmp_path: Path):
+    cfg = _full_vps_yaml(tmp_path)
+    responses = {
+        "sysctl -n vm.swappiness": "60",
+        "sysctl -n vm.overcommit_memory": "0",
+        "sysctl -n net.ipv4.tcp_max_syn_backlog": "512",
+        "sysctl -n fs.inotify.max_user_watches": "59992",
+        "sysctl -n net.ipv4.tcp_keepalive_time": "7200",
+        "sysctl -n net.core.default_qdisc": "fq_codel",
+        "sysctl -n net.ipv4.tcp_congestion_control": "cubic",
+        "lsmod 2>/dev/null | grep -c '^tcp_bbr' || true": "0",
+        "dpkg -s fail2ban >/dev/null 2>&1; echo $?": "0",
+        "grep -c '^PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null || true": "0",
+        "ufw status": "Status: active\n",
+    }
+    _make_fake_ssh(monkeypatch, responses)
+    r = CliRunner().invoke(app, ["vps", "plan", str(cfg)])
+    assert r.exit_code == 0
+    assert "tuning" in r.output.lower()
+
+
+def test_vps_apply_tuning_with_bbr(monkeypatch, tmp_path: Path):
+    # Add bbr: true to the config
+    cfg_dir = tmp_path / "vps_test"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    vps_file = cfg_dir / "vps.yaml"
+    vps_content = """apiVersion: cstation/v1
+kind: VPS
+identity:
+  name: testbbr
+  stage: prod
+  region: hel1
+access:
+  host: 1.2.3.4
+  user: root
+os:
+  baseline:
+    tuning:
+      bbr: true
+      vm_swappiness: 10
+"""
+    vps_file.write_text(vps_content)
+
+    executed_cmds = []
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        executed_cmds.append(command)
+        if "lsmod" in command:
+            return _FakeSSHResult(stdout="0")
+        if "sysctl -n" in command:
+            return _FakeSSHResult(stdout="cubic")
+        return _FakeSSHResult(stdout="", exited=0)
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+    _skip_confirm(monkeypatch)
+
+    r = CliRunner().invoke(app, ["vps", "apply", str(cfg_dir), "--yes", "--phase", "tuning"])
+    assert r.exit_code == 0
+    assert any("modprobe tcp_bbr" in cmd for cmd in executed_cmds)
+    assert any("sysctl --system" in cmd for cmd in executed_cmds)
