@@ -1243,3 +1243,23 @@ def test_preflight_reads_network_from_vps_config(tmp_path, monkeypatch):
     r = runner.invoke(app, ["docker", "plan", str(vps_dir)])
     assert r.exit_code == 1
     assert "custom_net" in r.output.lower()
+def test_docker_apply_with_container_flag(tmp_path, monkeypatch):
+    vps_dir = _setup_vps_dir(tmp_path)
+    _mock_ssh_run(monkeypatch)
+    import typer
+    monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
+
+    r = runner.invoke(app, ["docker", "apply", str(vps_dir), "--container", "traefik", "--yes"])
+    assert r.exit_code == 0
+    assert "traefik" in r.output.lower()
+
+
+def test_docker_apply_with_short_c_flag(tmp_path, monkeypatch):
+    vps_dir = _setup_vps_dir(tmp_path)
+    _mock_ssh_run(monkeypatch)
+    import typer
+    monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
+
+    r = runner.invoke(app, ["docker", "apply", str(vps_dir), "-c", "traefik", "--yes"])
+    assert r.exit_code == 0
+    assert "traefik" in r.output.lower()

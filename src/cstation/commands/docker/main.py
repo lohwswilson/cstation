@@ -41,7 +41,7 @@ def _discover_fragments(vps_dir: Path) -> list[Path]:
     return sorted(p for p in vps_dir.glob("*.yaml") if p.name != "vps.yaml")
 
 
-def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list[tuple[str, ContainerConfig, str]]:
+def _load_fragments(vps_dir: Path, container_filter: Optional[str] = None) -> list[tuple[str, ContainerConfig, str]]:
     from pydantic import ValidationError
     fragments = []
     for frag_path in _discover_fragments(vps_dir):
@@ -56,7 +56,7 @@ def _load_fragments(vps_dir: Path, service_filter: Optional[str] = None) -> list
         try:
             config = ContainerConfig(**data)
             name = config.name
-            if service_filter and name != service_filter:
+            if container_filter and name != container_filter:
                 continue
             
             status = "enabled" if config.enabled else "disabled"
@@ -159,7 +159,7 @@ def _resolve_secrets(vps_name: str, fragments: list[tuple[str, ContainerConfig, 
 @docker_app.command("plan")
 def docker_plan(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    service: Optional[str] = typer.Option(None, "--service", "-s", help="Plan a single service"),
+    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Plan a single container"),
 ) -> None:
     """Dry-run: show what would change for container services."""
     vps_dir = _resolve_vps_dir(Path(vps))
@@ -173,7 +173,7 @@ def docker_plan(
     if not _preflight_check(ssh, vps_data):
         raise typer.Exit(1)
 
-    fragments = _load_fragments(vps_dir, service)
+    fragments = _load_fragments(vps_dir, container)
     fragments = _resolve_secrets(identity_name, fragments)
     if not fragments:
         console.print("[dim]No enabled container fragments found.[/dim]")
@@ -218,7 +218,7 @@ def docker_plan(
 @docker_app.command("apply")
 def docker_apply(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    service: Optional[str] = typer.Option(None, "--service", "-s", help="Deploy a single service"),
+    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Deploy a single container"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     prune: bool = typer.Option(False, "--prune", help="Remove undeclared running containers"),
 ) -> None:
@@ -234,7 +234,7 @@ def docker_apply(
     if not _preflight_check(ssh, vps_data):
         raise typer.Exit(1)
 
-    fragments = _load_fragments(vps_dir, service)
+    fragments = _load_fragments(vps_dir, container)
     fragments = _resolve_secrets(identity_name, fragments)
     if not fragments:
         console.print("[dim]No enabled container fragments found.[/dim]")
@@ -283,7 +283,7 @@ def docker_apply(
 @docker_app.command("status")
 def docker_status(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    service: Optional[str] = typer.Option(None, "--service", "-s", help="Show a single service"),
+    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Show a single container"),
 ) -> None:
     """Show container service state on the VPS."""
     vps_dir = _resolve_vps_dir(Path(vps))
@@ -291,7 +291,7 @@ def docker_status(
 
     ssh = _ssh_from_config(vps_data)
 
-    fragments = _load_fragments(vps_dir, service)
+    fragments = _load_fragments(vps_dir, container)
 
     table = Table(title=f"Docker Services: {vps_data.identity.name}")
     table.add_column("Service", style="cyan")
