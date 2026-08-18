@@ -1611,3 +1611,48 @@ os:
     assert r.exit_code == 0
     assert any("modprobe tcp_bbr" in cmd for cmd in executed_cmds)
     assert any("sysctl --system" in cmd for cmd in executed_cmds)
+
+def test_vps_apply_tuning_with_full_stack_and_nofile(monkeypatch, tmp_path: Path):
+    cfg_dir = tmp_path / "vps_test_full"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    vps_file = cfg_dir / "vps.yaml"
+    vps_content = """apiVersion: cstation/v1
+kind: VPS
+identity:
+  name: testfull
+  stage: prod
+  region: hel1
+access:
+  host: 1.2.3.4
+  user: root
+os:
+  baseline:
+    tuning:
+      bbr: true
+      vm_swappiness: 10
+      net_core_somaxconn: 16384
+      net_ipv4_tcp_tw_reuse: 1
+      nofile: 65536
+"""
+    vps_file.write_text(vps_content)
+
+    executed_cmds = []
+
+    def fake_run(self, command: str, hide: bool = True, sudo: bool = False):
+        executed_cmds.append(command)
+        if "lsmod" in command:
+            return _FakeSSHResult(stdout="1")
+        if "sysctl -n" in command:
+            return _FakeSSHResult(stdout="default")
+        if "cat /etc/security/limits.d/99-cstation.conf" in command:
+            return _FakeSSHResult(stdout="* soft nofile 1024")
+        return _FakeSSHResult(stdout="", exited=0)
+
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", fake_run)
+    _skip_confirm(monkeypatch)
+
+    r = CliRunner().invoke(app, ["vps", "apply", str(cfg_dir), "--yes", "--phase", "tuning"])
+    assert r.exit_code == 0
+    assert any("net.core.somaxconn = 16384" in cmd for cmd in executed_cmds)
+    assert any("65536" in cmd for cmd in executed_cmds)
+    assert any("99-cstation.conf" in cmd for cmd in executed_cmds)

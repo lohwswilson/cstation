@@ -307,8 +307,16 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
         param_to_sysctl = {
             "vm_swappiness": "vm.swappiness",
             "vm_overcommit_memory": "vm.overcommit_memory",
+            "vm_dirty_ratio": "vm.dirty_ratio",
+            "vm_dirty_background_ratio": "vm.dirty_background_ratio",
             "net_ipv4_tcp_max_syn_backlog": "net.ipv4.tcp_max_syn_backlog",
+            "net_core_somaxconn": "net.core.somaxconn",
+            "net_core_netdev_max_backlog": "net.core.netdev_max_backlog",
+            "net_ipv4_tcp_fin_timeout": "net.ipv4.tcp_fin_timeout",
+            "net_ipv4_tcp_tw_reuse": "net.ipv4.tcp_tw_reuse",
+            "net_ipv4_ip_local_port_range": "net.ipv4.ip_local_port_range",
             "fs_inotify_max_user_watches": "fs.inotify.max_user_watches",
+            "fs_file_max": "fs.file-max",
             "net_ipv4_tcp_keepalive_time": "net.ipv4.tcp_keepalive_time",
             "net_core_default_qdisc": "net.core.default_qdisc",
             "net_ipv4_tcp_congestion_control": "net.ipv4.tcp_congestion_control",
@@ -337,7 +345,7 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
                 continue
             current_result = ssh.run(f"sysctl -n {sysctl_key} 2>/dev/null", hide=True)
             current_val = getattr(current_result, "stdout", "").strip() if current_result else ""
-            if current_val != str(desired):
+            if ' '.join(current_val.split()) != ' '.join(str(desired).split()):
                 needed[sysctl_key] = desired
 
         if not needed:
@@ -355,6 +363,24 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
                 ssh.run("sysctl --system", sudo=True, hide=True)
                 console.print("  [green]✓[/green] tuning: sysctl params applied")
             changes = True
+
+        nofile = desired_params.get("nofile")
+        if nofile:
+            LIMITS_DIR = "/etc/security/limits.d"
+            LIMITS_PATH = f"{LIMITS_DIR}/99-cstation.conf"
+            limits_content = f"* soft nofile {nofile}\n* hard nofile {nofile}\nroot soft nofile {nofile}\nroot hard nofile {nofile}\n"
+            current_limits_res = ssh.run(f"cat {LIMITS_PATH} 2>/dev/null", hide=True, sudo=True)
+            current_limits_txt = getattr(current_limits_res, "stdout", "").strip() if current_limits_res else ""
+            if current_limits_txt != limits_content.strip():
+                if dry_run:
+                    console.print(f"  [yellow]⟳[/yellow] tuning: would set nofile={nofile} in {LIMITS_PATH}")
+                else:
+                    ssh.run(f"mkdir -p {LIMITS_DIR}", sudo=True)
+                    ssh.run(f"echo '{limits_content.strip()}' > {LIMITS_PATH}", sudo=True)
+                    console.print(f"  [green]✓[/green] tuning: nofile={nofile} limits configured in {LIMITS_PATH}")
+                changes = True
+            else:
+                console.print(f"  [green]✓[/green] tuning: nofile limits already set to {nofile}")
 
     if journald_config:
         JOURNALD_DIR = "/etc/systemd/journald.conf.d"
