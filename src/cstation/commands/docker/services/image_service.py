@@ -104,7 +104,13 @@ class ImageService:
         if cfg.volumes:
             service_def["volumes"] = cfg.volumes
         if cfg.env:
-            service_def["environment"] = cfg.env
+            if isinstance(cfg.env, dict):
+                service_def["environment"] = {
+                    k: str(v).lower() if isinstance(v, bool) else str(v)
+                    for k, v in cfg.env.items()
+                }
+            elif isinstance(cfg.env, list):
+                service_def["environment"] = cfg.env
 
         if getattr(cfg, "privileged", None) is not None:
             service_def["privileged"] = cfg.privileged

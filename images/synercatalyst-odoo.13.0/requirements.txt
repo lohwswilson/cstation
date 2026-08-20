@@ -10,3 +10,12 @@ zoom_us
 openupgradelib
 werkzeug<1.0
 reportlab
+boto3
+botocore
+dropbox
+pyncclient
+nextcloud-api-wrapper
+paramiko
+pysftp
+qifparse
+pyjwt
