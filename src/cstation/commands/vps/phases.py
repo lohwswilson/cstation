@@ -320,6 +320,13 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
             "net_ipv4_tcp_keepalive_time": "net.ipv4.tcp_keepalive_time",
             "net_core_default_qdisc": "net.core.default_qdisc",
             "net_ipv4_tcp_congestion_control": "net.ipv4.tcp_congestion_control",
+            "net_ipv4_tcp_slow_start_after_idle": "net.ipv4.tcp_slow_start_after_idle",
+            "net_ipv4_tcp_fastopen": "net.ipv4.tcp_fastopen",
+            "net_ipv4_tcp_mtu_probing": "net.ipv4.tcp_mtu_probing",
+            "net_core_rmem_max": "net.core.rmem_max",
+            "net_core_wmem_max": "net.core.wmem_max",
+            "net_ipv4_tcp_rmem": "net.ipv4.tcp_rmem",
+            "net_ipv4_tcp_wmem": "net.ipv4.tcp_wmem",
         }
 
         desired_params = dict(tuning_config)

@@ -1,57 +1,59 @@
-# CStation Configuration Guide
+# CStation Configuration Guide ⚙️
 
-This guide explains how CStation locates, loads, and validates configuration files for servers, containers, DNS zones, images, and GitHub repositories.
-
----
-
-## Configuration Hierarchy
-
-CStation discovers configuration files in the following directory order (highest precedence wins):
-
-1. **`./etc/`** — Project-local override directory.
-2. **`/etc/cstation/`** — System-wide configuration directory.
-3. **`~/.config/cstation/`** — User-level directory (Default source of truth).
+This guide explains how CStation discovers, loads, and validates configuration files for VPS instances, container fragments, DNS zones, images, and secrets.
 
 ---
 
-## Directory Layout
+## 📑 Table of Contents
 
-A standard `~/.config/cstation/` directory is structured as follows:
+1. [Configuration Discovery & Precedence](#1-configuration-discovery--precedence)
+2. [Directory Layout](#2-directory-layout)
+3. [Global Settings & Secrets (`config.yaml`)](#3-global-settings--secrets-configyaml)
+4. [VPS Infrastructure Schema (`vps.yaml`)](#4-vps-infrastructure-schema-vpsyaml)
+5. [Container Fragment Schema (`<service>.yaml`)](#5-container-fragment-schema-serviceyaml)
+   - [Odoo ERP Service Extension](#odoo-erp-service-extension)
+   - [Traefik Reverse Proxy Extension](#traefik-reverse-proxy-extension)
+6. [DNS Zone Schema (`dns/<domain>.yaml`)](#6-dns-zone-schema-dnsdomainyaml)
+7. [Multi-Arch Image Build Schema (`image.yaml`)](#7-multi-arch-image-build-schema-imageyaml)
+
+---
+
+## 1. Configuration Discovery & Precedence
+
+CStation merges configuration files from three locations using local-first precedence (**highest precedence first**):
+
+1. **`~/.config/cstation/`** (User Directory) — **Highest Priority** (Default source of truth).
+2. **`/etc/cstation/`** (System Directory) — Medium Priority.
+3. **`./etc/`** (Bundled Fallback) — Lowest Priority.
+
+---
+
+## 2. Directory Layout
+
+A standard `~/.config/cstation/` directory layout:
 
 ```
 ~/.config/cstation/
-├── config.yaml                     # Global settings & provider credentials
-│
+├── config.yaml                     # Global credentials & secrets
 ├── vps/                            # VPS servers and container stacks
 │   ├── sg01.synercatalyst.com/
-│   │   ├── vps.yaml                # VPS definition (access, OS baseline, docker)
+│   │   ├── vps.yaml                # VPS hardware, access, & OS baseline
 │   │   ├── .facts.json             # Cached hardware metrics (<100ms status)
-│   │   ├── traefik.yaml            # Container fragment (Reverse proxy)
-│   │   ├── db.yaml                 # Container fragment (PostgreSQL)
-│   │   └── sg01_prod.yaml          # Container fragment (Odoo ERP)
-│   │
-│   └── us02.synercatalyst.com/
-│       ├── vps.yaml
-│       └── ...
-│
-├── dns/                            # Declarative DNS zones
-│   ├── synercatalyst.com.yaml      # DNS records for synercatalyst.com
-│   └── ansis.com.sg.yaml
-│
-├── github/                         # GitHub repository mappings
-│   └── odoo_repos.sync.yml         # Odoo & OpenUpgrade sync definitions
-│
-└── images/                         # Docker image build configurations
-    └── synercatalyst-odoo.13.0/
-        ├── Dockerfile
-        └── image.yaml
+│   │   ├── SG01_DB.yaml            # PostgreSQL container fragment
+│   │   ├── SG01_TRAEFIK.yaml       # Traefik reverse proxy fragment
+│   │   ├── SG01_PORTAINER.yaml     # Portainer CE fragment
+│   │   └── SG01_DEV8_SG01DB.yaml   # Odoo 18 container stack fragment
+│   └── us01.synercatalyst.com/
+├── dns/                            # Declarative DNS zones (synercatalyst.com.yaml)
+├── github/                         # Git repository sync definitions (odoo_repos.sync.yml)
+└── images/                         # Multi-arch Docker image build recipes
 ```
 
 ---
 
-## 1. Global Settings (`config.yaml`)
+## 3. Global Settings & Secrets (`config.yaml`)
 
-Defines cloud provider API credentials, secrets, and global defaults.
+Defines cloud provider API credentials, DNS tokens, and container secrets:
 
 ```yaml
 # Cloud provider credentials
@@ -69,22 +71,22 @@ vps:
 cloudflare:
   api_token: "your-cloudflare-api-token"
 
-# Container & Service Secrets (Injected during apply/plan)
-vps:
-  secrets:
-    sg01.synercatalyst.com:
-      traefik:
-        CF_API_EMAIL: "admin@example.com"
-        CF_API_KEY: "secret-cloudflare-key"
-      sg01_prod:
-        PASSWORD: "super-secure-db-password"
+# Injected container secrets (never commit to public repos)
+secrets:
+  sg01.synercatalyst.com:
+    SG01_DB:
+      POSTGRES_PASSWORD: "secret-db-password"
+    SG01_DEV8_SG01DB:
+      PASSWORD: "secret-user-password"
+      PGPASSWORD: "secret-user-password"
+    SG01_TRAEFIK:
+      CF_API_EMAIL: "admin@example.com"
+      CF_API_KEY: "secret-cloudflare-key"
 ```
 
 ---
 
-## 2. VPS Configuration (`vps/<hostname>/vps.yaml`)
-
-Defines the server identity, SSH access, baseline OS security settings, and Docker daemon configuration.
+## 4. VPS Infrastructure Schema (`vps.yaml`)
 
 ```yaml
 apiVersion: cstation/v1
@@ -97,99 +99,171 @@ identity:
   provider: static
 
 access:
-  host: 192.168.1.100
-  port: 22
+  host: 107.155.65.47
   user: root
-  key: ~/.ssh/id_rsa
+  port: 22
+  key: ~/.ssh/id_ed25519
 
 os:
   baseline:
     packages:
-      - curl
-      - htop
       - ufw
       - fail2ban
+      - docker.io
+      - docker-compose-v2
+      - containerd
       - rsync
-    upgrade_all: false
+      - git
+      - curl
+      - sudo
     sshd:
-      port: 22
-      permit_root_login: "prohibit-password"
-      password_authentication: false
+      disable_password_auth: true
     firewall:
-      enabled: true
-      default_incoming: "deny"
+      mode: ufw
       allow:
-        - "22/tcp"
-        - "80/tcp"
-        - "443/tcp"
+        - 22/tcp
     swap:
-      size_mb: 4096
-      swappiness: 10
+      size_gb: 8
     tuning:
-      sysctl:
-        vm.max_map_count: 262144
-        net.core.somaxconn: 1024
+      bbr: true
+      vm_swappiness: 10
+      net_core_somaxconn: 4096
+      net_ipv4_tcp_tw_reuse: 1
+      nofile: 65536
+    journald:
+      system_max_use: 500M
+    fail2ban:
+      bantime: 1h
+      findtime: 10m
+      maxretry: 5
 
 docker:
   daemon:
-    log_driver: "json-file"
+    log_driver: json-file
     log_opts:
-      max-size: "50m"
-      max-file: "3"
+      max-size: 10m
+      max-file: '3'
+    live_restore: true
   networks:
     - PW_NET
   directories:
+    - /var/lib/postgresql
+    - /var/lib/traefik
     - /var/lib/perfectwork
-    - /srv/data
 ```
 
 ---
 
-## 3. Container Fragment (`vps/<hostname>/<name>.yaml`)
+## 5. Container Fragment Schema (`<service>.yaml`)
 
-Declarative container fragment placed alongside `vps.yaml`.
-
+### Basic Container Fragment
 ```yaml
 apiVersion: cstation/v1
 kind: Container
-name: SG01_PROD
-image: synercatalyst/odoo:18.0
-restart: always
+name: SG01_DB
+enabled: true
+image: pgvector/pgvector:pg18
+container_name: SG01_DB
 network: PW_NET
-
 ports:
-  - "8069:8069"
-
+  - "127.0.0.1:1488:5432"
 volumes:
-  - /var/lib/perfectwork/PW.18.0:/usr/lib/python3/dist-packages/odoo
-  - /var/lib/perfectwork/PW_ADDONS.18.0:/mnt
-  - /var/lib/perfectwork/SG01/CONTAINERS/SG01_PROD:/var/lib/odoo
+  - "/var/lib/postgresql:/var/lib/postgresql/data"
+secrets:
+  - POSTGRES_PASSWORD
+env:
+  POSTGRES_USER: postgres
+  PGDATA: /var/lib/postgresql/data/pgdata
+restart_policy: always
+```
 
+### Odoo ERP Service Extension
+```yaml
+apiVersion: cstation/v1
+kind: Container
+name: SG01_DEV8_SG01DB
+enabled: true
+image: synercatalyst/odoo.18.0:latest
+container_name: SG01_DEV8_SG01DB
+network: PW_NET
+owner: "100:101"
+chmod: "755"
+ports:
+  - 3348:8069
+  - 3347:8072
+volumes:
+  - /var/lib/perfectwork/PW.18.0/odoo:/usr/lib/python3/dist-packages/odoo
+  - /var/lib/perfectwork/PW.18.0/addons:/mnt/extra-addons
+  - /var/lib/perfectwork/SG01/CONTAINERS/SG01_DEV8_SG01DB:/var/lib/odoo
+  - /var/lib/perfectwork/PW_ADDONS.18.0:/mnt
+secrets:
+  - PASSWORD
+  - PGPASSWORD
 env:
   HOST: SG01_DB
-  PORT: 5432
-  USER: odoo
-  PASSWORD: ${PASSWORD}
-
-labels:
-  traefik.enable: "true"
-  traefik.http.routers.sg01_prod.rule: "Host(`erp.synercatalyst.com`)"
-  traefik.http.routers.sg01_prod.entrypoints: "websecure"
-  traefik.http.routers.sg01_prod.tls.certresolver: "le_resolver"
-
+  PORT: '5432'
+  USER: sg01_dev8_sg01db
+  ODOO_RC: /var/lib/odoo/odoo.conf
+  LANG: en_US.UTF-8
+  ODOO_VERSION: '18.0'
 odoo_conf:
   db_host: SG01_DB
-  db_user: odoo
-  limit_time_cpu: 600
-  limit_time_real: 1200
-  workers: 4
+  db_port: 5432
+  db_user: sg01_dev8_sg01db
+  dbfilter: ^%d$
+  admin_passwd: secret-master-password
+  db_maxconn: 32
+  addons_path: /mnt/extra-addons, /mnt/ansis, /mnt/OCA, /mnt/customers
+  server_wide_modules: web, queue_job, fastapi
+  log_level: info
+  workers: 5
+  max_cron_threads: 2
+  limit_time_cpu: 1800
+  limit_time_real: 3600
+traefik:
+  http:
+    routers:
+      sg01-dev8-web:
+        entryPoints: [web, websecure]
+        service: sg01-dev8-service
+        rule: HostRegexp(`^[a-z0-9]+\.dev8\.perfectwork\.app$`)
+        tls:
+          certResolver: le_dns_resolver
+          domains:
+            - main: dev8.perfectwork.app
+              sans: '*.dev8.perfectwork.app'
+      sg01-dev8-ws:
+        entryPoints: [web, websecure]
+        service: sg01-dev8-ws-service
+        rule: HostRegexp(`^[a-z0-9]+\.dev8\.perfectwork\.app$`) && PathPrefix(`/websocket`)
+        middlewares: [upgradeheader, sslheader]
+        tls:
+          certResolver: le_dns_resolver
+          domains:
+            - main: dev8.perfectwork.app
+              sans: '*.dev8.perfectwork.app'
+    services:
+      sg01-dev8-service:
+        loadBalancer:
+          servers: [{ url: "http://SG01_DEV8_SG01DB:8069" }]
+      sg01-dev8-ws-service:
+        loadBalancer:
+          servers: [{ url: "http://SG01_DEV8_SG01DB:8072" }]
+    middlewares:
+      sslheader:
+        headers:
+          customRequestHeaders: { X-Forwarded-Proto: "https" }
+      upgradeheader:
+        headers:
+          customRequestHeaders: { Connection: "Upgrade", Upgrade: "websocket" }
+          forceSTSHeader: true
+          hostsProxyHeaders: ["websocket", "Upgrade"]
+restart_policy: always
 ```
 
 ---
 
-## 4. DNS Declarations (`dns/<domain>.yaml`)
-
-Declarative DNS record configuration managed by `cstation dns`.
+## 6. DNS Zone Schema (`dns/<domain>.yaml`)
 
 ```yaml
 apiVersion: cstation/v1
@@ -197,58 +271,50 @@ kind: DNS
 domain: synercatalyst.com
 
 records:
-  - name: "@"
+  - name: sg01
     type: A
-    value: "192.168.1.100"
-    proxied: true
-    ttl: 1
+    value: 107.155.65.47
+    ttl: 300
+    proxied: false
 
-  - name: "erp"
-    type: CNAME
-    value: "synercatalyst.com"
-    proxied: true
+  - name: "*.dev8"
+    type: A
+    value: 107.155.65.47
+    ttl: 300
 
-  - name: "@"
+  - name: mail
+    type: A
+    value: 152.53.169.95
+    ttl: 300
+
+  - name: ""
     type: MX
-    value: "mail.synercatalyst.com"
+    value: mail.ansis.com.sg
     priority: 10
-    ttl: 3600
-
-  - name: "_autodiscover._tcp"
-    type: SRV
-    value: "mail.synercatalyst.com"
-    priority: 0
-    srv_weight: 0
-    srv_port: 443
-    ttl: 3600
+    ttl: 300
 ```
 
 ---
 
-## 5. GitHub Repositories (`github/odoo_repos.sync.yml`)
-
-Maps Odoo, OpenUpgrade, and module repositories for multi-branch upstream synchronization and deployment.
+## 7. Multi-Arch Image Build Schema (`image.yaml`)
 
 ```yaml
-github:
-  username: lohwswilson
-  default_clone_method: ssh
-  default_directory: /opt/PW
+apiVersion: cstation/v1
+kind: DockerImage
+name: synercatalyst-odoo.13.0
 
-repositories:
-  - name: PW.18.0
-    description: "PerfectWork 18.0 (ansis-ai/odoo)"
-    branch: "18.0"
-    category: odoo
-    auto_sync: true
-    local_path: /opt/PW/PW.18.0
-    upstream_url: git@github.com:odoo/odoo.git
+image:
+  repository: synercatalyst/odoo.13.0
+  tags:
+    - "13.0"
+    - "latest"
 
-  - name: OpenUpgrade_18.0
-    description: "OpenUpgrade 18.0 (ansis-ai/OpenUpgrade)"
-    branch: "18.0"
-    category: openupgrade
-    auto_sync: true
-    local_path: /opt/PW/OpenUpgrade_18.0
-    upstream_url: https://github.com/OCA/OpenUpgrade.git
+build:
+  context: .
+  dockerfile: Dockerfile
+  platforms:
+    - linux/amd64
+    - linux/arm64
+  args:
+    ODOO_VERSION: "13.0"
 ```

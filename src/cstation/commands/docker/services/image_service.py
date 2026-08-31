@@ -254,8 +254,12 @@ class ImageService:
         return actions
 
     def _start(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
-        ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
-        console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
+        result = ssh.run(f"docker compose -f {self.compose_path} up -d", sudo=True)
+        if result and getattr(result, "exited", 0) == 0:
+            console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
+        else:
+            stderr = getattr(result, "stderr", "") or getattr(result, "stdout", "") or ""
+            console.print(f"  [red]✗[/red] docker compose up -d failed ({self.name}){': ' + stderr.strip() if stderr else ''}")
 
     def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         cfg = _ensure_config(config)
@@ -269,14 +273,16 @@ class ImageService:
             console.print(f"  [green]✓[/green] created directory {d}")
 
         desired_compose = self._render_compose(cfg)
-        ssh.run(f"bash -c 'cat > {self.compose_path} << \"CSCOMPOSE\"\n{desired_compose}\nCSCOMPOSE'", sudo=True)
+        encoded_compose = base64.b64encode(desired_compose.encode()).decode()
+        ssh.run(f"echo {encoded_compose} | base64 -d | sudo tee {self.compose_path} > /dev/null", sudo=True)
         console.print(f"  [green]✓[/green] wrote {self.compose_path}")
 
         desired_env = self._render_env(cfg)
         secrets_env = self._render_secrets_env(cfg)
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
-            ssh.run(f"bash -c 'cat > {self.env_path} << \"CSENV\"\n{desired_env}\nCSENV'", sudo=True)
+            encoded_env = base64.b64encode(desired_env.encode()).decode()
+            ssh.run(f"echo {encoded_env} | base64 -d | sudo tee {self.env_path} > /dev/null", sudo=True)
             resolved = getattr(cfg, "_resolved_secrets", {})
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")

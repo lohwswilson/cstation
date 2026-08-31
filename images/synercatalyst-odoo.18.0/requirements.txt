@@ -140,6 +140,9 @@ nextcloud-api-wrapper
 paramiko
 pysftp
 qifparse
+azure-storage-blob
+google-cloud-storage
+webdavclient3
 
 # ==============================================================================
 # Security, Singpass OIDC, JWT & Tools
@@ -148,3 +151,10 @@ jwcrypto
 python-jose
 pyjwt
 odoorpc
+
+# ==============================================================================
+# Data Science & Quantitative Intelligence (moneta_finance_ai_advisor)
+# ==============================================================================
+numpy>=1.26.0
+pandas>=2.2.0
+

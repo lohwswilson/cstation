@@ -130,7 +130,6 @@ EXPOSE 8069 8071 8072
 ENV ODOO_RC=/var/lib/odoo/odoo.conf
 ENV HOST=db
 ENV USER=odoo
-ENV PASSWORD=odoo
 
 USER odoo
 

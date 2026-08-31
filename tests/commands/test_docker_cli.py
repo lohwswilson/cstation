@@ -174,6 +174,7 @@ def _setup_vps_dir(tmp_path: Path) -> Path:
 
 MOCK_DOCKER_RESPONSES = {
     "docker info >/dev/null 2>&1 && echo ok || echo missing": "ok",
+    "docker compose version >/dev/null 2>&1 && echo ok || echo missing": "ok",
     "docker network ls --format '{{.Name}}' 2>/dev/null": "PW_NET\nbridge",
 }
 
@@ -281,6 +282,32 @@ def test_docker_preflight_fails_no_docker(tmp_path, monkeypatch):
     assert "docker daemon" in r.output.lower() or "not running" in r.output.lower()
 
 
+def test_docker_preflight_fails_no_docker_compose(tmp_path, monkeypatch):
+    vps_dir = _setup_vps_dir(tmp_path)
+
+    class MockResult:
+        def __init__(self, stdout=""):
+            self.stdout = stdout
+            self.stderr = ""
+            self.exited = 0
+
+    def mock_run(self, command, hide=True, sudo=False):
+        if "docker info" in command:
+            return MockResult(stdout="ok")
+        if "docker compose version" in command:
+            return MockResult(stdout="missing")
+        if "docker network ls" in command:
+            return MockResult(stdout="PW_NET\nbridge")
+        return MockResult(stdout="")
+
+    monkeypatch.setattr("cstation.commands.docker.main.SSHManager.run", mock_run)
+    monkeypatch.setattr("cstation.commands.vps.main.SSHManager.run", mock_run)
+
+    r = runner.invoke(app, ["docker", "plan", str(vps_dir)])
+    assert r.exit_code == 1
+    assert "docker compose" in r.output.lower() or "not installed" in r.output.lower()
+
+
 def test_docker_preflight_fails_no_pw_net(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
 
@@ -292,6 +319,8 @@ def test_docker_preflight_fails_no_pw_net(tmp_path, monkeypatch):
 
     def mock_run(self, command, hide=True, sudo=False):
         if "docker info" in command:
+            return MockResult(stdout="ok")
+        if "docker compose version" in command:
             return MockResult(stdout="ok")
         if "docker network ls" in command:
             return MockResult(stdout="bridge")
@@ -1232,6 +1261,8 @@ def test_preflight_reads_network_from_vps_config(tmp_path, monkeypatch):
 
     def mock_run(self, command, hide=True, sudo=False):
         if "docker info" in command:
+            return MockResult(stdout="ok")
+        if "docker compose version" in command:
             return MockResult(stdout="ok")
         if "docker network ls" in command:
             return MockResult(stdout="bridge\nPW_NET")

@@ -48,7 +48,7 @@ def odoo_backup(
 
     backup_path = None
     for d in BACKUP_DIRS:
-        for pattern in [f"{dbname}_*.zip", f"*_{dbname}.zip"]:
+        for pattern in [f"{dbname}_*.zip", f"*_{dbname}.zip", f"*{dbname}*.zip", f"{dbname}*.zip"]:
             result = ssh.run(
                 f"docker exec {container} sh -c 'ls -1t {d}/{pattern} 2>/dev/null | head -1'",
                 hide=True,
@@ -58,6 +58,35 @@ def odoo_backup(
                 break
         if backup_path:
             break
+
+    if not backup_path:
+        # Check all recent zips and verify db_name in manifest.json
+        for d in BACKUP_DIRS:
+            result = ssh.run(
+                f"docker exec {container} sh -c 'ls -1t {d}/*.zip 2>/dev/null | head -5'",
+                hide=True,
+            )
+            if result and getattr(result, "stdout", "").strip():
+                for candidate in result.stdout.strip().splitlines():
+                    cand = candidate.strip()
+                    if not cand:
+                        continue
+                    manifest_cmd = (
+                        f"docker exec {container} python3 -c \""
+                        f"import zipfile, json\n"
+                        f"try:\n"
+                        f"    zf = zipfile.ZipFile('{cand}')\n"
+                        f"    m = json.loads(zf.read('manifest.json').decode())\n"
+                        f"    print(m.get('db_name', ''))\n"
+                        f"except Exception:\n"
+                        f"    pass\""
+                    )
+                    man_res = ssh.run(manifest_cmd, hide=True)
+                    if man_res and getattr(man_res, "stdout", "").strip().lower() == dbname.lower():
+                        backup_path = cand
+                        break
+            if backup_path:
+                break
 
     if not backup_path:
         console.print(f"[red]✗[/red] No backups found for database '{dbname}' in container '{container}'")

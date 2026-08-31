@@ -110,7 +110,7 @@ class TraefikService(ImageService):
         if cfg.static_config:
             traefik_yml_path = self._resolve_traefik_yml_path(cfg)
             content = yaml.dump(cfg.static_config, sort_keys=False, default_flow_style=False)
-            ssh.run(f"bash -c 'cat > {traefik_yml_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'", sudo=True)
+            ssh.run(f"bash -c 'test -d {traefik_yml_path} && rm -rf {traefik_yml_path}; cat > {traefik_yml_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'", sudo=True)
             console.print(f"  [green]✓[/green] wrote {traefik_yml_path}")
             written.append(traefik_yml_path)
         return written

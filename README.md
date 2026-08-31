@@ -1,27 +1,74 @@
 # CStation 🚀
 
-**CStation** is a modern, local-first DevOps CLI for managing VPS infrastructure, declarative Docker container stacks, multi-arch Docker image builds, Cloudflare DNS records, and Odoo deployments.
+[![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![Package Manager](https://img.shields.io/badge/uv-fast-green.svg)](https://docs.astral.sh/uv/)
+[![Build Backend](https://img.shields.io/badge/build-hatchling-orange.svg)](https://hatch.pypa.io/)
+[![Test Suite](https://img.shields.io/badge/tests-244%20passed-success.svg)](https://pytest.org/)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
 
-Built with Python 3.13, Typer, Pydantic V2, and `uv`.
+**CStation** is a modern, local-first DevOps CLI and Infrastructure-as-Code (IaC) orchestrator. It manages VPS lifecycle, declarative Docker container stacks, multi-architecture image builds, Cloudflare DNS zones, and end-to-end Odoo deployments with sub-100ms response times.
+
+---
+
+## 📑 Table of Contents
+
+- [Key Highlights](#-key-highlights)
+- [System Architecture](#-system-architecture)
+- [Installation & Setup](#-installation--setup)
+- [Command Hierarchy](#-command-hierarchy)
+- [Quickstart Workflows](#-quickstart-workflows)
+  - [1. VPS Lifecycle Management](#1-vps-lifecycle-management)
+  - [2. Declarative Docker Containers](#2-declarative-docker-containers)
+  - [3. Odoo Code Sync & Database Backups](#3-odoo-code-sync--database-backups)
+  - [4. Declarative DNS (Cloudflare)](#4-declarative-dns-cloudflare)
+  - [5. Multi-Arch Docker Image Builds](#5-multi-arch-docker-image-builds)
+  - [6. GitHub Repository Management](#6-github-repository-management)
+- [Configuration Structure](#-configuration-structure)
+- [Testing & Quality Assurance](#-testing--quality-assurance)
+- [Documentation Suite](#-documentation-suite)
 
 ---
 
 ## ✨ Key Highlights
 
-- **⚡ Blazing Fast (<100ms)**: Employs bundled SSH batch execution (`run_batch`) and local fact caching (`.facts.json`) for instant status dashboards and zero-latency fleet listings.
-- **🛡️ Declarative & Safe**: 100% typed with Pydantic V2. Every command supports dry-run `plan` modes before executing `apply`.
-- **💻 Local-First Architecture**: Your `~/.config/cstation/` directory is the single source of truth—commit it to Git to manage infrastructure as code.
-- **📦 Declarative Docker Orchestration**: Declare container stacks as lightweight YAML fragments alongside VPS definitions. Compose files are generated and applied on-the-fly over SSH.
-- **🔄 Complete Odoo Workflows**: High-speed delta `rsync` code synchronization, automated container backup fetching, and full database + filestore restores.
-- **🌐 Vendor-Neutral DNS & Auth**: Declarative DNS record synchronization via Cloudflare, and automated OAuth2 device-flow authentication for Netcup SCP.
+- **⚡ Blazing Fast Telemetry (<100ms)**: Bundles multi-command SSH queries into single roundtrips using `run_batch()` (`==CS_SEP==` separator) and caches facts in local `.facts.json`.
+- **🛡️ 100% Declarative & Safe**: Powered by Pydantic V2 schemas. Every mutating command includes an interactive `plan` mode before `apply`.
+- **💻 Local-First Single Source of Truth**: All infrastructure state lives in `~/.config/cstation/` as version-controllable YAML.
+- **🐳 Declarative Docker Stacks**: Lightweight fragment files generate production `docker-compose.yml`, `.env`, Traefik reverse-proxy configs, and systemd mounts on-the-fly.
+- **🔄 Enterprise Odoo Pipelines**: High-speed delta `rsync` code synchronizers, automated auto-backup extraction with manifest verification, and zero-downtime database + filestore restores.
+- **🌐 Cloud-Agnostic with DNS Automation**: Manages Hetzner, Vultr, Netcup, and static bare-metal servers alongside automated Cloudflare DNS ACME challenges.
+
+---
+
+## 🏛️ System Architecture
+
+```mermaid
+graph TD
+    CLI[cstation CLI / Typer App] --> Config[ConfigManager: ~/.config/cstation/]
+    CLI --> SSH[SSHManager: Fabric / Paramiko / run_batch]
+    
+    Config --> Models[Pydantic V2 Models]
+    Config --> Secrets[Secrets Engine: config.yaml]
+    
+    CLI --> VPS[VPS Engine: 13-Phase Pipeline]
+    CLI --> Docker[Docker Engine: Declarative Fragments]
+    CLI --> Odoo[Odoo Engine: Sync / Backup / Restore]
+    CLI --> DNS[DNS Engine: Cloudflare API]
+    CLI --> Image[Image Builder: Docker / Podman]
+    CLI --> GitHub[GitHub Manager: Selective Clone]
+    
+    VPS --> |SSH Batch| RemoteHost[Remote VPS Host]
+    Docker --> |Compose & Traefik| RemoteHost
+    Odoo --> |rsync & psql| RemoteHost
+```
 
 ---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-- Python **3.13+**
-- [`uv`](https://docs.astral.sh/uv/) package manager
+- **Python 3.13+** (pinned via `.python-version`)
+- [**`uv`**](https://docs.astral.sh/uv/) (recommended high-performance package manager)
 
 ### Installation
 
@@ -30,20 +77,16 @@ Built with Python 3.13, Typer, Pydantic V2, and `uv`.
 git clone https://github.com/lohwswilson/cstation.git
 cd cstation
 
-# Install in editable mode
-uv pip install -e .
-
-# (Optional) Install test dependencies
+# Install in editable mode with development & test extras
 uv pip install -e ".[test]"
 
 # Verify installation
-cstation --version
 cstation --help
 ```
 
 ---
 
-## 🛠️ Command Overview
+## 🛠️ Command Hierarchy
 
 ```
 cstation
@@ -54,48 +97,48 @@ cstation
 ├── dns          # DNS zone & record management (zones, plan, apply)
 ├── auth         # Provider authentication (netcup login, logout, status)
 ├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
-├── lint         # Offline pre-flight linter & schema validator (alias: check)
+├── check        # Offline pre-flight linter & schema validator (alias: lint)
 ├── completion   # Shell auto-completion helpers (install, show)
-├── server       # Server tools (ssh-setup, status, ls, rm, playbook, pw sync)
+├── server       # Server management (ssh-setup, status, ls, rm, playbook, pw sync)
 └── version      # Print CStation version
 ```
 
 ---
 
-## 🚀 Quickstart Guide
+## 🚀 Quickstart Workflows
 
-### 1. VPS Management
+### 1. VPS Lifecycle Management
 
 ```bash
-# 1. Initialize a new VPS config via live SSH scan
+# Initialize a new VPS via live SSH inspection
 cstation vps init sg01.synercatalyst.com --port 22 --user root
 
-# 2. Preview 12-phase OS setup (packages, firewall, sshd, swap, tuning, docker)
+# Dry-run 13-phase OS setup (packages, sshd, firewall, swap, tuning, fail2ban, docker)
 cstation vps plan sg01.synercatalyst.com
 
-# 3. Apply baseline configuration
+# Apply baseline infrastructure setup
 cstation vps apply sg01.synercatalyst.com --yes
 
-# 4. View real-time VPS health dashboard (CPU, RAM, Disk, Docker)
+# View real-time VPS telemetry dashboard (CPU, RAM, Disk, Docker)
 cstation vps status sg01.synercatalyst.com
 
-# 5. List all managed VPS instances
+# List all fleet VPS instances (cached <100ms)
 cstation vps list
 ```
 
 ### 2. Declarative Docker Containers
 
 ```bash
-# 1. Scrape existing containers from a VPS into local YAML fragments
+# Scrape running containers on VPS into local declarative YAML fragments
 cstation docker import sg01.synercatalyst.com --all
 
-# 2. Check running vs declared container state
+# Check container state vs declared local state
 cstation docker status sg01.synercatalyst.com
 
-# 3. Dry-run container changes
+# Preview container deployment changes
 cstation docker plan sg01.synercatalyst.com
 
-# 4. Deploy or update containers via SSH
+# Deploy / update container stacks over SSH
 cstation docker apply sg01.synercatalyst.com --yes
 ```
 
@@ -103,28 +146,28 @@ cstation docker apply sg01.synercatalyst.com --yes
 
 ```bash
 # Sync local PW.18.0 and addons to VPS via optimized rsync
-cstation odoo sync sg06 18.0
+cstation odoo sync sg01 18.0
 
 # Preview sync without touching remote files
-cstation odoo sync sg06 18.0 --dry-run
+cstation odoo sync sg01 18.0 --dry-run
 
 # Download the latest auto-backup from a running container
-cstation odoo backup sg01 SG01_PROD my_database
+cstation odoo backup us01.synercatalyst.com US01_BESOLUTION_US01DB PW5-BESOLUTION
 
-# Restore a full backup zip (database dump + filestore)
-cstation odoo restore sg01 SG01_PROD backup.zip --yes
+# Restore a full backup zip (database dump + filestore) to a target VPS
+cstation odoo restore sg01.synercatalyst.com SG01_DEV5_SG01DB 2026_08_31_03_00_12.dump.zip --dest-db be5 --yes
 ```
 
 ### 4. Declarative DNS (Cloudflare)
 
 ```bash
-# List all Cloudflare DNS zones
+# List all configured Cloudflare DNS zones
 cstation dns zones
 
 # Dry-run DNS drift against ~/.config/cstation/dns/
 cstation dns plan synercatalyst.com
 
-# Apply DNS records
+# Apply declared DNS records
 cstation dns apply synercatalyst.com --yes
 ```
 
@@ -134,23 +177,20 @@ cstation dns apply synercatalyst.com --yes
 # List available image recipes in ~/.config/cstation/images/
 cstation image list
 
-# Build multi-arch image and push to registry
+# Build multi-arch image and push to configured registry
 cstation image build synercatalyst-odoo.13.0
 ```
 
-### 6. GitHub Repository Management & Fast Selective Clone
+### 6. GitHub Repository Management
 
 ```bash
-# View configured repository mapping
+# View configured repository mappings
 cstation github repo list
 
-# Fast selective clone (blobless --filter=blob:none & parallel worker threads)
+# Fast selective clone (blobless --filter=blob:none in parallel)
 cstation github repo clone
 
-# Clone a single specific repository (e.g. OCA rest-framework)
-cstation github repo clone rest-framework
-
-# Fetch upstream (odoo/odoo), merge, pull origin, and push to GitHub fork
+# Sync fork with upstream repository
 cstation github repo sync
 ```
 
@@ -158,41 +198,49 @@ cstation github repo sync
 
 ## 📂 Configuration Structure
 
-Live configurations are stored under `~/.config/cstation/`:
+All live configurations reside under `~/.config/cstation/`:
 
 ```
 ~/.config/cstation/
 ├── config.yaml                     # Global credentials, secrets, & API tokens
 ├── vps/                            # Server configs & container stacks
 │   ├── sg01.synercatalyst.com/
-│   │   ├── vps.yaml                # Infrastructure definition
-│   │   ├── traefik.yaml            # Traefik reverse proxy fragment
-│   │   ├── db.yaml                 # PostgreSQL container fragment
-│   │   └── sg01_prod.yaml          # Odoo application fragment
-│   └── us02.synercatalyst.com/
+│   │   ├── vps.yaml                # VPS hardware, access & OS baseline
+│   │   ├── .facts.json             # Cached hardware & status telemetry
+│   │   ├── SG01_DB.yaml            # PostgreSQL database container fragment
+│   │   ├── SG01_TRAEFIK.yaml       # Traefik reverse proxy fragment
+│   │   ├── SG01_PORTAINER.yaml     # Portainer CE fragment
+│   │   └── SG01_DEV8_SG01DB.yaml   # Odoo 18.0 container stack fragment
+│   ├── sg07.ansis.com.sg/
+│   └── us01.synercatalyst.com/
 ├── dns/                            # Declarative DNS zones (synercatalyst.com.yaml)
 ├── github/                         # Git repository sync definitions (odoo_repos.sync.yml)
-└── images/                         # Multi-arch Docker image recipes
+└── images/                         # Multi-arch Docker image build recipes
 ```
-
-See the [Configuration Guide](docs/configuration-guide.md) for full schema specifications.
 
 ---
 
-## 🧪 Testing & Development
+## 🧪 Testing & Quality Assurance
+
+CStation maintains an extensive automated test suite covering CLI invocation, SSH batch execution, model schemas, and error boundaries:
 
 ```bash
-# Run entire test suite (192 unit & integration tests)
-uv run pytest -v
+# Run all tests with pytest
+uv run pytest -q
 
-# Run single test module
+# Run specific test modules
+uv run pytest tests/commands/test_docker_cli.py
 uv run pytest tests/commands/test_vps_cli.py
+uv run pytest tests/commands/test_odoo_cli.py
 ```
 
 ---
 
-## 📚 Detailed Documentation
+## 📚 Documentation Suite
 
-- 📖 [CLI Command Reference](docs/cli-reference.md)
-- ⚙️ [Configuration & Schema Guide](docs/configuration-guide.md)
-- 🤖 [Coding Agent Guidance (AGENTS.md)](AGENTS.md)
+- 🗺️ **[Strategic Roadmap (ROADMAP.md)](ROADMAP.md)**: Phased milestones, tracks, and future capabilities.
+- 🏛️ **[System Architecture (ARCHITECTURE.md)](ARCHITECTURE.md)**: Deep dive into CStation internals, SSH batching, and service adapters.
+- 📖 **[CLI Command Reference (docs/cli-reference.md)](docs/cli-reference.md)**: Complete manual for all 11 command groups.
+- ⚙️ **[Configuration Guide (docs/configuration-guide.md)](docs/configuration-guide.md)**: Comprehensive YAML schema reference.
+- 🤝 **[Developer & Contributing Guide (CONTRIBUTING.md)](CONTRIBUTING.md)**: Contribution standards, code style, and PR workflow.
+- 🤖 **[AI Agent Guidance (AGENTS.md)](AGENTS.md)**: Canonical rules for AI coding agents.

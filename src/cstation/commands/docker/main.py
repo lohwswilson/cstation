@@ -81,6 +81,14 @@ def _preflight_check(ssh: SSHManager, vps_data: VPSConfig) -> bool:
         console.print("[red]✗[/red] Docker daemon is not running on the VPS.")
         console.print("[dim]Run 'cstation vps apply <vps>' first.[/dim]")
         return False
+
+    result = ssh.run("docker compose version >/dev/null 2>&1 && echo ok || echo missing", hide=True, sudo=True)
+    status = getattr(result, "stdout", "").strip() if result else "missing"
+    if status != "ok":
+        console.print("[red]✗[/red] Docker Compose (v2) is not installed on the VPS.")
+        console.print("[dim]Run 'cstation vps apply <vps>' or install 'docker-compose-v2' on the server first.[/dim]")
+        return False
+
     result = ssh.run("docker network ls --format '{{.Name}}' 2>/dev/null", hide=True, sudo=True)
     networks = set()
     if result and getattr(result, "stdout", "").strip():

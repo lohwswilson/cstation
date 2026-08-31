@@ -47,6 +47,12 @@ ENV PYTHONPATH=/usr/lib/python3/dist-packages:/opt/odoo
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        gnupg \
+        locales \
+    && echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen \
+    && echo 'deb http://apt.postgresql.org/pub/repos/apt/ bookworm-pgdg main' > /etc/apt/sources.list.d/pgdg.list \
+    && curl -sSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/pgdg.gpg \
+    && apt-get update && apt-get install -y --no-install-recommends \
         fonts-noto-cjk \
         fonts-dejavu-core \
         libpq5 \
@@ -55,8 +61,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxml2 \
         libxslt1.1 \
         libjpeg62-turbo \
-        wkhtmltopdf \
-        postgresql-client \
+        xfonts-75dpi \
+        xfonts-base \
+        postgresql-client-18 \
+    && ARCH="$(dpkg --print-architecture)" \
+    && curl -sSL -o /tmp/wkhtmltox.deb "https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.bookworm_${ARCH}.deb" \
+    && apt-get install -y --no-install-recommends /tmp/wkhtmltox.deb \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # 2. Copy compiled Python environment from builder
@@ -64,7 +74,8 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # 3. Setup directories & non-root user
-RUN id odoo || adduser --disabled-password --gecos '' odoo \
+RUN groupadd -g 101 odoo \
+    && useradd -u 100 -g 101 -m -d /var/lib/odoo -s /bin/bash odoo \
     && mkdir -p /var/lib/odoo /mnt/extra-addons /opt/odoo /usr/lib/python3/dist-packages \
     && chown -R odoo:odoo /var/lib/odoo /mnt/extra-addons /opt/odoo /usr/lib/python3/dist-packages
 
@@ -85,7 +96,6 @@ ENV ODOO_RC=/var/lib/odoo/odoo.conf
 ENV HOST=db
 ENV PORT=5432
 ENV USER=odoo
-ENV PASSWORD=odoo
 
 # Graceful shutdown & healthcheck
 STOPSIGNAL SIGTERM
