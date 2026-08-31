@@ -16,5 +16,10 @@ config/
 # Odoo backup archives
 *.zip
 
+# Test & Coverage
+.coverage
+coverage.xml
+htmlcov/
+
 # macOS
 .DS_Store

@@ -81,6 +81,17 @@ cstation vps apply <vps-name-or-path> [OPTIONS]
 ```
 - `--yes, -y`: Skip confirmation prompt.
 
+### `cstation vps ssh`
+Open an interactive SSH shell or run a command directly on the remote VPS without manually specifying IP, port, or key.
+
+```bash
+# Open interactive TTY shell
+cstation vps ssh <vps-name-or-path>
+
+# Run a remote command
+cstation vps ssh <vps-name-or-path> htop
+```
+
 ### `cstation vps rm`
 Delete a local VPS configuration directory.
 
@@ -134,6 +145,20 @@ cstation docker apply <vps> [OPTIONS]
 ## 3. `cstation odoo`
 
 Enterprise Odoo codebase synchronization, auto-backup extraction, and database restoration.
+
+### `cstation odoo update`
+Run an Odoo database module upgrade or installation directly inside a remote container over SSH.
+
+```bash
+# Upgrade specific module on a database
+cstation odoo update <vps> <container> -d <dbname> -m perfectwork_sg_be
+
+# Upgrade all modules and restart container
+cstation odoo update <vps> <container> -d <dbname> -m all
+
+# Install new module without restarting
+cstation odoo update <vps> <container> -d <dbname> -i my_new_module --no-restart
+```
 
 ### `cstation odoo sync`
 Synchronize local PerfectWork/Odoo source code and addons to a remote VPS using optimized delta rsync.

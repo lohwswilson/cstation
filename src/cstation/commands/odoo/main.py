@@ -396,6 +396,68 @@ def odoo_restore(
     console.print(f"  VPS: {identity_name}")
 
 
+@odoo_app.command("update")
+def odoo_update(
+    vps: str = typer.Argument(..., help="VPS name or directory path"),
+    container: str = typer.Argument(..., help="Odoo container name"),
+    dbname: str = typer.Option(..., "--dbname", "-d", help="Database name to update"),
+    modules: str = typer.Option("all", "--modules", "-m", help="Comma-separated module names to update (e.g. 'all', 'perfectwork_sg_be')"),
+    install: Optional[str] = typer.Option(None, "--install", "-i", help="Optional comma-separated module names to install"),
+    restart: bool = typer.Option(True, "--restart/--no-restart", help="Restart container after update completes"),
+) -> None:
+    """Run an Odoo database module upgrade or installation directly inside a remote container."""
+    vps_dir = _resolve_vps_dir(Path(vps))
+    vps_data = _load_vps_config(vps_dir)
+    identity_name = vps_data.identity.name
+    ssh = _ssh_from_config(vps_data)
+
+    console.print(f"\n[bold]Odoo Module Update: {identity_name}[/bold]\n")
+    console.print(f"  Container:  {container}")
+    console.print(f"  Database:   {dbname}")
+    console.print(f"  Update:     {modules}")
+    if install:
+        console.print(f"  Install:    {install}")
+    console.print()
+
+    # Check if container is running
+    check_running = ssh.run(
+        f"docker inspect -f '{{{{.State.Running}}}}' {container} 2>/dev/null",
+        hide=True,
+        sudo=True,
+    )
+    is_running = (getattr(check_running, "stdout", "").strip() == "true") if check_running else False
+    if not is_running:
+        console.print(f"[red]✗[/red] Container '{container}' is not running on {identity_name}")
+        raise typer.Exit(1)
+
+    cmd_parts = ["odoo", f"-d {dbname}", f"-u {modules}", "--stop-after-init"]
+    if install:
+        cmd_parts.append(f"-i {install}")
+    odoo_cmd = " ".join(cmd_parts)
+
+    console.print(f"  [dim]Running upgrade: docker exec {container} {odoo_cmd}...[/dim]")
+    update_res = ssh.run(
+        f"docker exec {container} {odoo_cmd}",
+        sudo=True,
+    )
+    if update_res and getattr(update_res, "exited", 0) != 0:
+        console.print(f"[red]✗[/red] Odoo update command failed")
+        raise typer.Exit(1)
+
+    console.print(f"  [green]✓[/green] Module update completed successfully")
+
+    if restart:
+        console.print(f"  [dim]Restarting {container}...[/dim]")
+        compose_path = f"/var/lib/{container}/docker-compose.yml"
+        ssh.run(
+            f"test -f {compose_path} && docker compose -f {compose_path} restart || docker restart {container}",
+            sudo=True,
+        )
+        console.print(f"  [green]✓[/green] Restarted {container}")
+
+    console.print(f"\n[bold green]✓ Update complete on {identity_name}![/bold green]")
+
+
 @odoo_app.command("sync")
 def odoo_sync(
     host: str = typer.Argument(..., help="Target hostname (e.g. sg06)"),

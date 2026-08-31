@@ -1293,6 +1293,37 @@ def vps_remove(
     console.print(f"\n[green]✓[/green] Removed VPS [bold]{name}[/bold]")
 
 
+@vps_app.command("ssh")
+def vps_ssh(
+    vps: str = typer.Argument(..., help="VPS name or directory path"),
+    command: Optional[list[str]] = typer.Argument(None, help="Optional remote command to execute"),
+) -> None:
+    """Open an interactive SSH shell or execute a command on the target VPS."""
+    vps_dir = _resolve_vps_dir(Path(vps))
+    vps_data = _load_vps_config(vps_dir)
+
+    host = vps_data.access.host
+    user = vps_data.access.user or "root"
+    port = vps_data.access.port or 22
+    key = vps_data.access.key
+
+    ssh_args = ["ssh", "-p", str(port)]
+    if key:
+        expanded_key = os.path.expanduser(key)
+        if os.path.exists(expanded_key):
+            ssh_args.extend(["-i", expanded_key])
+
+    ssh_target = f"{user}@{host}"
+    ssh_args.append(ssh_target)
+
+    if command:
+        ssh_args.extend(command)
+
+    import subprocess
+    ret = subprocess.call(ssh_args)
+    raise typer.Exit(ret)
+
+
 # Legacy alias for backward compatibility
 vps_app.command("remove", hidden=True)(vps_remove)
 

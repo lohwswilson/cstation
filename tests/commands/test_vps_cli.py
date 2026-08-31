@@ -1656,3 +1656,32 @@ os:
     assert any("net.core.somaxconn = 16384" in cmd for cmd in executed_cmds)
     assert any("65536" in cmd for cmd in executed_cmds)
     assert any("99-cstation.conf" in cmd for cmd in executed_cmds)
+
+
+def test_vps_ssh_invokes_subprocess(monkeypatch, tmp_path: Path):
+    import subprocess
+    cfg_dir = tmp_path / "sg01"
+    cfg_dir.mkdir()
+    (cfg_dir / "vps.yaml").write_text("""
+apiVersion: cstation/v1
+kind: VPS
+identity:
+  name: sg01
+access:
+  host: 1.2.3.4
+  user: root
+  port: 2222
+  key: ~/.ssh/id_ed25519
+""")
+    called_args = []
+    def fake_call(args):
+        called_args.append(args)
+        return 0
+
+    monkeypatch.setattr(subprocess, "call", fake_call)
+    r = CliRunner().invoke(app, ["vps", "ssh", str(cfg_dir)])
+    assert r.exit_code == 0
+    assert len(called_args) == 1
+    assert "-p" in called_args[0]
+    assert "2222" in called_args[0]
+    assert "root@1.2.3.4" in called_args[0]
