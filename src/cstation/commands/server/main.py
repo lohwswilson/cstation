@@ -16,11 +16,7 @@ from ..pw.main import app as pw_app
 
 
 # Create Server app
-server_app = typer.Typer(
-    name="server", 
-    help="Remote server management", 
-    invoke_without_command=True
-)
+server_app = typer.Typer(name="server", help="Remote server management", invoke_without_command=True)
 
 # Add commands to the app
 server_app.command("ssh-setup")(setup_ssh)

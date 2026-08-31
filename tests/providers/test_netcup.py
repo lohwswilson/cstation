@@ -19,37 +19,41 @@ def _make_http(get_response=None, status_code=200):
 
 
 def test_get_vps_by_id_parses_server_fields():
-    http = _make_http(get_response={
-        "id": 12345,
-        "name": "v2202604354651455383",
-        "hostname": "us02.synercatalyst.com",
-        "nickname": "US02",
-        "disabled": False,
-        "template": {"id": 7, "name": "VPS 2000 G8s"},
-        "site": {"id": 1, "city": "Nuremberg"},
-        "ipv4Addresses": [{"id": 1, "ip": "46.38.240.100", "netmask": "255.255.255.0", "gateway": "46.38.240.1"}],
-        "ipv6Addresses": [{"id": 1, "networkPrefix": "2a03:4000:2:1::", "networkPrefixLength": 64, "gateway": "2a03:4000:2:1::1"}],
-        "maxCpuCount": 4,
-        "disksAvailableSpaceInMiB": 512000,
-        "snapshotCount": 0,
-        "rescueSystemActive": False,
-        "snapshotAllowed": True,
-        "architecture": "AMD64",
-        "serverLiveInfo": {
-            "state": "RUNNING",
-            "cpuCount": 4,
-            "maxServerMemoryInMiB": 16384,
-            "currentServerMemoryInMiB": 8192,
-            "disks": [
-                {"dev": "vda", "driver": "VIRTIO", "capacityInMiB": 512000, "allocationInMiB": 25600},
+    http = _make_http(
+        get_response={
+            "id": 12345,
+            "name": "v2202604354651455383",
+            "hostname": "us02.synercatalyst.com",
+            "nickname": "US02",
+            "disabled": False,
+            "template": {"id": 7, "name": "VPS 2000 G8s"},
+            "site": {"id": 1, "city": "Nuremberg"},
+            "ipv4Addresses": [{"id": 1, "ip": "46.38.240.100", "netmask": "255.255.255.0", "gateway": "46.38.240.1"}],
+            "ipv6Addresses": [
+                {"id": 1, "networkPrefix": "2a03:4000:2:1::", "networkPrefixLength": 64, "gateway": "2a03:4000:2:1::1"}
             ],
-            "interfaces": [],
-            "bootorder": [],
-            "autostart": True,
-            "uefi": True,
-            "uptimeInSeconds": 86400,
-        },
-    })
+            "maxCpuCount": 4,
+            "disksAvailableSpaceInMiB": 512000,
+            "snapshotCount": 0,
+            "rescueSystemActive": False,
+            "snapshotAllowed": True,
+            "architecture": "AMD64",
+            "serverLiveInfo": {
+                "state": "RUNNING",
+                "cpuCount": 4,
+                "maxServerMemoryInMiB": 16384,
+                "currentServerMemoryInMiB": 8192,
+                "disks": [
+                    {"dev": "vda", "driver": "VIRTIO", "capacityInMiB": 512000, "allocationInMiB": 25600},
+                ],
+                "interfaces": [],
+                "bootorder": [],
+                "autostart": True,
+                "uefi": True,
+                "uptimeInSeconds": 86400,
+            },
+        }
+    )
 
     p = NetcupProvider(http=http, access_token="test-token")
     v = p.get_vps(id="12345")
@@ -71,7 +75,14 @@ def test_get_vps_by_name_searches_list():
     list_resp = Mock()
     list_resp.status_code = 200
     list_resp.json.return_value = [
-        {"id": 12345, "name": "v2202604354651455383", "hostname": None, "nickname": None, "disabled": False, "template": None},
+        {
+            "id": 12345,
+            "name": "v2202604354651455383",
+            "hostname": None,
+            "nickname": None,
+            "disabled": False,
+            "template": None,
+        },
     ]
 
     detail_resp = Mock()
@@ -104,10 +115,16 @@ def test_get_vps_by_name_searches_list():
 
 
 def test_status_mapping():
-    http = _make_http(get_response={
-        "id": 1, "name": "test", "site": {}, "ipv4Addresses": [], "ipv6Addresses": [],
-        "serverLiveInfo": {"state": "PAUSED", "disks": []},
-    })
+    http = _make_http(
+        get_response={
+            "id": 1,
+            "name": "test",
+            "site": {},
+            "ipv4Addresses": [],
+            "ipv6Addresses": [],
+            "serverLiveInfo": {"state": "PAUSED", "disks": []},
+        }
+    )
     p = NetcupProvider(http=http, access_token="test-token")
     v = p.get_vps(id="1")
     assert v.status == VPSStatus.STOPPING
@@ -162,17 +179,33 @@ def test_list_vps():
     detail1 = Mock()
     detail1.status_code = 200
     detail1.json.return_value = {
-        "id": 1, "name": "srv1", "site": {"city": "Nuremberg"},
-        "ipv4Addresses": [{"id": 1, "ip": "1.2.3.4"}], "ipv6Addresses": [],
-        "serverLiveInfo": {"state": "RUNNING", "cpuCount": 2, "maxServerMemoryInMiB": 8192, "disks": [{"capacityInMiB": 256000}]},
+        "id": 1,
+        "name": "srv1",
+        "site": {"city": "Nuremberg"},
+        "ipv4Addresses": [{"id": 1, "ip": "1.2.3.4"}],
+        "ipv6Addresses": [],
+        "serverLiveInfo": {
+            "state": "RUNNING",
+            "cpuCount": 2,
+            "maxServerMemoryInMiB": 8192,
+            "disks": [{"capacityInMiB": 256000}],
+        },
     }
 
     detail2 = Mock()
     detail2.status_code = 200
     detail2.json.return_value = {
-        "id": 2, "name": "srv2", "site": {"city": "Falkenstein"},
-        "ipv4Addresses": [{"id": 2, "ip": "5.6.7.8"}], "ipv6Addresses": [],
-        "serverLiveInfo": {"state": "SHUTOFF", "cpuCount": 4, "maxServerMemoryInMiB": 16384, "disks": [{"capacityInMiB": 512000}]},
+        "id": 2,
+        "name": "srv2",
+        "site": {"city": "Falkenstein"},
+        "ipv4Addresses": [{"id": 2, "ip": "5.6.7.8"}],
+        "ipv6Addresses": [],
+        "serverLiveInfo": {
+            "state": "SHUTOFF",
+            "cpuCount": 4,
+            "maxServerMemoryInMiB": 16384,
+            "disks": [{"capacityInMiB": 512000}],
+        },
     }
 
     http = Mock()

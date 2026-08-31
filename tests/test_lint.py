@@ -2,7 +2,6 @@
 Tests for Lint Command in CStation CLI.
 """
 
-import pytest
 from cstation.commands.lint.main import _parse_port_binding, run_lint_checks
 
 
@@ -24,10 +23,15 @@ def test_run_lint_checks_passes():
 
 def test_run_lint_checks_flags_missing_secrets(tmp_path, monkeypatch):
     from cstation.commands.lint import main as lint_mod
+
     vps_dir = tmp_path / "vps" / "test.vps"
     vps_dir.mkdir(parents=True)
-    (vps_dir / "vps.yaml").write_text("apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: test.vps\naccess:\n  host: 1.2.3.4\n")
-    (vps_dir / "app.yaml").write_text("apiVersion: cstation/v1\nkind: Container\nname: app\nimage: nginx\nsecrets:\n  - MISSING_SECRET_KEY\n")
+    (vps_dir / "vps.yaml").write_text(
+        "apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: test.vps\naccess:\n  host: 1.2.3.4\n"
+    )
+    (vps_dir / "app.yaml").write_text(
+        "apiVersion: cstation/v1\nkind: Container\nname: app\nimage: nginx\nsecrets:\n  - MISSING_SECRET_KEY\n"
+    )
     monkeypatch.setattr(lint_mod, "CSTATION_VPS_DIR", tmp_path / "vps")
     monkeypatch.setattr(lint_mod, "CSTATION_IMAGES_DIR", tmp_path / "images")
     monkeypatch.setattr(lint_mod, "CSTATION_DNS_DIR", tmp_path / "dns")

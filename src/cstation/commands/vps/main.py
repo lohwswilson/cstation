@@ -147,7 +147,6 @@ def _strip_nulls(obj: Any) -> Any:
     return obj
 
 
-
 def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
     # Phase 1: Bundle all fact collection + package manager detection
     batch_cmds = {
@@ -168,9 +167,9 @@ def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
         "pkg_yum": "command -v yum",
         "pkg_apk": "command -v apk",
     }
-    
+
     results = ssh.run_batch(batch_cmds)
-    
+
     os_release = _parse_os_release(results["os_release"])
     os_id = os_release.get("ID", "")
     pkg_mgr = _detect_package_manager(ssh, os_id, results)
@@ -181,17 +180,17 @@ def _collect_facts(ssh: SSHManager) -> dict[str, Any]:
         pkg_batch_cmd = _check_packages_batch(pkg_mgr, KEY_PACKAGES)
         pkg_res = ssh.run(pkg_batch_cmd)
         pkg_results_raw = getattr(pkg_res, "stdout", "") or ""
-    
+
     detected = []
     for line in pkg_results_raw.splitlines():
         if line.startswith("inst:"):
             detected.append(line.split(":", 1)[1])
-    
+
     missing = [p for p in KEY_PACKAGES if p not in detected]
 
     kernel = results["kernel"].strip()
     hostname = results["hostname"].strip()
-    
+
     lscpu_raw = results["lscpu"]
     mem_raw = results["memory"]
     lsblk_raw = results["lsblk"]
@@ -302,9 +301,9 @@ def _configured_providers() -> list[str]:
     providers = cfg.get_config_value("vps.providers", default={}) or {}
     if not isinstance(providers, dict):
         providers = {}
-    
+
     result = [str(k) for k in providers.keys()]
-    
+
     if "static" not in result:
         result.append("static")
     return result
@@ -319,6 +318,7 @@ def _provider_from_token(provider: str, token: str) -> Any:
         return VultrProvider(token=token, http=_HttpClient())
     if provider == "netcup":
         from cstation.providers.netcup_auth import get_access_token, NetcupAuthError
+
         try:
             access_token = get_access_token()
         except NetcupAuthError as e:
@@ -335,7 +335,7 @@ def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[st
     if accounts:
         if account is None:
             if len(accounts) == 1:
-                (only_name, only_token), = accounts.items()
+                ((only_name, only_token),) = accounts.items()
                 return only_name, only_token
             raise typer.BadParameter(
                 f"Multiple {provider} accounts configured; use --account or prefix target with <account>:"
@@ -351,11 +351,12 @@ def _resolve_account(provider: str, account: Optional[str]) -> tuple[Optional[st
 
     if provider == "netcup":
         from cstation.providers.netcup_auth import credentials_exist
+
         if credentials_exist():
             return None, "oauth"
         raise typer.BadParameter(
-            f"No Netcup SCP credentials found. Run 'cstation netcup auth-login' first, "
-            f"or configure vps.providers.netcup.scp in ~/.config/cstation/config.yaml"
+            "No Netcup SCP credentials found. Run 'cstation netcup auth-login' first, "
+            "or configure vps.providers.netcup.scp in ~/.config/cstation/config.yaml"
         )
 
     raise typer.BadParameter(
@@ -389,6 +390,9 @@ def _split_account_target(target: str) -> tuple[Optional[str], str]:
 def vps_list(
     provider: str = typer.Option("all"),
     account: Optional[str] = typer.Option(None, "--account"),
+    refresh: bool = typer.Option(
+        False, "--refresh", "-r", help="Force live SSH facts refresh across all VPS instances in parallel"
+    ),
     output: OutputFormat = typer.Option(
         OutputFormat.TABLE,
         "--output",
@@ -418,7 +422,7 @@ def vps_list(
             raise typer.BadParameter(f"Unknown provider '{provider}'")
 
     providers_to_list = providers if provider == "all" else [provider]
-    
+
     # Prepare work units for parallel execution
     tasks = []
     for p_name in providers_to_list:
@@ -440,7 +444,7 @@ def vps_list(
                 p = _provider_from_token(p_name, token)
             else:
                 acct_name, p = _provider(p_name, account=None)
-            
+
             vps_list = p.list_vps()
             return p_name, acct_name, vps_list, None, None
         except ProviderAuthError as e:
@@ -455,21 +459,42 @@ def vps_list(
         futures = [executor.submit(_fetch_vps_task, *t) for t in tasks]
         for future in futures:
             p_name, acct_name, vps_list, auth_err, prov_err = future.result()
-            
+
             if auth_err:
                 if not aggregate_mode:
                     console.print(f"[red]✗[/red] {auth_err}")
                     raise typer.Exit(2)
                 auth_errors.append(auth_err)
-            
+
             if prov_err:
                 if not aggregate_mode:
                     console.print(f"[red]✗[/red] {prov_err}")
                     raise typer.Exit(1)
                 provider_errors.append(prov_err)
-            
+
             for v in vps_list:
                 rows.append((p_name, acct_name, v))
+
+    if refresh and rows:
+
+        def _refresh_node(v_entry):
+            prov, acct, v = v_entry
+            v_dir = CSTATION_VPS_DIR / v.name
+            if not v_dir.exists():
+                v_dir = CSTATION_VPS_DIR / v.id
+            if v_dir.exists() and (v_dir / "vps.yaml").exists():
+                try:
+                    v_cfg = _load_vps_config(v_dir)
+                    v_ssh = _ssh_from_config(v_cfg)
+                    v_facts = _collect_facts(v_ssh)
+                    if v_facts and v_facts.get("os", {}).get("id"):
+                        save_cached_facts(v_dir, v_facts)
+                        v.facts_summary = format_facts_summary(v_facts)
+                except Exception:
+                    pass
+
+        with ThreadPoolExecutor(max_workers=min(16, len(rows))) as executor:
+            list(executor.map(_refresh_node, rows))
 
     if not rows:
         if auth_errors:
@@ -485,16 +510,18 @@ def vps_list(
 
     structured_data = []
     for provider_name, acct_name, v in rows:
-        structured_data.append({
-            "provider": provider_name,
-            "account": acct_name,
-            "id": v.id,
-            "name": v.name,
-            "region": v.region,
-            "status": getattr(v.status, "value", str(v.status)),
-            "ipv4": v.ipv4,
-            "metrics": v.facts_summary,
-        })
+        structured_data.append(
+            {
+                "provider": provider_name,
+                "account": acct_name,
+                "id": v.id,
+                "name": v.name,
+                "region": v.region,
+                "status": getattr(v.status, "value", str(v.status)),
+                "ipv4": v.ipv4,
+                "metrics": v.facts_summary,
+            }
+        )
 
     def render_vps_list_table():
         table = Table(title="VPS")
@@ -511,7 +538,7 @@ def vps_list(
         table.add_column("Region")
         table.add_column("Status")
         table.add_column("IPv4")
-        
+
         show_metrics = any(v.facts_summary is not None for _, _, v in rows)
         if show_metrics:
             table.add_column("Live Metrics (Cached)")
@@ -531,18 +558,20 @@ def vps_list(
                 row.append(provider_name)
             if show_account:
                 row.append(acct_name or "-")
-            
-            row.extend([
-                id_value,
-                v.name,
-                v.region or "-",
-                f"[green]{v.status.value}[/green]" if v.status.value == "running" else v.status.value,
-                v.ipv4 or "-",
-            ])
-            
+
+            row.extend(
+                [
+                    id_value,
+                    v.name,
+                    v.region or "-",
+                    f"[green]{v.status.value}[/green]" if v.status.value == "running" else v.status.value,
+                    v.ipv4 or "-",
+                ]
+            )
+
             if show_metrics:
                 row.append(v.facts_summary or "[dim]-[/dim]")
-                
+
             table.add_row(*row)
         console.print(table)
 
@@ -557,9 +586,12 @@ from cstation.facts import load_cached_facts, save_cached_facts, format_facts_su
 
 # ... (other imports)
 
+
 @vps_app.command("status")
 def vps_status(
-    target: str = typer.Argument(..., help="VPS name (e.g. sg01.synercatalyst.com) or target in the form <provider>/<account>:<id>"),
+    target: str = typer.Argument(
+        ..., help="VPS name (e.g. sg01.synercatalyst.com) or target in the form <provider>/<account>:<id>"
+    ),
     provider: Optional[str] = typer.Option(None, "--provider"),
     account: Optional[str] = typer.Option(None, "--account"),
     refresh: bool = typer.Option(False, "--refresh", "-r", help="Force a live SSH update even if cached data exists"),
@@ -578,7 +610,7 @@ def vps_status(
             vps_data = _load_vps_config(vps_dir)
             target_name = vps_data.identity.name
             host = vps_data.access.host
-            
+
             # Check for cache
             if not refresh:
                 cached_facts = load_cached_facts(vps_dir)
@@ -591,7 +623,7 @@ def vps_status(
                             age_str = f"({age_sec}s ago)"
                         else:
                             age_str = f"({age_sec // 60}m ago)"
-                    
+
                     console.print(f"[dim]Using cached status for {target_name} {age_str}[/dim]")
                     _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, cached_facts)
                     return
@@ -613,11 +645,13 @@ def vps_status(
     # Fallback to manual provider/account:id logic
     target_provider, rest = (target.split("/", 1) + [None])[:2] if "/" in target else (None, target)
     if target_provider is not None and provider is not None and target_provider != provider:
-        raise typer.BadParameter("Conflicting provider selection: both --provider and <provider>/<target> were provided")
-    
+        raise typer.BadParameter(
+            "Conflicting provider selection: both --provider and <provider>/<target> were provided"
+        )
+
     effective_provider = (target_provider or provider or _default_provider()).strip()
     target_account, raw_target = _split_account_target(rest)
-    
+
     if target_account is not None and account is not None and target_account != account:
         raise typer.BadParameter("Conflicting account selection: both --account and <account>:<target> were provided")
     effective_account = target_account or account
@@ -629,7 +663,9 @@ def vps_status(
         _print_vps_status_table(v)
     except ProviderNotFoundError as e:
         console.print(f"[red]✗[/red] {e}")
-        console.print("[dim]If this is a managed server, ensure its directory name in ~/.config/cstation/vps/ matches exactly.[/dim]")
+        console.print(
+            "[dim]If this is a managed server, ensure its directory name in ~/.config/cstation/vps/ matches exactly.[/dim]"
+        )
         raise typer.Exit(3)
     except ProviderAuthError as e:
         console.print(f"[red]✗[/red] {e}")
@@ -669,12 +705,12 @@ def _print_vps_live_status(name: str, region: str, access: dict, facts: dict) ->
     table = Table(title=f"VPS Live Status: {name}", show_header=False)
     table.add_column("Field", style="bold cyan")
     table.add_column("Value")
-    
+
     table.add_row("Name", name)
     table.add_row("Region", region)
     table.add_row("Status", "[green]running[/green]")
     table.add_row("IPv4", access.get("host", "-"))
-    
+
     table.add_section()
     os_info = facts.get("os", {})
     table.add_row("OS", os_info.get("pretty", "-"))
@@ -684,24 +720,24 @@ def _print_vps_live_status(name: str, region: str, access: dict, facts: dict) ->
         cc_styled = f"[green]{tcp_cc}[/green]" if tcp_cc == "bbr" else f"[yellow]{tcp_cc}[/yellow]"
         table.add_row("TCP Congestion", cc_styled)
     table.add_row("Load Avg", facts.get("load_avg", "-"))
-    
+
     table.add_section()
     cpu = facts.get("cpu", {})
     if cpu:
         cpu_val = f"{cpu.get('vcpu', '?')} vCPUs ({cpu.get('model', '?')})"
         table.add_row("CPU", cpu_val)
-        
+
     mem = facts.get("memory", {})
     if mem:
         total = mem.get("total_mb", 0)
         used = mem.get("used_mb", 0)
         pct = (used / total * 100) if total > 0 else 0
         table.add_row("Memory", f"{used} MB / {total} MB ({pct:.1f}%)")
-        
+
         swap_total = mem.get("swap_total_mb", 0)
         if swap_total > 0:
             swap_used = mem.get("swap_used_mb", 0)
-            swap_pct = (swap_used / swap_total * 100)
+            swap_pct = swap_used / swap_total * 100
             table.add_row("Swap", f"{swap_used} MB / {swap_total} MB ({swap_pct:.1f}%)")
 
     du = facts.get("disk_usage", {})
@@ -714,7 +750,7 @@ def _print_vps_live_status(name: str, region: str, access: dict, facts: dict) ->
         table.add_row("Docker", f"{ds.get('running')} running / {ds.get('total')} total containers")
     else:
         table.add_row("Docker", "[dim]not running or no containers[/dim]")
-        
+
     console.print(table)
 
 
@@ -741,14 +777,14 @@ def _load_vps_config(vps_dir: Path) -> VPSConfig:
     if not vps_yaml.exists():
         console.print(f"[red]✗[/red] No vps.yaml found in {vps_dir}")
         raise typer.Exit(6)
-    
+
     with vps_yaml.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    
+
     if not isinstance(data, dict):
         console.print(f"[red]✗[/red] Invalid config in {vps_yaml}: expected mapping at top level")
         raise typer.Exit(6)
-    
+
     try:
         return VPSConfig(**data)
     except ValidationError as e:
@@ -770,10 +806,12 @@ def _ssh_from_config(config: VPSConfig) -> SSHManager:
     )
 
 
-
 @vps_app.command("plan")
 def vps_plan(
-    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)"),
+    vps: str = typer.Argument(
+        ...,
+        help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)",
+    ),
 ) -> None:
     """
     Dry-run: show what would be applied to the VPS without making changes.
@@ -850,9 +888,16 @@ def vps_plan(
 
 @vps_app.command("apply")
 def vps_apply(
-    vps: str = typer.Argument(..., help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)"),
+    vps: str = typer.Argument(
+        ...,
+        help="VPS name or directory path (e.g. eu01.synercatalyst.com or ~/.config/cstation/vps/eu01.synercatalyst.com)",
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    phase: Optional[str] = typer.Option(None, "--phase", help="Run only a specific phase: upgrade_all, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories"),
+    phase: Optional[str] = typer.Option(
+        None,
+        "--phase",
+        help="Run only a specific phase: upgrade_all, packages, shell, terminal, sshd, firewall, swap, tuning, fail2ban, hostname, docker_daemon, docker_networks, docker_directories",
+    ),
 ) -> None:
     """
     Apply VPS configuration: install packages, configure sshd, configure firewall, set up swap, tuning, Docker.
@@ -909,7 +954,9 @@ def vps_apply(
         if phase is None or phase == "firewall":
             fw_cfg = baseline.get("firewall", {})
             if fw_cfg:
-                phases_to_run.append(f"  firewall: configure {fw_cfg.get('mode', 'ufw')}, allow {fw_cfg.get('allow', [])}")
+                phases_to_run.append(
+                    f"  firewall: configure {fw_cfg.get('mode', 'ufw')}, allow {fw_cfg.get('allow', [])}"
+                )
         if phase is None or phase == "swap":
             swap_cfg = baseline.get("swap", {})
             if swap_cfg.get("size_gb"):
@@ -1045,7 +1092,7 @@ def vps_apply(
 def _pick_best_ip(facts: dict[str, Any], fallback: str) -> str:
     """Try to find a public IPv4 from facts, falling back to the provided string."""
     interfaces = facts.get("network", {}).get("interfaces", [])
-    
+
     # Priority 1: A non-internal, UP IPv4
     for iface in interfaces:
         ip = iface.get("ipv4")
@@ -1055,13 +1102,13 @@ def _pick_best_ip(facts: dict[str, Any], fallback: str) -> str:
         if ip.startswith(("127.", "172.", "10.", "192.168.")):
             continue
         return ip
-        
+
     # Priority 2: Any UP IPv4 that isn't loopback
     for iface in interfaces:
         ip = iface.get("ipv4")
         if ip and iface.get("state") == "UP" and not ip.startswith("127."):
             return ip
-            
+
     return fallback
 
 
@@ -1176,7 +1223,7 @@ def vps_init(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     clean_payload = _strip_nulls(payload)
-    
+
     # Overwrite if force or file doesn't exist (the existence check was done earlier)
     with output_path.open("w", encoding="utf-8") as f:
         yaml.dump(clean_payload, f, sort_keys=False, Dumper=_CStationYamlDumper)
@@ -1225,7 +1272,9 @@ def _remove_vps_secrets(vps_name: str) -> bool:
 def vps_remove(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    skip_check: bool = typer.Option(False, "--skip-check", help="Skip SSH container check (use if server is unreachable)"),
+    skip_check: bool = typer.Option(
+        False, "--skip-check", help="Skip SSH container check (use if server is unreachable)"
+    ),
 ) -> None:
     """
     Remove a VPS from local configuration: remove its config directory and secrets.
@@ -1264,7 +1313,7 @@ def vps_remove(
             console.print("[dim]  Use --skip-check if the server is already unreachable.[/dim]")
 
     files_in_dir = list(vps_dir.iterdir()) if vps_dir.is_dir() else []
-    console.print(f"\n[red]This will permanently delete:[/red]")
+    console.print("\n[red]This will permanently delete:[/red]")
     console.print(f"  Config directory: {vps_dir}/")
     for f in sorted(files_in_dir):
         console.print(f"    {f.name}")
@@ -1272,7 +1321,9 @@ def vps_remove(
 
     if containers_warning:
         console.print(f"\n[yellow]⚠ {len(containers_warning)} container(s) are still running on {name}.[/yellow]")
-        console.print("[yellow]Consider stopping them before removing, or use the provider console to destroy the VPS.[/yellow]")
+        console.print(
+            "[yellow]Consider stopping them before removing, or use the provider console to destroy the VPS.[/yellow]"
+        )
 
     if not yes:
         confirm = typer.confirm("\nProceed with removal?", default=False)
@@ -1320,6 +1371,7 @@ def vps_ssh(
         ssh_args.extend(command)
 
     import subprocess
+
     ret = subprocess.call(ssh_args)
     raise typer.Exit(ret)
 

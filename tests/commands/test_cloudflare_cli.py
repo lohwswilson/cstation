@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -45,7 +44,10 @@ def test_cloudflare_plan_no_domain_config(tmp_path, monkeypatch):
 def test_cloudflare_apply_no_token(tmp_path, monkeypatch):
     dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
-    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
+    _write(
+        dns_dir / "example.com.yaml",
+        "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n",
+    )
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
     _write(tmp_path / "home" / ".config" / "cstation" / "config.yaml", "")
@@ -82,15 +84,16 @@ def test_cloudflare_zones_with_token(tmp_path, monkeypatch):
 def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
     dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
-    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n")
+    _write(
+        dns_dir / "example.com.yaml",
+        "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: mail\n    type: A\n    value: 1.2.3.4\n    ttl: 300\n",
+    )
     home = tmp_path / "home"
     _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test-token\n")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
     _reset_config()
     initialize_configuration()
-
-    from cstation.providers.cloudflare import DNSRecord
 
     mock_provider = Mock()
     mock_provider.get_zone_id.return_value = "zone123"
@@ -106,16 +109,20 @@ def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
 def test_cloudflare_plan_all_domains(tmp_path, monkeypatch):
     dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"
     dns_dir.mkdir(parents=True)
-    _write(dns_dir / "example.com.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: ''\n    type: MX\n    value: mail.example.com\n    priority: 10\n    ttl: 300\n")
-    _write(dns_dir / "test.org.yaml", "apiVersion: cstation/v1\nkind: DNS\ndomain: test.org\nrecords:\n  - name: ''\n    type: A\n    value: 5.6.7.8\n    ttl: 300\n")
+    _write(
+        dns_dir / "example.com.yaml",
+        "apiVersion: cstation/v1\nkind: DNS\ndomain: example.com\nrecords:\n  - name: ''\n    type: MX\n    value: mail.example.com\n    priority: 10\n    ttl: 300\n",
+    )
+    _write(
+        dns_dir / "test.org.yaml",
+        "apiVersion: cstation/v1\nkind: DNS\ndomain: test.org\nrecords:\n  - name: ''\n    type: A\n    value: 5.6.7.8\n    ttl: 300\n",
+    )
     home = tmp_path / "home"
     _write(home / ".config" / "cstation" / "config.yaml", "cloudflare:\n  api_token: test-token\n")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.chdir(tmp_path)
     _reset_config()
     initialize_configuration()
-
-    from cstation.providers.cloudflare import DNSRecord
 
     mock_provider = Mock()
     mock_provider.get_zone_id.return_value = "zone123"

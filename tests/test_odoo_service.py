@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cstation.commands.docker.services.odoo import _render_odoo_conf, OdooService, ODOO_CONF_DEFAULTS
+from cstation.commands.docker.services.odoo import _render_odoo_conf, OdooService
 
 
 def _make_config(**overrides):
@@ -56,9 +56,7 @@ def _make_config(**overrides):
                     }
                 },
                 "services": {
-                    "us02-dev8-main": {
-                        "loadBalancer": {"servers": [{"url": "http://US02_DEV8_US02DB:8069"}]}
-                    }
+                    "us02-dev8-main": {"loadBalancer": {"servers": [{"url": "http://US02_DEV8_US02DB:8069"}]}}
                 },
             }
         },
@@ -117,11 +115,13 @@ def test_render_odoo_conf_excludes_underscore_keys():
 
 
 def test_render_odoo_conf_ordering():
-    result = _render_odoo_conf({
-        "db_host": "SG07_DB",
-        "addons_path": "/mnt/ansis",
-        "dbfilter": "SEQ*",
-    })
+    result = _render_odoo_conf(
+        {
+            "db_host": "SG07_DB",
+            "addons_path": "/mnt/ansis",
+            "dbfilter": "SEQ*",
+        }
+    )
     lines = result.strip().splitlines()
     addons_idx = next(i for i, l in enumerate(lines) if l.startswith("addons_path"))
     dbfilter_idx = next(i for i, l in enumerate(lines) if l.startswith("dbfilter"))
@@ -218,6 +218,7 @@ def test_db_password_none():
 def test_odoo_compose_includes_labels():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "SG07_SEQ8"
     config = {
@@ -236,6 +237,7 @@ def test_odoo_compose_includes_labels():
 def test_compose_labels_absent_when_not_set():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test"
     config = {"image": "nginx:latest", "network": "PW_NET"}
@@ -247,6 +249,7 @@ def test_compose_labels_absent_when_not_set():
 def test_compose_privileged_true():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test"
     config = {"image": "nginx:latest", "network": "PW_NET", "privileged": True}
@@ -258,6 +261,7 @@ def test_compose_privileged_true():
 def test_compose_privileged_absent_by_default():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test"
     config = {"image": "nginx:latest", "network": "PW_NET"}
@@ -268,12 +272,13 @@ def test_compose_privileged_absent_by_default():
 
 def test_chmod_in_apply():
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = ImageService()
     svc.name = "test"
@@ -295,6 +300,7 @@ def test_chmod_in_apply():
 
 def test_chmod_in_plan():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test"
     config = {
@@ -307,7 +313,7 @@ def test_chmod_in_plan():
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     actions = svc.plan(MockSSH(), config)
     chmod_actions = [a for a in actions if "chmod" in a and "766" in a]
@@ -316,12 +322,13 @@ def test_chmod_in_plan():
 
 def test_chmod_absent_when_not_set():
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = ImageService()
     svc.name = "test"
@@ -339,7 +346,8 @@ def test_chmod_absent_when_not_set():
 
 
 def test_odoo_service_in_registry():
-    from cstation.commands.docker.services.registry import get_service, available_services
+    from cstation.commands.docker.services.registry import available_services
+
     assert "odoo" in available_services()
     svc = OdooService()
     assert svc.name == ""  # name set at instance level, not class level
@@ -349,6 +357,7 @@ def test_odoo_service_in_registry():
 
 def test_auto_detect_odoo_service_with_odoo_conf():
     from cstation.commands.docker.main import _get_service_instance
+
     config = {"odoo_conf": {"db_host": "US02_DB"}}
     svc = _get_service_instance("US02_DEV8_US02DB", "Container", config)
     assert isinstance(svc, OdooService)
@@ -357,6 +366,7 @@ def test_auto_detect_odoo_service_with_odoo_conf():
 def test_auto_detect_generic_without_odoo_conf():
     from cstation.commands.docker.main import _get_service_instance
     from cstation.commands.docker.services.image_service import ImageService
+
     config = {"image": "nginx:latest"}
     svc = _get_service_instance("myapp", "Container", config)
     assert isinstance(svc, ImageService)
@@ -366,6 +376,7 @@ def test_auto_detect_generic_without_odoo_conf():
 def test_auto_detect_named_service_takes_priority():
     from cstation.commands.docker.main import _get_service_instance
     from cstation.commands.docker.services.traefik import TraefikService
+
     config = {"odoo_conf": {"db_host": "US02_DB"}}
     svc = _get_service_instance("traefik", "Container", config)
     assert isinstance(svc, TraefikService)
@@ -433,7 +444,7 @@ def test_odoo_apply_writes_conf():
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     config = _make_config()
     ssh = MockSSH()
@@ -450,7 +461,7 @@ def test_odoo_apply_creates_db_user():
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     config = _make_config()
     ssh = MockSSH()
@@ -468,7 +479,7 @@ def test_odoo_apply_chowns_conf():
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     config = _make_config()
     ssh = MockSSH()
@@ -484,7 +495,7 @@ def test_odoo_plan_checks_conf():
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     config = _make_config()
     actions = svc.plan(MockSSH(), config)

@@ -4,7 +4,6 @@ Tests for Output Formatting in CStation CLI.
 
 import json
 import yaml
-import pytest
 from cstation.output import OutputFormat, print_formatted
 
 
@@ -32,6 +31,7 @@ def test_print_formatted_yaml(capsys):
 
 def test_print_formatted_table_callback(capsys):
     called = []
+
     def callback():
         called.append(True)
         print("TABLE_RENDERED")

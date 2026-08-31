@@ -41,9 +41,7 @@ def _url_post(url: str, data: dict[str, str]) -> dict[str, Any]:
             detail = json.loads(body)
         except (json.JSONDecodeError, ValueError):
             detail = {"raw": body}
-        raise NetcupAuthError(
-            f"HTTP {e.code} from {url}: {detail}"
-        ) from e
+        raise NetcupAuthError(f"HTTP {e.code} from {url}: {detail}") from e
     except urllib.error.URLError as e:
         raise NetcupAuthError(f"Network error contacting {url}: {e.reason}") from e
 
@@ -120,9 +118,7 @@ def revoke_refresh_token(refresh_token: str) -> None:
 
 def load_credentials() -> dict[str, Any]:
     if not CREDENTIALS_FILE.exists():
-        raise NetcupAuthError(
-            "No stored Netcup credentials. Run: cstation netcup auth login"
-        )
+        raise NetcupAuthError("No stored Netcup credentials. Run: cstation netcup auth login")
     try:
         data = json.loads(CREDENTIALS_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as e:

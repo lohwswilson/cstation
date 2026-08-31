@@ -5,7 +5,6 @@ Version command for CStation CLI
 
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
-import typer
 from rich import print as rprint
 
 

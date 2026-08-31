@@ -12,4 +12,3 @@ class ProviderNotFoundError(ProviderError):
 
 class ProviderRateLimitError(ProviderError):
     pass
-

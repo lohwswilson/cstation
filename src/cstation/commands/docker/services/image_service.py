@@ -57,15 +57,15 @@ class ImageService:
         best_host = None
         best_cont_len = 0
         for volume in cfg.volumes:
-            if not isinstance(volume, str) or ':' not in volume:
+            if not isinstance(volume, str) or ":" not in volume:
                 continue
-            host, cont = volume.split(':', 1)
+            host, cont = volume.split(":", 1)
             if cont == container_path:
                 return host
-            if container_path.startswith(cont + '/'):
+            if container_path.startswith(cont + "/"):
                 if len(cont) > best_cont_len:
                     best_cont_len = len(cont)
-                    best_host = host + container_path[len(cont):]
+                    best_host = host + container_path[len(cont) :]
         return best_host
 
     @property
@@ -106,8 +106,7 @@ class ImageService:
         if cfg.env:
             if isinstance(cfg.env, dict):
                 service_def["environment"] = {
-                    k: str(v).lower() if isinstance(v, bool) else str(v)
-                    for k, v in cfg.env.items()
+                    k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in cfg.env.items()
                 }
             elif isinstance(cfg.env, list):
                 service_def["environment"] = cfg.env
@@ -259,7 +258,9 @@ class ImageService:
             console.print(f"  [green]✓[/green] docker compose up -d ({self.name})")
         else:
             stderr = getattr(result, "stderr", "") or getattr(result, "stdout", "") or ""
-            console.print(f"  [red]✗[/red] docker compose up -d failed ({self.name}){': ' + stderr.strip() if stderr else ''}")
+            console.print(
+                f"  [red]✗[/red] docker compose up -d failed ({self.name}){': ' + stderr.strip() if stderr else ''}"
+            )
 
     def apply(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:
         cfg = _ensure_config(config)
@@ -287,7 +288,9 @@ class ImageService:
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")
             elif cfg.secrets:
-                console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)")
+                console.print(
+                    f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)"
+                )
             else:
                 console.print(f"  [green]✓[/green] wrote {self.env_path}")
 
@@ -329,7 +332,7 @@ class ImageService:
                 "state": state,
                 "containers": len(containers),
                 "running": running_count,
-                "managed": True
+                "managed": True,
             }
 
         # 2. Fallback to raw docker inspect (imported/unmanaged state)
@@ -346,7 +349,7 @@ class ImageService:
                 "state": f"{state} (unmanaged)",
                 "containers": 1,
                 "running": 1 if state == "running" else 0,
-                "managed": False
+                "managed": False,
             }
 
         return {
@@ -356,7 +359,7 @@ class ImageService:
             "state": "missing",
             "containers": 0,
             "running": 0,
-            "managed": False
+            "managed": False,
         }
 
     def stop(self, ssh: SSHManager, config: Union[ContainerConfig, dict]) -> None:

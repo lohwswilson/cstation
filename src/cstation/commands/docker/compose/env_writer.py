@@ -8,7 +8,7 @@ def render_env(env: dict[str, Any]) -> str:
     for key, value in sorted(env.items()):
         v = str(value)
         if any(c in v for c in (" ", "'", '"', "\n", "#")):
-            v = f"'{v.replace(chr(39), chr(39)+chr(39))}'"
+            v = f"'{v.replace(chr(39), chr(39) + chr(39))}'"
         lines.append(f"{key}={v}")
     return "\n".join(lines) + "\n"
 

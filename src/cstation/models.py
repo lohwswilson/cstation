@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, ConfigDict, IPvAnyAddress
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class IdentityConfig(BaseModel):

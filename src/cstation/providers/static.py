@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -43,27 +42,30 @@ class StaticProvider(VPSProvider):
             access = data.get("access", {})
             if not isinstance(access, dict):
                 access = {}
-            
+
             summary = None
             cached = load_cached_facts(entry)
             if cached:
                 summary = format_facts_summary(cached)
 
-            results.append(VPS(
-                provider="static",
-                id=identity.get("name", entry.name),
-                name=identity.get("name", entry.name),
-                region=identity.get("region"),
-                status=VPSStatus.RUNNING,
-                ipv4=access.get("host"),
-                facts_summary=summary,
-            ))
+            results.append(
+                VPS(
+                    provider="static",
+                    id=identity.get("name", entry.name),
+                    name=identity.get("name", entry.name),
+                    region=identity.get("region"),
+                    status=VPSStatus.RUNNING,
+                    ipv4=access.get("host"),
+                    facts_summary=summary,
+                )
+            )
         return results
 
     def get_vps(self, *, id: Optional[str] = None, name: Optional[str] = None) -> VPS:
         host = id or name
         if not host:
             from cstation.providers.errors import ProviderError
+
             raise ProviderError("Host or IP must be provided for static provider")
 
         vps_dir = CSTATION_VPS_DIR / host
@@ -86,12 +88,15 @@ class StaticProvider(VPSProvider):
 
     def _is_ip(self, host: str) -> bool:
         import re
+
         return bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host))
 
     def create_vps(self, **kwargs) -> VPS:
         from cstation.providers.errors import ProviderError
+
         raise ProviderError("Static provider does not support creating VPS")
 
     def delete_vps(self, **kwargs) -> None:
         from cstation.providers.errors import ProviderError
+
         raise ProviderError("Static provider does not support deleting VPS")

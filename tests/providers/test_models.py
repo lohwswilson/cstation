@@ -12,4 +12,3 @@ def test_vps_has_expected_fields():
     )
     assert vps.name == "sg07"
     assert vps.status.value == "running"
-

@@ -12,14 +12,13 @@ from .repo import repo_app
 
 # Create GitHub app
 github_app = typer.Typer(
-    name="github", 
-    help="GitHub integration & OCA/Odoo module repository management", 
-    invoke_without_command=True
+    name="github", help="GitHub integration & OCA/Odoo module repository management", invoke_without_command=True
 )
 
 # Add commands to the app
 github_app.command("ssh")(setup_github_ssh)
 github_app.add_typer(repo_app, name="repo")
+
 
 @github_app.callback()
 def github_callback(ctx: typer.Context):

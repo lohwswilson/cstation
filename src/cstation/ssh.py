@@ -6,20 +6,20 @@ This module handles remote execution and SSH management using fabric/paramiko,
 replacing the dependency on Ansible.
 """
 
-import os
 import subprocess
 from fabric import Connection
 from invoke import UnexpectedExit
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from rich.console import Console
 
 console = Console()
+
 
 class SSHManager:
     """
     Manages SSH connections and remote execution.
     """
-    
+
     def __init__(
         self,
         host: str,
@@ -46,17 +46,18 @@ class SSHManager:
                     "timeout": 10,
                     "banner_timeout": 10,
                     "auth_timeout": 10,
-                } if self.key_filename else {
+                }
+                if self.key_filename
+                else {
                     "timeout": 10,
                     "banner_timeout": 10,
                     "auth_timeout": 10,
-                }
+                },
             )
         return self._conn
 
     def run(self, command: str, hide: bool = True, sudo: bool = False) -> Any:
         """Execute a single command."""
-        import sys
         try:
             if sudo and self.user != "root" and self.host not in ("127.0.0.1", "localhost"):
                 return self.connection.sudo(command, hide=hide, warn=True)
@@ -75,22 +76,21 @@ class SSHManager:
         Execute multiple commands in a single SSH round-trip.
         Returns a mapping of key -> stdout.
         """
-        import sys
         # Shorter, safer separator
         separator = "==CS_SEP=="
         keys = list(commands.keys())
-        
+
         # Build a single shell command without subshells for maximum compatibility
         # We use '|| true' to ensure the sequence continues and we get our separators
         parts = []
         for cmd in commands.values():
             # Ensure each command returns 0 so the chain continues and Result.ok is True
             parts.append(f"{{ {cmd} ; }} 2>&1")
-        
+
         bundled_cmd = f" ; echo '{separator}' ; ".join(parts)
-        
+
         result = self.run(bundled_cmd, sudo=sudo)
-        
+
         if result is None:
             return {key: "" for key in keys}
 
@@ -100,13 +100,13 @@ class SSHManager:
 
         if not stdout and exited != 0:
             return {key: "" for key in keys}
-        
+
         if not stdout:
             return {key: "" for key in keys}
 
         # Split by separator and strip whitespace
         outputs = stdout.split(separator)
-        
+
         # Ensure we have the same number of outputs as keys
         res = {}
         for i, key in enumerate(keys):
@@ -125,6 +125,7 @@ class SSHManager:
             if not clean_key:
                 return False
             import shlex
+
             quoted_key = shlex.quote(clean_key)
             # Ensure .ssh exists
             self.run("mkdir -p ~/.ssh && chmod 700 ~/.ssh", sudo=True)
@@ -191,7 +192,7 @@ class SSHManager:
             console.print(f"[red]Failed to download {remote_path} to {local_path}: {e}[/red]")
             return False
 
-    def write_file(self, content: str, remote_path: str, mode: str = '0600', sudo: bool = False) -> bool:
+    def write_file(self, content: str, remote_path: str, mode: str = "0600", sudo: bool = False) -> bool:
         """
         Write string content to a remote file.
         If sudo=True, safely uploads to a temporary file first, then uses sudo install to place it.
@@ -199,6 +200,7 @@ class SSHManager:
         try:
             import io
             import uuid
+
             if sudo:
                 tmp_remote = f"/tmp/.cs_tmp_{uuid.uuid4().hex[:12]}"
                 f = io.StringIO(content)

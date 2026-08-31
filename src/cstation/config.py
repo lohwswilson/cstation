@@ -9,11 +9,12 @@ with proper precedence rules and cross-platform path resolution.
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 import yaml
 from rich.console import Console
 
 console = Console()
+
 
 def _parse_dotenv_value(value: str) -> str:
     value = value.strip()
@@ -82,6 +83,7 @@ def load_dotenv() -> None:
 
 class ConfigurationError(Exception):
     """Custom exception for configuration-related errors"""
+
     pass
 
 
@@ -169,12 +171,12 @@ class ConfigManager:
     Configuration manager that handles multiple configuration sources
     with proper precedence and error handling.
     """
-    
+
     def __init__(self):
         self.config_data: Dict[str, Any] = {}
         self.config_sources: List[str] = []
         self.verbose: bool = False
-        
+
     def get_config_search_paths(self) -> List[Path]:
         """
         Get configuration search paths in order of precedence (highest to lowest):
@@ -185,18 +187,18 @@ class ConfigManager:
         paths = []
 
         # 1. User configuration (highest precedence — local-first source of truth)
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             # Windows user configuration
-            user_config = Path(os.environ.get('APPDATA', '')) / "cstation"
+            user_config = Path(os.environ.get("APPDATA", "")) / "cstation"
         else:
             # Unix-like user configuration
             user_config = get_cstation_config_dir()
         paths.append(user_config)
 
         # 2. System-wide configuration
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             # Windows system configuration
-            system_config = Path(os.environ.get('PROGRAMDATA', 'C:/ProgramData')) / "cstation"
+            system_config = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData")) / "cstation"
         else:
             # Unix-like system configuration
             system_config = Path("/etc/cstation")
@@ -207,7 +209,7 @@ class ConfigManager:
         paths.append(local_config)
 
         return paths
-    
+
     def find_ansible_config(self) -> Optional[Path]:
         """
         Find the Ansible configuration file in the search paths.
@@ -217,14 +219,14 @@ class ConfigManager:
         system_ansible_cfg = Path("/etc/cstation/ansible/ansible.cfg")
         if system_ansible_cfg.exists() and system_ansible_cfg.is_file():
             return system_ansible_cfg
-            
+
         # Then check other search paths
         for base_path in self.get_config_search_paths():
             ansible_cfg = base_path / "ansible" / "ansible.cfg"
             if ansible_cfg.exists() and ansible_cfg.is_file():
                 return ansible_cfg
         return None
-    
+
     def find_app_config(self) -> Optional[Path]:
         """
         Find the application configuration file in the search paths.
@@ -235,28 +237,28 @@ class ConfigManager:
                 base_path / "app" / "config.yml",
                 base_path / "app" / "config.yaml",
                 base_path / "config.yml",
-                base_path / "config.yaml"
+                base_path / "config.yaml",
             ]
             for config_file in config_files:
                 if config_file.exists() and config_file.is_file():
                     return config_file
         return None
-    
+
     def load_yaml_file(self, file_path: Path) -> Dict[str, Any]:
         """
         Load and parse a YAML configuration file with error handling.
-        
+
         Args:
             file_path: Path to the YAML file
-            
+
         Returns:
             Dictionary containing the parsed configuration
-            
+
         Raises:
             ConfigurationError: If file cannot be read or parsed
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
                 self.config_sources.append(str(file_path))
                 return data
@@ -268,20 +270,20 @@ class ConfigManager:
             raise ConfigurationError(f"Invalid YAML in configuration file {file_path}: {e}")
         except Exception as e:
             raise ConfigurationError(f"Unexpected error reading configuration file {file_path}: {e}")
-    
+
     def merge_configs(self, base_config: Dict[str, Any], override_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Merge two configuration dictionaries with deep merging.
-        
+
         Args:
             base_config: Base configuration (lower precedence)
             override_config: Override configuration (higher precedence)
-            
+
         Returns:
             Merged configuration dictionary
         """
         result = base_config.copy()
-        
+
         for key, value in override_config.items():
             if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 # Deep merge for nested dictionaries
@@ -289,29 +291,29 @@ class ConfigManager:
             else:
                 # Override for non-dict values or new keys
                 result[key] = value
-        
+
         return result
-    
+
     def load_configuration(self) -> Dict[str, Any]:
         """
         Load and merge configuration from all available sources.
-        
+
         Returns:
             Merged configuration dictionary
         """
         merged_config = {}
-        
+
         # Load configurations in reverse precedence order (lowest to highest)
         search_paths = list(reversed(self.get_config_search_paths()))
-        
+
         for base_path in search_paths:
             config_files = [
                 base_path / "app" / "config.yml",
                 base_path / "app" / "config.yaml",
                 base_path / "config.yml",
-                base_path / "config.yaml"
+                base_path / "config.yaml",
             ]
-            
+
             for config_file in config_files:
                 if config_file.exists() and config_file.is_file():
                     try:
@@ -323,17 +325,17 @@ class ConfigManager:
                     except ConfigurationError as e:
                         console.print(f"[yellow]⚠[/yellow] Warning: {e}")
                         continue
-        
+
         self.config_data = merged_config
         return merged_config
-    
+
     def get_ansible_config_path(self) -> str:
         """
         Get the path to the Ansible configuration file.
-        
+
         Returns:
             Path to ansible.cfg as string
-            
+
         Raises:
             ConfigurationError: If no ansible.cfg is found
         """
@@ -342,7 +344,7 @@ class ConfigManager:
             return str(ansible_cfg)
 
         raise ConfigurationError("No ansible.cfg found")
-    
+
     def setup_ansible_environment(self) -> None:
         """
         Set up the ANSIBLE_CONFIG environment variable.
@@ -354,68 +356,68 @@ class ConfigManager:
         os.environ["ANSIBLE_CONFIG"] = str(ansible_cfg)
         if self.verbose:
             console.print(f"[green]✓[/green] Set ANSIBLE_CONFIG to: {ansible_cfg}")
-    
+
     def get_config_value(self, key: str, default: Any = None) -> Any:
         """
         Get a configuration value by key with dot notation support.
-        
+
         Args:
             key: Configuration key (supports dot notation like 'database.host')
             default: Default value if key is not found
-            
+
         Returns:
             Configuration value or default
         """
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.config_data
-        
+
         try:
             for k in keys:
                 value = value[k]
             return value
         except (KeyError, TypeError):
             return default
-    
+
     def validate_configuration(self) -> List[str]:
         """
         Validate the loaded configuration and return any issues found.
-        
+
         Returns:
             List of validation error messages
         """
         issues = []
-        
+
         # Check if any configuration was loaded
         if not self.config_data and not self.config_sources:
             issues.append("No configuration files found in any search path")
-        
+
         return issues
-    
+
     def print_configuration_info(self) -> None:
         """
         Print information about the loaded configuration for debugging.
         """
         console.print("\n[bold]Configuration Information:[/bold]")
-        console.print(f"Search paths (in precedence order):")
+        console.print("Search paths (in precedence order):")
         for i, path in enumerate(self.get_config_search_paths(), 1):
             exists = "✓" if path.exists() else "✗"
             console.print(f"  {i}. [{exists}] {path}")
-        
-        console.print(f"\nLoaded configuration sources:")
+
+        console.print("\nLoaded configuration sources:")
         if self.config_sources:
             for source in self.config_sources:
                 console.print(f"  • {source}")
         else:
             console.print("  [yellow]No configuration files loaded[/yellow]")
-        
+
         # Validate and show any issues
         issues = self.validate_configuration()
         if issues:
-            console.print(f"\n[red]Configuration Issues:[/red]")
+            console.print("\n[red]Configuration Issues:[/red]")
             for issue in issues:
                 console.print(f"  • {issue}")
         else:
-            console.print(f"\n[green]✓ Configuration validation passed[/green]")
+            console.print("\n[green]✓ Configuration validation passed[/green]")
 
 
 # Global configuration manager instance
@@ -452,7 +454,7 @@ def initialize_configuration(verbose: bool = False) -> ConfigManager:
 def get_config() -> ConfigManager:
     """
     Get the global configuration manager instance.
-    
+
     Returns:
         ConfigManager instance
     """

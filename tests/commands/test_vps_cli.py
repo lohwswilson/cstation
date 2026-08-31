@@ -406,6 +406,7 @@ def test_vps_init_refuses_overwrite(monkeypatch, tmp_path: Path):
 
     def fake_get_vps(self, *, id=None, name=None):
         from cstation.providers.base import VPS, VPSStatus
+
         return VPS(
             provider="hetzner",
             id="123456",
@@ -490,7 +491,11 @@ def test_vps_init_default_output_uses_vps_name(monkeypatch, tmp_path: Path):
 
     expected_path = tmp_path / "config" / "vps" / "eu01" / "vps.yaml"
     home_expected_path = home / ".config" / "cstation" / "vps" / "eu01" / "vps.yaml"
-    assert expected_path.exists() or home_expected_path.exists(), f"Expected default path {expected_path} or {home_expected_path} but file not found"
+    assert expected_path.exists() or home_expected_path.exists(), (
+        f"Expected default path {expected_path} or {home_expected_path} but file not found"
+    )
+
+
 def test_vps_list_aggregates_multiple_providers(monkeypatch, tmp_path: Path):
     from cstation.providers.base import VPS, VPSStatus
 
@@ -1509,12 +1514,14 @@ def test_vps_list_shows_static_vps_from_config_dir(monkeypatch, tmp_path: Path):
     vps_dir = tmp_path / "home" / ".config" / "cstation" / "vps" / "static-srv"
     vps_dir.mkdir(parents=True)
     (vps_dir / "vps.yaml").write_text(
-        _yaml.dump({
-            "apiVersion": "cstation/v1",
-            "kind": "VPS",
-            "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
-            "access": {"host": "10.0.0.5", "user": "root", "port": 22},
-        }),
+        _yaml.dump(
+            {
+                "apiVersion": "cstation/v1",
+                "kind": "VPS",
+                "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
+                "access": {"host": "10.0.0.5", "user": "root", "port": 22},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -1537,12 +1544,14 @@ def test_vps_list_static_filter(monkeypatch, tmp_path: Path):
     vps_dir = tmp_path / "home" / ".config" / "cstation" / "vps" / "static-srv"
     vps_dir.mkdir(parents=True)
     (vps_dir / "vps.yaml").write_text(
-        _yaml.dump({
-            "apiVersion": "cstation/v1",
-            "kind": "VPS",
-            "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
-            "access": {"host": "10.0.0.5", "user": "root", "port": 22},
-        }),
+        _yaml.dump(
+            {
+                "apiVersion": "cstation/v1",
+                "kind": "VPS",
+                "identity": {"name": "static-srv", "stage": "prod", "region": "manual", "provider": "static"},
+                "access": {"host": "10.0.0.5", "user": "root", "port": 22},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -1612,6 +1621,7 @@ os:
     assert any("modprobe tcp_bbr" in cmd for cmd in executed_cmds)
     assert any("sysctl --system" in cmd for cmd in executed_cmds)
 
+
 def test_vps_apply_tuning_with_full_stack_and_nofile(monkeypatch, tmp_path: Path):
     cfg_dir = tmp_path / "vps_test_full"
     cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -1660,6 +1670,7 @@ os:
 
 def test_vps_ssh_invokes_subprocess(monkeypatch, tmp_path: Path):
     import subprocess
+
     cfg_dir = tmp_path / "sg01"
     cfg_dir.mkdir()
     (cfg_dir / "vps.yaml").write_text("""
@@ -1674,6 +1685,7 @@ access:
   key: ~/.ssh/id_ed25519
 """)
     called_args = []
+
     def fake_call(args):
         called_args.append(args)
         return 0

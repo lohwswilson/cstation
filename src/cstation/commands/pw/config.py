@@ -7,58 +7,46 @@ This module defines configuration options specific to PW sync operations.
 
 import re
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class PWConfig(BaseModel):
     """PerfectWork sync configuration."""
-    
+
     # Source paths
     pw_base_path: Path = Field(default=Path("/opt/PW"), description="Base path for PW installations")
-    
+
     # Valid versions (now accepts any numeric version)
     version_pattern: str = Field(
-        default=r"^\d+\.\d+$",
-        description="Regex pattern for valid version format (e.g., 3.0, 18.0)"
+        default=r"^\d+\.\d+$", description="Regex pattern for valid version format (e.g., 3.0, 18.0)"
     )
-    
+
     # Remote settings
-    remote_base_path: str = Field(
-        default="/var/lib/perfectwork",
-        description="Base path on remote server"
-    )
-    domain_suffix: str = Field(
-        default=".ansis.com.sg",
-        description="Domain suffix for remote hosts"
-    )
-    
+    remote_base_path: str = Field(default="/var/lib/perfectwork", description="Base path on remote server")
+    domain_suffix: str = Field(default=".ansis.com.sg", description="Domain suffix for remote hosts")
+
     # Sync settings
     default_ssh_port: int = Field(default=22, description="Default SSH port")
     cluster_ssh_port: int = Field(default=8288, description="Cluster SSH port")
-    
+
     # Rsync options
     rsync_options: List[str] = Field(
-        default=["-avz", "--delete", "--exclude", ".*"],
-        description="Default rsync options"
+        default=["-avz", "--delete", "--exclude", ".*"], description="Default rsync options"
     )
-    
+
     # Exclusion patterns
     exclude_patterns: List[str] = Field(
-        default=["__pycache__", "*.pyc", "*.pyo", ".git", ".svn"],
-        description="Patterns to exclude during sync"
+        default=["__pycache__", "*.pyc", "*.pyo", ".git", ".svn"], description="Patterns to exclude during sync"
     )
-    
+
     # Temporary directory settings
-    temp_dir_prefix: str = Field(
-        default="cstation_pw_sync",
-        description="Prefix for temporary directories"
-    )
-    
+    temp_dir_prefix: str = Field(default="cstation_pw_sync", description="Prefix for temporary directories")
+
     # Timeout settings
     ssh_timeout: int = Field(default=30, description="SSH connection timeout in seconds")
     rsync_timeout: int = Field(default=300, description="Rsync operation timeout in seconds")
-    
+
     model_config = ConfigDict(env_prefix="CSTATION_PW_", case_sensitive=False)
 
 
@@ -117,6 +105,7 @@ def get_remote_host(hostname: str) -> str:
         return hostname
 
     from ...config import CSTATION_VPS_DIR
+
     if CSTATION_VPS_DIR.exists():
         for d in CSTATION_VPS_DIR.iterdir():
             if d.is_dir() and d.name.startswith(f"{hostname}."):
@@ -130,8 +119,8 @@ def get_rsync_command_base(port: int, dry_run: bool = False) -> List[str]:
     """Get base rsync command with common options."""
     config = get_pw_config()
     cmd = ["rsync"] + config.rsync_options + ["-e", f"ssh -p{port}"]
-    
+
     if dry_run:
         cmd.append("--dry-run")
-    
+
     return cmd

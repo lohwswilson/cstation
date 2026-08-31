@@ -88,7 +88,9 @@ class NetcupProvider(VPSProvider):
             ipv4=ipv4,
             ipv6=ipv6,
             vcpu=int(vcpu) if isinstance(vcpu, int) and not isinstance(vcpu, bool) else None,
-            memory_mb=int(memory_mb) if isinstance(memory_mb, (int, float)) and not isinstance(memory_mb, bool) else None,
+            memory_mb=int(memory_mb)
+            if isinstance(memory_mb, (int, float)) and not isinstance(memory_mb, bool)
+            else None,
             disk_gb=disk_gb,
             bandwidth_gb=None,
             plan=str(plan) if isinstance(plan, str) and plan.strip() else None,

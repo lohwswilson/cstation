@@ -6,8 +6,6 @@ Generates and installs shell auto-completions for bash, zsh, fish, and powershel
 from __future__ import annotations
 
 import os
-import sys
-import subprocess
 from pathlib import Path
 from typing import Optional
 import typer
@@ -56,7 +54,9 @@ def show_completion(
 
 @completion_app.command(name="install")
 def install_completion(
-    shell: Optional[str] = typer.Option(None, "--shell", "-s", help="Target shell: zsh, bash, or fish (auto-detected if omitted)"),
+    shell: Optional[str] = typer.Option(
+        None, "--shell", "-s", help="Target shell: zsh, bash, or fish (auto-detected if omitted)"
+    ),
 ) -> None:
     """
     Install auto-completion script into your user shell configuration.

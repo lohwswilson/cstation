@@ -9,11 +9,9 @@ from __future__ import annotations
 import os
 import sys
 import yaml
-from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict
 import typer
 from pydantic import ValidationError
-from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
@@ -21,7 +19,6 @@ from cstation.config import (
     CSTATION_VPS_DIR,
     CSTATION_IMAGES_DIR,
     CSTATION_DNS_DIR,
-    get_config,
     get_vps_secrets,
 )
 from cstation.models import (
@@ -49,7 +46,7 @@ def _parse_port_binding(port_str: str) -> tuple[str, int, str]:
     proto = "tcp"
     if "/" in port_str:
         port_str, proto = port_str.split("/", 1)
-    
+
     parts = port_str.split(":")
     if len(parts) == 1:
         # Single port e.g. 80
@@ -83,14 +80,16 @@ def run_lint_checks() -> dict[str, Any]:
             results["passed"] = False
         else:
             results["warning_count"] += 1
-        
-        results["issues"].append({
-            "target": target,
-            "rule": rule,
-            "severity": severity.upper(),
-            "message": message,
-            "file": file_path,
-        })
+
+        results["issues"].append(
+            {
+                "target": target,
+                "rule": rule,
+                "severity": severity.upper(),
+                "message": message,
+                "file": file_path,
+            }
+        )
 
     # 1. Check VPS Configs & Containers
     vps_dir = CSTATION_VPS_DIR
@@ -118,8 +117,10 @@ def run_lint_checks() -> dict[str, Any]:
                 add_issue(vps_name, "missing:vps.yaml", "WARNING", "No vps.yaml file found in directory", str(vps_path))
 
             # Validate Containers in VPS
-            host_ports: Dict[tuple[str, int, str], str] = {} # (ip, port, proto) -> container_name
-            is_local_mac = (vps_name == "local.dev" or (vps_config and vps_config.access.host in ["127.0.0.1", "localhost"])) and sys.platform == "darwin"
+            host_ports: Dict[tuple[str, int, str], str] = {}  # (ip, port, proto) -> container_name
+            is_local_mac = (
+                vps_name == "local.dev" or (vps_config and vps_config.access.host in ["127.0.0.1", "localhost"])
+            ) and sys.platform == "darwin"
 
             for container_yaml in sorted(vps_path.glob("*.yaml")):
                 if container_yaml.name == "vps.yaml":
@@ -140,7 +141,7 @@ def run_lint_checks() -> dict[str, Any]:
                             ip, host_p, proto = _parse_port_binding(str(port_str))
                             if host_p == 0:
                                 continue
-                            
+
                             # Check collision on 0.0.0.0 or exact IP
                             binding_key = (ip, host_p, proto)
                             wildcard_key = ("0.0.0.0", host_p, proto)
@@ -164,7 +165,13 @@ def run_lint_checks() -> dict[str, Any]:
                             else:
                                 host_ports[binding_key] = c_name
                         except Exception as pe:
-                            add_issue(vps_name, "syntax:port", "WARNING", f"Could not parse port '{port_str}' in container '{c_name}': {pe}", str(container_yaml))
+                            add_issue(
+                                vps_name,
+                                "syntax:port",
+                                "WARNING",
+                                f"Could not parse port '{port_str}' in container '{c_name}': {pe}",
+                                str(container_yaml),
+                            )
 
                     # Secret Reference Check
                     if c_config.secrets:
@@ -198,9 +205,21 @@ def run_lint_checks() -> dict[str, Any]:
                 except ValidationError as e:
                     for err in e.errors():
                         field = ".".join(str(loc) for loc in err["loc"])
-                        add_issue(vps_name, "schema:container", "ERROR", f"Container '{c_name}' field '{field}': {err['msg']}", str(container_yaml))
+                        add_issue(
+                            vps_name,
+                            "schema:container",
+                            "ERROR",
+                            f"Container '{c_name}' field '{field}': {err['msg']}",
+                            str(container_yaml),
+                        )
                 except Exception as e:
-                    add_issue(vps_name, "schema:container", "ERROR", f"Failed to parse container YAML '{c_name}': {e}", str(container_yaml))
+                    add_issue(
+                        vps_name,
+                        "schema:container",
+                        "ERROR",
+                        f"Failed to parse container YAML '{c_name}': {e}",
+                        str(container_yaml),
+                    )
 
     # 2. Check Docker Image Recipes
     img_dir = CSTATION_IMAGES_DIR
@@ -217,9 +236,13 @@ def run_lint_checks() -> dict[str, Any]:
                 except ValidationError as e:
                     for err in e.errors():
                         field = ".".join(str(loc) for loc in err["loc"])
-                        add_issue(recipe_dir.name, "schema:image", "ERROR", f"Field '{field}': {err['msg']}", str(recipe_yaml))
+                        add_issue(
+                            recipe_dir.name, "schema:image", "ERROR", f"Field '{field}': {err['msg']}", str(recipe_yaml)
+                        )
                 except Exception as e:
-                    add_issue(recipe_dir.name, "schema:image", "ERROR", f"Failed to parse image.yaml: {e}", str(recipe_yaml))
+                    add_issue(
+                        recipe_dir.name, "schema:image", "ERROR", f"Failed to parse image.yaml: {e}", str(recipe_yaml)
+                    )
 
     # 3. Check DNS Zones
     dns_dir = CSTATION_DNS_DIR
@@ -235,7 +258,9 @@ def run_lint_checks() -> dict[str, Any]:
                     field = ".".join(str(loc) for loc in err["loc"])
                     add_issue(domain_name, "schema:dns", "ERROR", f"Field '{field}': {err['msg']}", str(dns_yaml))
             except Exception as e:
-                add_issue(domain_name, "schema:dns", "ERROR", f"Failed to parse DNS YAML '{domain_name}': {e}", str(dns_yaml))
+                add_issue(
+                    domain_name, "schema:dns", "ERROR", f"Failed to parse DNS YAML '{domain_name}': {e}", str(dns_yaml)
+                )
 
     return results
 
@@ -257,7 +282,9 @@ def lint_main(
 
     def render_table():
         if not results["issues"]:
-            console.print(f"[bold green]✓ All configurations validated successfully![/bold green] ({results['total_checks']} checks passed)")
+            console.print(
+                f"[bold green]✓ All configurations validated successfully![/bold green] ({results['total_checks']} checks passed)"
+            )
             return
 
         table = Table(title="CStation Configuration Lint Results", show_header=True, header_style="bold cyan")

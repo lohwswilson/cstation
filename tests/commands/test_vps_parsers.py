@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import pytest
 
@@ -39,6 +38,7 @@ class _FakeSSH:
 # _parse_os_release
 # ---------------------------------------------------------------------------
 
+
 def test_parse_os_release_basic():
     raw = 'NAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\nHOME_URL=https://example.com\n'
     assert _parse_os_release(raw) == {
@@ -62,6 +62,7 @@ def test_parse_os_release_empty():
 # _first_line
 # ---------------------------------------------------------------------------
 
+
 def test_first_line_returns_trimmed_first_line():
     assert _first_line(_FakeResult("  hello \nworld\n")) == "hello"
 
@@ -77,6 +78,7 @@ def test_first_line_empty_for_blank_stdout():
 # ---------------------------------------------------------------------------
 # _detect_package_manager
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "os_id,expected",
@@ -104,11 +106,13 @@ def test_detect_package_manager_from_batch_results():
 
 
 def test_detect_package_manager_probes_ssh_in_order():
-    ssh = _FakeSSH({
-        "command -v apt-get": "",
-        "command -v dnf": "",
-        "command -v yum": "/usr/bin/yum",
-    })
+    ssh = _FakeSSH(
+        {
+            "command -v apt-get": "",
+            "command -v dnf": "",
+            "command -v yum": "/usr/bin/yum",
+        }
+    )
     assert _detect_package_manager(ssh, "unknown-os") == "yum"
 
 
@@ -120,6 +124,7 @@ def test_detect_package_manager_unknown_when_no_manager_found():
 # ---------------------------------------------------------------------------
 # _check_packages_batch
 # ---------------------------------------------------------------------------
+
 
 def test_check_packages_batch_apt():
     cmd = _check_packages_batch("apt", ["docker", "git"])
@@ -148,6 +153,7 @@ def test_check_packages_batch_empty_packages():
 # ---------------------------------------------------------------------------
 # _package_installed
 # ---------------------------------------------------------------------------
+
 
 def test_package_installed_apt():
     ssh = _FakeSSH({"dpkg -s docker >/dev/null 2>&1; echo $?": "0"})
@@ -235,20 +241,23 @@ def test_parse_free_m_missing_swap():
 # _parse_lsblk_json
 # ---------------------------------------------------------------------------
 
+
 def test_parse_lsblk_json():
-    raw = json_dumps({
-        "blockdevices": [
-            {
-                "name": "vda",
-                "size": 53687091200,  # 50 GiB
-                "type": "disk",
-                "mountpoints": ["/"],
-                "children": [
-                    {"name": "vda1", "size": 53685091328, "type": "part", "mountpoints": ["/"]},
-                ],
-            }
-        ]
-    })
+    raw = json_dumps(
+        {
+            "blockdevices": [
+                {
+                    "name": "vda",
+                    "size": 53687091200,  # 50 GiB
+                    "type": "disk",
+                    "mountpoints": ["/"],
+                    "children": [
+                        {"name": "vda1", "size": 53685091328, "type": "part", "mountpoints": ["/"]},
+                    ],
+                }
+            ]
+        }
+    )
     parsed = _parse_lsblk_json(raw)
     assert len(parsed) == 1
     disk = parsed[0]
@@ -270,17 +279,28 @@ def test_parse_lsblk_json_empty():
 # _parse_ip_addr_json
 # ---------------------------------------------------------------------------
 
+
 def test_parse_ip_addr_json():
-    raw = json_dumps([
-        {"ifname": "lo", "operstate": "UNKNOWN", "address": "00:00:00:00:00:00",
-         "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}]},
-        {"ifname": "ens3", "operstate": "UP", "address": "52:54:00:aa:bb:cc",
-         "addr_info": [
-             {"family": "inet", "local": "1.2.3.4", "prefixlen": 24},
-             {"family": "inet6", "local": "2a01:4f8:1:2::5", "prefixlen": 64},
-             {"family": "inet6", "local": "fe80::5054:ff:feaa:bbcc", "prefixlen": 64},
-         ]},
-    ])
+    raw = json_dumps(
+        [
+            {
+                "ifname": "lo",
+                "operstate": "UNKNOWN",
+                "address": "00:00:00:00:00:00",
+                "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}],
+            },
+            {
+                "ifname": "ens3",
+                "operstate": "UP",
+                "address": "52:54:00:aa:bb:cc",
+                "addr_info": [
+                    {"family": "inet", "local": "1.2.3.4", "prefixlen": 24},
+                    {"family": "inet6", "local": "2a01:4f8:1:2::5", "prefixlen": 64},
+                    {"family": "inet6", "local": "fe80::5054:ff:feaa:bbcc", "prefixlen": 64},
+                ],
+            },
+        ]
+    )
     parsed = _parse_ip_addr_json(raw)
     assert len(parsed) == 1  # loopback skipped
     iface = parsed[0]
@@ -300,6 +320,7 @@ def test_parse_ip_addr_json_invalid_json_returns_empty():
 # ---------------------------------------------------------------------------
 # _parse_ip_route
 # ---------------------------------------------------------------------------
+
 
 def test_parse_ip_route():
     raw = "default via 10.0.0.1 dev ens3\n10.0.0.0/24 dev ens3 proto kernel scope link src 10.0.0.5\n"

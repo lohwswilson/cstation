@@ -76,12 +76,12 @@ def _apply_upgrade_all(ssh: SSHManager, baseline: dict[str, Any], pkg_mgr: str, 
         return False
 
     if dry_run:
-        console.print(f"  [yellow]⟳[/yellow] upgrade: would upgrade all packages")
+        console.print("  [yellow]⟳[/yellow] upgrade: would upgrade all packages")
         return True
 
     result = ssh.run(cmd, sudo=True)
     if result and getattr(result, "exited", 0) == 0:
-        console.print(f"  [green]✓[/green] upgrade: all packages upgraded")
+        console.print("  [green]✓[/green] upgrade: all packages upgraded")
         return True
     stderr = getattr(result, "stderr", "") or ""
     console.print(f"  [red]✗[/red] upgrade: failed{': ' + stderr.strip() if stderr else ''}")
@@ -169,9 +169,9 @@ def _apply_terminal(ssh: SSHManager, baseline: dict[str, Any], *, dry_run: bool 
 
     entry = f"TERM={terminal}"
     if current.strip():
-        ssh.run(f'bash -c \'echo "{entry}" >> /etc/environment\'', hide=True)
+        ssh.run(f"bash -c 'echo \"{entry}\" >> /etc/environment'", hide=True)
     else:
-        ssh.run(f'bash -c \'echo "{entry}" > /etc/environment\'', hide=True)
+        ssh.run(f"bash -c 'echo \"{entry}\" > /etc/environment'", hide=True)
     console.print(f"  [green]✓[/green] terminal: set TERM={terminal} in /etc/environment")
     return True
 
@@ -191,9 +191,14 @@ def _apply_sshd(ssh: SSHManager, sshd_config: dict[str, Any], *, dry_run: bool =
             if dry_run:
                 console.print("    [dim]would set PasswordAuthentication no in /etc/ssh/sshd_config[/dim]")
             else:
-                ssh.run("sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config", sudo=True)
+                ssh.run(
+                    "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config", sudo=True
+                )
                 # Also ensure it's not overridden in sshd_config.d
-                ssh.run("mkdir -p /etc/ssh/sshd_config.d && echo 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/disable-password.conf", sudo=True)
+                ssh.run(
+                    "mkdir -p /etc/ssh/sshd_config.d && echo 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/disable-password.conf",
+                    sudo=True,
+                )
                 ssh.run("systemctl reload sshd || systemctl reload ssh", sudo=True)
                 console.print("  [green]✓[/green] sshd: password auth disabled, sshd reloaded")
 
@@ -250,7 +255,7 @@ def _apply_firewall(ssh: SSHManager, fw_config: dict[str, Any], *, dry_run: bool
             console.print(f"  [green]✓[/green] firewall: added rules {', '.join(missing_rules)}")
             changes = True
         else:
-            console.print(f"  [green]✓[/green] firewall: ufw active, all rules present")
+            console.print("  [green]✓[/green] firewall: ufw active, all rules present")
 
     # Ensure default deny
     if not dry_run:
@@ -295,7 +300,9 @@ def _apply_swap(ssh: SSHManager, swap_config: dict[str, Any], *, dry_run: bool =
     return True
 
 
-def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_config: dict[str, Any], *, dry_run: bool = False) -> bool:
+def _apply_tuning(
+    ssh: SSHManager, tuning_config: dict[str, Any], journald_config: dict[str, Any], *, dry_run: bool = False
+) -> bool:
     if not tuning_config and not journald_config:
         console.print("  [dim]tuning: not configured[/dim]")
         return False
@@ -339,10 +346,17 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
             mod_loaded = mod_check and getattr(mod_check, "stdout", "").strip() not in ("", "0")
             if not mod_loaded:
                 if dry_run:
-                    console.print("  [yellow]⟳[/yellow] tuning: would load tcp_bbr kernel module and configure /etc/modules-load.d/bbr.conf")
+                    console.print(
+                        "  [yellow]⟳[/yellow] tuning: would load tcp_bbr kernel module and configure /etc/modules-load.d/bbr.conf"
+                    )
                 else:
-                    ssh.run("modprobe tcp_bbr && (grep -q '^tcp_bbr' /etc/modules-load.d/bbr.conf 2>/dev/null || echo 'tcp_bbr' > /etc/modules-load.d/bbr.conf)", sudo=True)
-                    console.print("  [green]✓[/green] tuning: loaded tcp_bbr module and persisted in /etc/modules-load.d/bbr.conf")
+                    ssh.run(
+                        "modprobe tcp_bbr && (grep -q '^tcp_bbr' /etc/modules-load.d/bbr.conf 2>/dev/null || echo 'tcp_bbr' > /etc/modules-load.d/bbr.conf)",
+                        sudo=True,
+                    )
+                    console.print(
+                        "  [green]✓[/green] tuning: loaded tcp_bbr module and persisted in /etc/modules-load.d/bbr.conf"
+                    )
                 changes = True
 
         needed: dict[str, Any] = {}
@@ -352,7 +366,7 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
                 continue
             current_result = ssh.run(f"sysctl -n {sysctl_key} 2>/dev/null", hide=True)
             current_val = getattr(current_result, "stdout", "").strip() if current_result else ""
-            if ' '.join(current_val.split()) != ' '.join(str(desired).split()):
+            if " ".join(current_val.split()) != " ".join(str(desired).split()):
                 needed[sysctl_key] = desired
 
         if not needed:
@@ -413,7 +427,7 @@ def _apply_tuning(ssh: SSHManager, tuning_config: dict[str, Any], journald_confi
                 ssh.run(f"mkdir -p {JOURNALD_DIR}", sudo=True)
                 ssh.run(f"echo '{desired_content}' > {JOURNALD_PATH}", sudo=True)
                 ssh.run("systemctl restart systemd-journald", sudo=True)
-                console.print(f"  [green]✓[/green] tuning: journald configured and restarted")
+                console.print("  [green]✓[/green] tuning: journald configured and restarted")
             changes = True
 
     return changes
@@ -454,7 +468,7 @@ def _apply_fail2ban(ssh: SSHManager, f2b_config: dict[str, Any], *, dry_run: boo
 
     ssh.run(f"echo '{desired_content}' > {JAIL_PATH}", sudo=True)
     ssh.run("systemctl restart fail2ban", sudo=True)
-    console.print(f"  [green]✓[/green] fail2ban: jail.local written and restarted")
+    console.print("  [green]✓[/green] fail2ban: jail.local written and restarted")
     return True
 
 
@@ -498,7 +512,7 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
     storage_driver = daemon_config.get("storage_driver")
     if storage_driver:
         desired_json["storage-driver"] = storage_driver
-    
+
     # Default live-restore to True to guarantee running containers are never terminated on daemon reloads
     live_restore = daemon_config.get("live_restore", True)
     if live_restore is not None:
@@ -533,11 +547,14 @@ def _apply_docker_daemon(ssh: SSHManager, daemon_config: dict[str, Any], *, dry_
             console.print(f"    [dim]{key}: {desired_json[key]}[/dim]")
         return True
 
-    ssh.run(f"mkdir -p /etc/docker", sudo=True)
+    ssh.run("mkdir -p /etc/docker", sudo=True)
     ssh.run(f"echo '{desired_content}' > {DAEMON_JSON_PATH}", sudo=True)
     # Reload config with zero container downtime via SIGHUP/reload; fallback to restart only if necessary
-    ssh.run("systemctl is-active docker >/dev/null 2>&1 && (systemctl reload docker 2>/dev/null || systemctl restart docker) || systemctl restart docker", sudo=True)
-    console.print(f"  [green]✓[/green] docker_daemon: daemon.json written and docker reloaded (zero container downtime)")
+    ssh.run(
+        "systemctl is-active docker >/dev/null 2>&1 && (systemctl reload docker 2>/dev/null || systemctl restart docker) || systemctl restart docker",
+        sudo=True,
+    )
+    console.print("  [green]✓[/green] docker_daemon: daemon.json written and docker reloaded (zero container downtime)")
     return True
 
 
@@ -581,7 +598,7 @@ def _apply_docker_directories(ssh: SSHManager, directories: list[str], *, dry_ru
             missing.append(d)
 
     if not missing:
-        console.print(f"  [green]✓[/green] docker_directories: all directories exist")
+        console.print("  [green]✓[/green] docker_directories: all directories exist")
         return False
 
     if dry_run:
@@ -593,4 +610,3 @@ def _apply_docker_directories(ssh: SSHManager, directories: list[str], *, dry_ru
         ssh.run(f"mkdir -p {d}", sudo=True)
         console.print(f"  [green]✓[/green] docker_directories: created {d}")
     return True
-

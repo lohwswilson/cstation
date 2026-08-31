@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from cstation.providers.cloudflare import CloudflareProvider, DNSRecord, DNSZone
-from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
+from cstation.providers.errors import ProviderAuthError, ProviderNotFoundError
 
 
 def _provider():
@@ -86,7 +86,7 @@ class TestDNSRecord:
             content="mail.example.com",
             priority=1,
             srv_weight=1,
-            srv_port=993
+            srv_port=993,
         )
         d = r.to_api_dict()
         assert "content" not in d
@@ -111,9 +111,9 @@ class TestDNSRecord:
                 "target": "mail.example.com",
                 "service": "_imaps",
                 "proto": "_tcp",
-                "name": "example.com"
+                "name": "example.com",
             },
-            "ttl": 300
+            "ttl": 300,
         }
         r = DNSRecord.from_api(data, domain="example.com")
         assert r.srv_weight == 2
@@ -128,7 +128,7 @@ class TestDNSRecord:
             "type": "SRV",
             "content": "5 443 target.com",
             "ttl": 300,
-            "priority": 10
+            "priority": 10,
         }
         r = DNSRecord.from_api(data, domain="example.com")
         assert r.srv_weight == 5
@@ -149,13 +149,15 @@ class TestDNSZone:
 class TestCloudflareProvider:
     def test_list_zones(self):
         p = _provider()
-        p._request = Mock(return_value={
-            "success": True,
-            "result": [
-                {"id": "z1", "name": "example.com", "status": "active"},
-                {"id": "z2", "name": "example.org", "status": "active"},
-            ],
-        })
+        p._request = Mock(
+            return_value={
+                "success": True,
+                "result": [
+                    {"id": "z1", "name": "example.com", "status": "active"},
+                    {"id": "z2", "name": "example.org", "status": "active"},
+                ],
+            }
+        )
         zones = p.list_zones()
         assert len(zones) == 2
         assert zones[0].name == "example.com"
@@ -163,10 +165,12 @@ class TestCloudflareProvider:
 
     def test_get_zone_id(self):
         p = _provider()
-        p._request = Mock(return_value={
-            "success": True,
-            "result": [{"id": "zone123", "name": "example.com"}],
-        })
+        p._request = Mock(
+            return_value={
+                "success": True,
+                "result": [{"id": "zone123", "name": "example.com"}],
+            }
+        )
         zone_id = p.get_zone_id("example.com")
         assert zone_id == "zone123"
         p._request.assert_called_once_with("GET", "zones?name=example.com")
@@ -179,13 +183,31 @@ class TestCloudflareProvider:
 
     def test_list_records(self):
         p = _provider()
-        p._request = Mock(return_value={
-            "success": True,
-            "result": [
-                {"id": "r1", "name": "mail.example.com", "type": "A", "content": "1.2.3.4", "ttl": 300, "proxied": False, "priority": None},
-                {"id": "r2", "name": "example.com", "type": "MX", "content": "mail.example.com", "ttl": 300, "proxied": False, "priority": 10},
-            ],
-        })
+        p._request = Mock(
+            return_value={
+                "success": True,
+                "result": [
+                    {
+                        "id": "r1",
+                        "name": "mail.example.com",
+                        "type": "A",
+                        "content": "1.2.3.4",
+                        "ttl": 300,
+                        "proxied": False,
+                        "priority": None,
+                    },
+                    {
+                        "id": "r2",
+                        "name": "example.com",
+                        "type": "MX",
+                        "content": "mail.example.com",
+                        "ttl": 300,
+                        "proxied": False,
+                        "priority": 10,
+                    },
+                ],
+            }
+        )
         records = p.list_records("zone123", domain="example.com")
         assert len(records) == 2
         assert records[0].type == "A"
@@ -195,20 +217,38 @@ class TestCloudflareProvider:
     def test_create_record(self):
         p = _provider()
         record = DNSRecord(name="mail", type="A", content="1.2.3.4", ttl=300, domain="example.com")
-        p._request = Mock(return_value={
-            "success": True,
-            "result": {"id": "new1", "name": "mail.example.com", "type": "A", "content": "1.2.3.4", "ttl": 300, "proxied": False},
-        })
+        p._request = Mock(
+            return_value={
+                "success": True,
+                "result": {
+                    "id": "new1",
+                    "name": "mail.example.com",
+                    "type": "A",
+                    "content": "1.2.3.4",
+                    "ttl": 300,
+                    "proxied": False,
+                },
+            }
+        )
         new_rec = p.create_record("zone123", record)
         assert new_rec.id == "new1"
 
     def test_update_record(self):
         p = _provider()
         record = DNSRecord(name="mail", type="A", content="5.6.7.8", ttl=300, domain="example.com")
-        p._request = Mock(return_value={
-            "success": True,
-            "result": {"id": "existing1", "name": "mail.example.com", "type": "A", "content": "5.6.7.8", "ttl": 300, "proxied": False},
-        })
+        p._request = Mock(
+            return_value={
+                "success": True,
+                "result": {
+                    "id": "existing1",
+                    "name": "mail.example.com",
+                    "type": "A",
+                    "content": "5.6.7.8",
+                    "ttl": 300,
+                    "proxied": False,
+                },
+            }
+        )
         updated = p.update_record("zone123", "existing1", record)
         assert updated.content == "5.6.7.8"
 

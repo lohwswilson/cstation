@@ -9,9 +9,8 @@ import typer
 import yaml
 from rich.console import Console
 
-from cstation.ssh import SSHManager
 from cstation.config import get_vps_secrets, get_config
-from cstation.models import VPSConfig, ContainerConfig
+from cstation.models import ContainerConfig
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
 from cstation.commands.pw.sync import PWSync
 
@@ -37,6 +36,9 @@ def odoo_backup(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     container: str = typer.Argument(..., help="Odoo container name"),
     dbname: str = typer.Argument(..., help="Database name to back up"),
+    keep: Optional[int] = typer.Option(
+        None, "--keep", "-k", help="Number of recent backups to retain in container (pruning older archives)"
+    ),
 ) -> None:
     """Download the latest Odoo auto_backup zip from a remote container to the local machine."""
     vps_dir = _resolve_vps_dir(Path(vps))
@@ -72,14 +74,14 @@ def odoo_backup(
                     if not cand:
                         continue
                     manifest_cmd = (
-                        f"docker exec {container} python3 -c \""
+                        f'docker exec {container} python3 -c "'
                         f"import zipfile, json\n"
                         f"try:\n"
                         f"    zf = zipfile.ZipFile('{cand}')\n"
                         f"    m = json.loads(zf.read('manifest.json').decode())\n"
                         f"    print(m.get('db_name', ''))\n"
                         f"except Exception:\n"
-                        f"    pass\""
+                        f'    pass"'
                     )
                     man_res = ssh.run(manifest_cmd, hide=True)
                     if man_res and getattr(man_res, "stdout", "").strip().lower() == dbname.lower():
@@ -115,14 +117,14 @@ def odoo_backup(
 
     backup_basename = backup_path.rsplit("/", 1)[-1]
     host_tmp = f"/tmp/{backup_basename}"
-    console.print(f"  [dim]Copying from container to host...[/dim]")
+    console.print("  [dim]Copying from container to host...[/dim]")
     result = ssh.run(f"docker cp {container}:{backup_path} {host_tmp}", sudo=True)
     if not result or getattr(result, "exited", 1) != 0:
-        console.print(f"[red]✗[/red] Failed to copy backup from container")
+        console.print("[red]✗[/red] Failed to copy backup from container")
         raise typer.Exit(1)
 
     local_path = Path.cwd() / backup_basename
-    console.print(f"  [dim]Downloading to local machine...[/dim]")
+    console.print("  [dim]Downloading to local machine...[/dim]")
     try:
         ssh.get(host_tmp, str(local_path))
     except Exception as e:
@@ -141,17 +143,62 @@ def odoo_backup(
 
     console.print(f"  [green]✓[/green] Saved to: {local_path} ({actual_str})")
 
+    # Prune old backups in container if --keep is specified
+    if keep and keep > 0:
+        for d in BACKUP_DIRS:
+            list_res = ssh.run(f"docker exec {container} sh -c 'ls -1t {d}/*.zip 2>/dev/null'", hide=True)
+            if list_res and getattr(list_res, "stdout", "").strip():
+                all_files = [f.strip() for f in list_res.stdout.strip().splitlines() if f.strip()]
+                if len(all_files) > keep:
+                    to_prune = all_files[keep:]
+                    prune_cmd = f"docker exec {container} rm -f " + " ".join(to_prune)
+                    ssh.run(prune_cmd, sudo=True)
+                    console.print(
+                        f"  [green]✓[/green] Pruned {len(to_prune)} old backup archive(s), retained latest {keep}"
+                    )
+
 
 @odoo_app.command("restore")
 def odoo_restore(
     vps: str = typer.Argument(..., help="Destination VPS name or directory path"),
     container: str = typer.Argument(..., help="Destination Odoo container name"),
-    backup_file: str = typer.Argument(..., help="Local backup zip file path"),
-    dest_db: Optional[str] = typer.Option(None, "--dest-db", "-d", help="Destination database name (defaults to source db name from manifest)"),
+    backup_file: Optional[str] = typer.Argument(
+        None, help="Local backup zip file path (optional; auto-prompts if omitted)"
+    ),
+    dest_db: Optional[str] = typer.Option(
+        None, "--dest-db", "-d", help="Destination database name (defaults to source db name from manifest)"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Restore an Odoo backup zip to a remote VPS."""
-    local_path = Path(backup_file)
+    if not backup_file:
+        cwd_zips = sorted(
+            [f for f in Path.cwd().glob("*.zip") if not f.name.startswith(".")],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+        if not cwd_zips:
+            console.print("[red]✗[/red] No backup zip files found in current directory. Please specify a file path.")
+            raise typer.Exit(1)
+        if len(cwd_zips) == 1 and yes:
+            local_path = cwd_zips[0]
+            console.print(f"  [dim]Auto-selected only available backup: {local_path.name}[/dim]")
+        else:
+            console.print("\n[bold cyan]Available Local Backups:[/bold cyan]")
+            import datetime
+
+            for idx, f in enumerate(cwd_zips, 1):
+                size_mb = f.stat().st_size / (1024 * 1024)
+                mtime = datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                console.print(f"  [{idx}] [bold]{f.name}[/bold] ({size_mb:.1f}MB, {mtime})")
+            choice = typer.prompt("\nSelect backup to restore", type=int, default=1)
+            if choice < 1 or choice > len(cwd_zips):
+                console.print("[red]✗[/red] Invalid selection.")
+                raise typer.Exit(1)
+            local_path = cwd_zips[choice - 1]
+    else:
+        local_path = Path(backup_file)
+
     if not local_path.exists():
         console.print(f"[red]✗[/red] Backup file not found: {local_path}")
         raise typer.Exit(1)
@@ -162,7 +209,7 @@ def odoo_restore(
                 console.print("[red]✗[/red] Invalid Odoo backup: manifest.json not found")
                 raise typer.Exit(1)
             manifest = json.loads(zf.read("manifest.json"))
-            if str(manifest.get("odoo_dump")) != "1":
+            if "odoo_dump" in manifest and str(manifest.get("odoo_dump")) not in ("1", "True", "true"):
                 console.print("[red]✗[/red] Invalid Odoo backup: not an Odoo dump")
                 raise typer.Exit(1)
             source_db = manifest.get("db_name", "unknown")
@@ -187,6 +234,7 @@ def odoo_restore(
         frag_dict = yaml.safe_load(f)
 
     from pydantic import ValidationError
+
     try:
         frag_config = ContainerConfig(**frag_dict)
     except ValidationError as e:
@@ -240,7 +288,7 @@ def odoo_restore(
     console.print(f"  [dim]Uploading backup to {ssh.host}...[/dim]")
     ssh.put(str(local_path), host_tmp)
 
-    console.print(f"  [dim]Extracting backup on host...[/dim]")
+    console.print("  [dim]Extracting backup on host...[/dim]")
     ssh.run(f"rm -rf {restore_dir}", sudo=True)
     ssh.run(f"mkdir -p {restore_dir}", sudo=True)
     extract_res = ssh.run(
@@ -255,14 +303,14 @@ def odoo_restore(
     console.print(f"  [dim]Creating database {dest_dbname}...[/dim]")
     # Auto-refresh template1 collation to avoid collation version mismatch errors on PG15+
     ssh.run(
-        f"docker exec {db_container} psql -U postgres -d template1 -c \"ALTER DATABASE template1 REFRESH COLLATION VERSION;\" 2>/dev/null || true",
+        f'docker exec {db_container} psql -U postgres -d template1 -c "ALTER DATABASE template1 REFRESH COLLATION VERSION;" 2>/dev/null || true',
         sudo=True,
         hide=True,
     )
 
     check_sql = f"SELECT 1 FROM pg_database WHERE datname='{dest_dbname}'"
     check_result = ssh.run(
-        f"docker exec {db_container} psql -U postgres -t -c \"{check_sql}\" 2>/dev/null",
+        f'docker exec {db_container} psql -U postgres -t -c "{check_sql}" 2>/dev/null',
         hide=True,
         sudo=True,
     )
@@ -272,23 +320,21 @@ def odoo_restore(
         console.print(f"  [yellow]⚠[/yellow] Database {dest_dbname} already exists. Dropping and recreating...")
         ssh.run(
             f"docker exec {db_container} psql -U postgres -c"
-            f" \"REVOKE CONNECT ON DATABASE \\\"{dest_dbname}\\\" FROM PUBLIC;\" 2>/dev/null",
+            f' "REVOKE CONNECT ON DATABASE \\"{dest_dbname}\\" FROM PUBLIC;" 2>/dev/null',
             sudo=True,
         )
         ssh.run(
             f"docker exec {db_container} psql -U postgres -c"
-            f" \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \\\"{dest_dbname}\\\";\" 2>/dev/null",
+            f' "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \\"{dest_dbname}\\";" 2>/dev/null',
             sudo=True,
         )
         ssh.run(
-            f"docker exec {db_container} psql -U postgres -c"
-            f" \"DROP DATABASE \\\"{dest_dbname}\\\";\" 2>/dev/null",
+            f'docker exec {db_container} psql -U postgres -c "DROP DATABASE \\"{dest_dbname}\\";" 2>/dev/null',
             sudo=True,
         )
 
     create_res = ssh.run(
-        f"docker exec {db_container} psql -U postgres -c"
-        f" \"CREATE DATABASE \\\"{dest_dbname}\\\" OWNER \\\"{db_user}\\\";\"",
+        f'docker exec {db_container} psql -U postgres -c "CREATE DATABASE \\"{dest_dbname}\\" OWNER \\"{db_user}\\";"',
         sudo=True,
     )
     if create_res and getattr(create_res, "exited", 0) != 0:
@@ -300,7 +346,7 @@ def odoo_restore(
         escaped_password = db_password.replace("'", "''")
         check_user_sql = f"SELECT 1 FROM pg_roles WHERE rolname='{db_user}'"
         user_result = ssh.run(
-            f"docker exec {db_container} psql -U postgres -t -c \"{check_user_sql}\" 2>/dev/null",
+            f'docker exec {db_container} psql -U postgres -t -c "{check_user_sql}" 2>/dev/null',
             hide=True,
             sudo=True,
         )
@@ -308,81 +354,82 @@ def odoo_restore(
         if not user_exists:
             ssh.run(
                 f"docker exec {db_container} psql -U postgres -c"
-                f" \"CREATE USER \\\"{db_user}\\\" WITH PASSWORD '{escaped_password}' SUPERUSER;\" 2>/dev/null",
+                f' "CREATE USER \\"{db_user}\\" WITH PASSWORD \'{escaped_password}\' SUPERUSER;" 2>/dev/null',
                 sudo=True,
             )
         else:
             ssh.run(
                 f"docker exec {db_container} psql -U postgres -c"
-                f" \"ALTER USER \\\"{db_user}\\\" WITH PASSWORD '{escaped_password}';\" 2>/dev/null",
+                f' "ALTER USER \\"{db_user}\\" WITH PASSWORD \'{escaped_password}\';" 2>/dev/null',
                 sudo=True,
             )
 
     console.print(f"  [dim]Restoring dump.sql into {dest_dbname}...[/dim]")
     dump_path = f"{restore_dir}/dump.sql"
     dump_res = ssh.run(
-        f"docker exec -i {db_container} psql -U postgres -d {dest_dbname}"
-        f" < {dump_path}",
+        f"docker exec -i {db_container} psql -U postgres -d {dest_dbname} < {dump_path}",
         sudo=True,
         hide=True,
     )
     if dump_res and getattr(dump_res, "exited", 0) != 0:
-        console.print(f"[red]✗[/red] Failed to restore dump.sql into database {dest_dbname}: {getattr(dump_res, 'stderr', '')}")
+        console.print(
+            f"[red]✗[/red] Failed to restore dump.sql into database {dest_dbname}: {getattr(dump_res, 'stderr', '')}"
+        )
         raise typer.Exit(1)
     console.print(f"  [green]✓[/green] Restored dump.sql into {dest_dbname}")
 
     console.print(f"  [dim]Reassigning table ownership to {db_user}...[/dim]")
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"REASSIGN OWNED BY CURRENT_USER TO \\\"{db_user}\\\";\"",
+        f' -c "REASSIGN OWNED BY CURRENT_USER TO \\"{db_user}\\";"',
         sudo=True,
     )
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"{dest_dbname}\\\" TO \\\"{db_user}\\\";\"",
+        f' -c "GRANT ALL PRIVILEGES ON DATABASE \\"{dest_dbname}\\" TO \\"{db_user}\\";"',
         sudo=True,
     )
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \\\"{db_user}\\\";\"",
+        f' -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \\"{db_user}\\";"',
         sudo=True,
     )
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \\\"{db_user}\\\";\"",
+        f' -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \\"{db_user}\\";"',
         sudo=True,
     )
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \\\"{db_user}\\\";\"",
+        f' -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \\"{db_user}\\";"',
         sudo=True,
     )
     ssh.run(
         f"docker exec {db_container} psql -U postgres -d {dest_dbname}"
-        f" -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \\\"{db_user}\\\";\"",
+        f' -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \\"{db_user}\\";"',
         sudo=True,
     )
     console.print(f"  [green]✓[/green] Reassigned ownership to {db_user}")
 
-    console.print(f"  [dim]Copying filestore...[/dim]")
+    console.print("  [dim]Copying filestore...[/dim]")
     ssh.run(f"mkdir -p {filestore_dir}", sudo=True)
     source_filestore = f"{restore_dir}/filestore"
     ssh.run(f"cp -r {source_filestore}/* {filestore_dir}/", sudo=True)
-    console.print(f"  [green]✓[/green] Copied filestore")
+    console.print("  [green]✓[/green] Copied filestore")
 
-    console.print(f"  [dim]Creating checklist directory...[/dim]")
+    console.print("  [dim]Creating checklist directory...[/dim]")
     ssh.run(f"mkdir -p {filestore_dir}/checklist", sudo=True)
     ssh.run(
         f"bash -c 'cd {filestore_dir}/checklist && for i in $(seq 0 255); do mkdir -p $(printf \"%02x\" $i); done'",
         sudo=True,
     )
-    console.print(f"  [green]✓[/green] Created checklist directory (256 subdirs)")
+    console.print("  [green]✓[/green] Created checklist directory (256 subdirs)")
 
     owner_parts = owner.split(":")
     ssh.run(f"chown -R {owner_parts[0]}:{owner_parts[1]} {filestore_dir}", sudo=True)
     console.print(f"  [green]✓[/green] Set filestore ownership to {owner}")
 
-    console.print(f"  [dim]Cleaning up temp files...[/dim]")
+    console.print("  [dim]Cleaning up temp files...[/dim]")
     ssh.run(f"rm -rf {restore_dir}", sudo=True)
 
     compose_path = f"/var/lib/{container}/docker-compose.yml"
@@ -390,7 +437,7 @@ def odoo_restore(
     ssh.run(f"docker compose -f {compose_path} restart", sudo=True)
     console.print(f"  [green]✓[/green] Restarted {container}")
 
-    console.print(f"\n[bold green]✓ Restore complete![/bold green]")
+    console.print("\n[bold green]✓ Restore complete![/bold green]")
     console.print(f"  Database: {dest_dbname}")
     console.print(f"  Container: {container}")
     console.print(f"  VPS: {identity_name}")
@@ -401,8 +448,12 @@ def odoo_update(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     container: str = typer.Argument(..., help="Odoo container name"),
     dbname: str = typer.Option(..., "--dbname", "-d", help="Database name to update"),
-    modules: str = typer.Option("all", "--modules", "-m", help="Comma-separated module names to update (e.g. 'all', 'perfectwork_sg_be')"),
-    install: Optional[str] = typer.Option(None, "--install", "-i", help="Optional comma-separated module names to install"),
+    modules: str = typer.Option(
+        "all", "--modules", "-m", help="Comma-separated module names to update (e.g. 'all', 'perfectwork_sg_be')"
+    ),
+    install: Optional[str] = typer.Option(
+        None, "--install", "-i", help="Optional comma-separated module names to install"
+    ),
     restart: bool = typer.Option(True, "--restart/--no-restart", help="Restart container after update completes"),
 ) -> None:
     """Run an Odoo database module upgrade or installation directly inside a remote container."""
@@ -441,10 +492,10 @@ def odoo_update(
         sudo=True,
     )
     if update_res and getattr(update_res, "exited", 0) != 0:
-        console.print(f"[red]✗[/red] Odoo update command failed")
+        console.print("[red]✗[/red] Odoo update command failed")
         raise typer.Exit(1)
 
-    console.print(f"  [green]✓[/green] Module update completed successfully")
+    console.print("  [green]✓[/green] Module update completed successfully")
 
     if restart:
         console.print(f"  [dim]Restarting {container}...[/dim]")

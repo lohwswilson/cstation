@@ -4,7 +4,6 @@ Tests for cstation docker rm command.
 
 from unittest.mock import MagicMock, patch
 from pathlib import Path
-import pytest
 from typer.testing import CliRunner
 from cstation.main import app
 
@@ -65,7 +64,9 @@ def test_docker_rm_yes(mock_get_svc, mock_ssh):
     mock_service = MagicMock()
     mock_get_svc.return_value = mock_service
 
-    result = runner.invoke(app, ["docker", "rm", "test-vps", "test_container", "--yes", "--purge-local", "--keep-secrets"])
+    result = runner.invoke(
+        app, ["docker", "rm", "test-vps", "test_container", "--yes", "--purge-local", "--keep-secrets"]
+    )
     assert result.exit_code == 0
     mock_service.remove.assert_called_once()
     assert not c_yaml.exists()

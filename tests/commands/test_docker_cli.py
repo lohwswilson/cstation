@@ -16,151 +16,159 @@ def _write(p: Path, content: str) -> None:
 
 
 def _full_vps_yaml() -> str:
-    return "\n".join([
-        "apiVersion: cstation/v1",
-        "kind: VPS",
-        "identity:",
-        "  name: test-vps",
-        "  stage: prod",
-        "  region: hel1",
-        "access:",
-        "  host: 1.2.3.4",
-        "  user: root",
-        "  port: 22",
-        "facts:",
-        "  os:",
-        "    id: ubuntu",
-        "    version: '24.04'",
-        "    package_manager: apt",
-        "  cpu: { vcpu: 2 }",
-        "  memory: { total_mb: 4096 }",
-        "  hostname: test",
-        "  packages: { detected: [], missing: [] }",
-        "os:",
-        "  baseline:",
-        "    packages: []",
-        "    shell: bash",
-        "    terminal: xterm-256color",
-        "    sshd: { disable_password_auth: true }",
-        "    firewall: { mode: ufw, allow: ['22/tcp'] }",
-        "docker:",
-        "  networks: [PW_NET]",
-        "  directories: []",
-    ])
+    return "\n".join(
+        [
+            "apiVersion: cstation/v1",
+            "kind: VPS",
+            "identity:",
+            "  name: test-vps",
+            "  stage: prod",
+            "  region: hel1",
+            "access:",
+            "  host: 1.2.3.4",
+            "  user: root",
+            "  port: 22",
+            "facts:",
+            "  os:",
+            "    id: ubuntu",
+            "    version: '24.04'",
+            "    package_manager: apt",
+            "  cpu: { vcpu: 2 }",
+            "  memory: { total_mb: 4096 }",
+            "  hostname: test",
+            "  packages: { detected: [], missing: [] }",
+            "os:",
+            "  baseline:",
+            "    packages: []",
+            "    shell: bash",
+            "    terminal: xterm-256color",
+            "    sshd: { disable_password_auth: true }",
+            "    firewall: { mode: ufw, allow: ['22/tcp'] }",
+            "docker:",
+            "  networks: [PW_NET]",
+            "  directories: []",
+        ]
+    )
 
 
 def _traefik_fragment() -> str:
-    return "\n".join([
-        "apiVersion: cstation/v1",
-        "kind: Container",
-        "name: traefik",
-        "enabled: true",
-        "image: traefik:latest",
-        "container_name: EU01_traefik",
-        "network: PW_NET",
-        "ports:",
-        "  - '80:80'",
-        "  - '443:443'",
-        "volumes:",
-        "  - /var/run/docker.sock:/var/run/docker.sock:ro",
-        "  - /var/lib/traefik/letsencrypt:/letsencrypt",
-        "  - /var/lib/traefik/conf:/etc/traefik/conf",
-        "  - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro",
-        "  - /var/lib/traefik/logs:/etc/traefik/logs",
-        "env_file: .env",
-        "env:",
-        "  DHPARAM_GENERATION: 'false'",
-        "secrets:",
-        "  - CF_API_EMAIL",
-        "  - CF_API_KEY",
-        "restart_policy: unless-stopped",
-        "static_config:",
-        "  global:",
-        "    checknewversion: false",
-        "    sendanonymoususage: false",
-        "  entryPoints:",
-        "    web:",
-        "      address: ':80'",
-        "      http:",
-        "        redirections:",
-        "          entryPoint:",
-        "            to: websecure",
-        "            scheme: https",
-        "            permanent: true",
-        "      forwardedHeaders:",
-        "        insecure: true",
-        "    websecure:",
-        "      address: ':443'",
-        "      forwardedHeaders:",
-        "        insecure: true",
-        "  providers:",
-        "    docker:",
-        "      endpoint: 'unix:///var/run/docker.sock'",
-        "      exposedByDefault: false",
-        "      network: PW_NET",
-        "    file:",
-        "      directory: '/etc/traefik/conf'",
-        "      watch: true",
-        "  certificatesResolvers:",
-        "    le_resolver:",
-        "      acme:",
-        "        email: 'syner.catalyst@gmail.com'",
-        "        storage: '/letsencrypt/acme.json'",
-        "        keyType: EC256",
-        "        tlsChallenge: {}",
-        "  api:",
-        "    dashboard: true",
-    ])
+    return "\n".join(
+        [
+            "apiVersion: cstation/v1",
+            "kind: Container",
+            "name: traefik",
+            "enabled: true",
+            "image: traefik:latest",
+            "container_name: EU01_traefik",
+            "network: PW_NET",
+            "ports:",
+            "  - '80:80'",
+            "  - '443:443'",
+            "volumes:",
+            "  - /var/run/docker.sock:/var/run/docker.sock:ro",
+            "  - /var/lib/traefik/letsencrypt:/letsencrypt",
+            "  - /var/lib/traefik/conf:/etc/traefik/conf",
+            "  - /var/lib/traefik/etc/traefik.yml:/etc/traefik/traefik.yml:ro",
+            "  - /var/lib/traefik/logs:/etc/traefik/logs",
+            "env_file: .env",
+            "env:",
+            "  DHPARAM_GENERATION: 'false'",
+            "secrets:",
+            "  - CF_API_EMAIL",
+            "  - CF_API_KEY",
+            "restart_policy: unless-stopped",
+            "static_config:",
+            "  global:",
+            "    checknewversion: false",
+            "    sendanonymoususage: false",
+            "  entryPoints:",
+            "    web:",
+            "      address: ':80'",
+            "      http:",
+            "        redirections:",
+            "          entryPoint:",
+            "            to: websecure",
+            "            scheme: https",
+            "            permanent: true",
+            "      forwardedHeaders:",
+            "        insecure: true",
+            "    websecure:",
+            "      address: ':443'",
+            "      forwardedHeaders:",
+            "        insecure: true",
+            "  providers:",
+            "    docker:",
+            "      endpoint: 'unix:///var/run/docker.sock'",
+            "      exposedByDefault: false",
+            "      network: PW_NET",
+            "    file:",
+            "      directory: '/etc/traefik/conf'",
+            "      watch: true",
+            "  certificatesResolvers:",
+            "    le_resolver:",
+            "      acme:",
+            "        email: 'syner.catalyst@gmail.com'",
+            "        storage: '/letsencrypt/acme.json'",
+            "        keyType: EC256",
+            "        tlsChallenge: {}",
+            "  api:",
+            "    dashboard: true",
+        ]
+    )
 
 
 def _portainer_fragment() -> str:
-    return "\n".join([
-        "apiVersion: cstation/v1",
-        "kind: Container",
-        "name: portainer",
-        "enabled: true",
-        "image: portainer/portainer-ce:latest",
-        "container_name: EU01_portainer",
-        "network: PW_NET",
-        "ports:",
-        "  - '9000:9000'",
-        "  - '9443:9443'",
-        "  - '8000:8000'",
-        "volumes:",
-        "  - /var/run/docker.sock:/var/run/docker.sock",
-        "  - /var/lib/portainer/data:/data",
-        "env:",
-        "  PORTAINER_LOG_LEVEL: INFO",
-        "restart_policy: always",
-        "traefik:",
-        "  http:",
-        "    routers:",
-        "      portainer:",
-        "        rule: \"Host(`portainer.eu01.synercatalyst.com`)\"",
-        "        entryPoints:",
-        "          - websecure",
-        "        service: portainer",
-        "        tls:",
-        "          certResolver: le_dns_resolver",
-        "    services:",
-        "      portainer:",
-        "        loadBalancer:",
-        "          servers:",
-        "            - url: 'http://EU01_portainer:9000'",
-    ])
+    return "\n".join(
+        [
+            "apiVersion: cstation/v1",
+            "kind: Container",
+            "name: portainer",
+            "enabled: true",
+            "image: portainer/portainer-ce:latest",
+            "container_name: EU01_portainer",
+            "network: PW_NET",
+            "ports:",
+            "  - '9000:9000'",
+            "  - '9443:9443'",
+            "  - '8000:8000'",
+            "volumes:",
+            "  - /var/run/docker.sock:/var/run/docker.sock",
+            "  - /var/lib/portainer/data:/data",
+            "env:",
+            "  PORTAINER_LOG_LEVEL: INFO",
+            "restart_policy: always",
+            "traefik:",
+            "  http:",
+            "    routers:",
+            "      portainer:",
+            '        rule: "Host(`portainer.eu01.synercatalyst.com`)"',
+            "        entryPoints:",
+            "          - websecure",
+            "        service: portainer",
+            "        tls:",
+            "          certResolver: le_dns_resolver",
+            "    services:",
+            "      portainer:",
+            "        loadBalancer:",
+            "          servers:",
+            "            - url: 'http://EU01_portainer:9000'",
+        ]
+    )
 
 
 def _disabled_mailcow_fragment() -> str:
-    return "\n".join([
-        "apiVersion: cstation/v1",
-        "kind: Stack",
-        "name: mailcow",
-        "enabled: false",
-        "git_repo: 'https://github.com/mailcow/mailcow-dockerized'",
-        "git_branch: master",
-        "git_dir: /opt/mailcow",
-        "network: PW_NET",
-    ])
+    return "\n".join(
+        [
+            "apiVersion: cstation/v1",
+            "kind: Stack",
+            "name: mailcow",
+            "enabled: false",
+            "git_repo: 'https://github.com/mailcow/mailcow-dockerized'",
+            "git_branch: master",
+            "git_dir: /opt/mailcow",
+            "network: PW_NET",
+        ]
+    )
 
 
 def _setup_vps_dir(tmp_path: Path) -> Path:
@@ -241,6 +249,7 @@ def test_docker_apply_traefik(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
     _mock_ssh_run(monkeypatch)
     import typer
+
     monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
 
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "--service", "traefik", "--yes"])
@@ -362,6 +371,7 @@ def test_docker_fragment_discovery(tmp_path):
     _write(vps_dir / "some-notes.txt", "not a yaml")
 
     from cstation.commands.docker.main import _discover_fragments
+
     fragments = _discover_fragments(vps_dir)
     assert len(fragments) == 1
     assert fragments[0].name == "traefik.yaml"
@@ -373,6 +383,7 @@ def test_docker_load_fragments_skips_vps_yaml(tmp_path):
     _write(vps_dir / "traefik.yaml", _traefik_fragment())
 
     from cstation.commands.docker.main import _load_fragments
+
     fragments = _load_fragments(vps_dir)
     assert len(fragments) == 1
     assert fragments[0][0] == "traefik"
@@ -381,6 +392,7 @@ def test_docker_load_fragments_skips_vps_yaml(tmp_path):
 
 def test_compose_render():
     from cstation.commands.docker.compose.render import render_compose
+
     compose = {
         "services": {"test": {"image": "nginx:latest"}},
         "networks": {"PW_NET": {"external": True}},
@@ -392,6 +404,7 @@ def test_compose_render():
 
 def test_env_writer():
     from cstation.commands.docker.compose.env_writer import render_env
+
     env = {"FOO": "bar", "BAZ": "1"}
     result = render_env(env)
     assert "BAZ=1" in result
@@ -400,6 +413,7 @@ def test_env_writer():
 
 def test_service_registry():
     from cstation.commands.docker.services.registry import get_service, available_services
+
     assert "traefik" in available_services()
     assert "portainer" in available_services()
     svc_cls = get_service("traefik")
@@ -409,6 +423,7 @@ def test_service_registry():
 def test_traefik_compose_includes_env_file(tmp_path):
     import yaml
     from cstation.commands.docker.services.traefik import TraefikService
+
     svc = TraefikService()
     config = {
         "image": "traefik:latest",
@@ -430,6 +445,7 @@ def test_traefik_compose_includes_env_file(tmp_path):
 def test_traefik_compose_no_insecure_dashboard_port(tmp_path):
     import yaml
     from cstation.commands.docker.services.traefik import TraefikService
+
     svc = TraefikService()
     config = {
         "image": "traefik:latest",
@@ -450,6 +466,7 @@ def test_traefik_compose_no_insecure_dashboard_port(tmp_path):
 def test_image_service_env_file_support():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test-svc"
     config = {
@@ -464,9 +481,12 @@ def test_image_service_env_file_support():
 
 def test_traefik_plan_warns_missing_secrets(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
-    _mock_ssh_run(monkeypatch, {
-        "test -f /var/lib/traefik/.env": "missing",
-    })
+    _mock_ssh_run(
+        monkeypatch,
+        {
+            "test -f /var/lib/traefik/.env": "missing",
+        },
+    )
 
     r = runner.invoke(app, ["docker", "plan", str(vps_dir), "--service", "traefik"])
     assert r.exit_code == 0
@@ -503,6 +523,7 @@ def test_traefik_apply_writes_secrets_template(tmp_path, monkeypatch):
 def test_traefik_static_config_no_insecure_api(tmp_path):
     import yaml
     from cstation.commands.docker.services.traefik import TraefikService
+
     svc = TraefikService()
     config = {
         "image": "traefik:latest",
@@ -519,6 +540,7 @@ def test_traefik_static_config_no_insecure_api(tmp_path):
         },
     }
     import io
+
     buf = io.StringIO()
     yaml.dump(config["static_config"], buf, sort_keys=False, default_flow_style=False)
     output = buf.getvalue()
@@ -531,6 +553,7 @@ def test_traefik_static_config_no_insecure_api(tmp_path):
 def test_portainer_compose_includes_all_ports():
     import yaml
     from cstation.commands.docker.services.portainer import PortainerService
+
     svc = PortainerService()
     config = {
         "image": "portainer/portainer-ce:latest",
@@ -553,6 +576,7 @@ def test_portainer_compose_includes_all_ports():
 def test_portainer_compose_docker_socket_rw():
     import yaml
     from cstation.commands.docker.services.portainer import PortainerService
+
     svc = PortainerService()
     config = {
         "image": "portainer/portainer-ce:latest",
@@ -574,6 +598,7 @@ def test_portainer_compose_docker_socket_rw():
 def test_portainer_compose_restart_always():
     import yaml
     from cstation.commands.docker.services.portainer import PortainerService
+
     svc = PortainerService()
     config = {
         "image": "portainer/portainer-ce:latest",
@@ -591,6 +616,7 @@ def test_portainer_compose_restart_always():
 
 def test_render_secrets_env_with_values():
     from cstation.commands.docker.compose.env_writer import render_secrets_env
+
     secrets = {"CF_API_EMAIL": "user@example.com", "CF_API_KEY": "abc123"}
     result = render_secrets_env(secrets)
     assert "CF_API_EMAIL=user@example.com" in result
@@ -599,6 +625,7 @@ def test_render_secrets_env_with_values():
 
 def test_render_secrets_env_with_placeholders():
     from cstation.commands.docker.compose.env_writer import render_secrets_env
+
     secrets = {"CF_API_EMAIL": "REPLACE_ME", "CF_API_KEY": "REPLACE_ME"}
     result = render_secrets_env(secrets)
     assert "CF_API_EMAIL=REPLACE_ME" in result
@@ -607,6 +634,7 @@ def test_render_secrets_env_with_placeholders():
 
 def test_image_service_render_secrets_env_from_resolved():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test-svc"
     config = {"_resolved_secrets": {"SECRET_KEY": "real_value"}}
@@ -617,6 +645,7 @@ def test_image_service_render_secrets_env_from_resolved():
 
 def test_image_service_render_secrets_env_from_keys():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "test-svc"
     config = {"secrets": ["SECRET_KEY", "ANOTHER_KEY"]}
@@ -628,14 +657,9 @@ def test_image_service_render_secrets_env_from_keys():
 
 def test_get_vps_secrets_found():
     from cstation.config import get_vps_secrets, config_manager
+
     config_manager.config_data = {
-        "vps": {
-            "secrets": {
-                "test-vps": {
-                    "traefik": {"CF_API_EMAIL": "user@example.com", "CF_API_KEY": "abc123"}
-                }
-            }
-        }
+        "vps": {"secrets": {"test-vps": {"traefik": {"CF_API_EMAIL": "user@example.com", "CF_API_KEY": "abc123"}}}}
     }
     result = get_vps_secrets("test-vps", "traefik")
     assert result == {"CF_API_EMAIL": "user@example.com", "CF_API_KEY": "abc123"}
@@ -643,6 +667,7 @@ def test_get_vps_secrets_found():
 
 def test_get_vps_secrets_not_found():
     from cstation.config import get_vps_secrets, config_manager
+
     config_manager.config_data = {"vps": {"providers": {}}}
     result = get_vps_secrets("unknown-vps", "traefik")
     assert result == {}
@@ -650,76 +675,77 @@ def test_get_vps_secrets_not_found():
 
 def test_docker_apply_traefik_with_resolved_secrets(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
-    _mock_ssh_run(monkeypatch, {
-        "test -f /var/lib/traefik/.env": "missing",
-    })
+    _mock_ssh_run(
+        monkeypatch,
+        {
+            "test -f /var/lib/traefik/.env": "missing",
+        },
+    )
 
     from cstation.config import config_manager
-    monkeypatch.setattr(config_manager, "config_data", {
-        "vps": {
-            "secrets": {
-                "test-vps": {
-                    "traefik": {"CF_API_EMAIL": "real@email.com", "CF_API_KEY": "real_key"}
-                }
-            }
-        }
-    })
+
+    monkeypatch.setattr(
+        config_manager,
+        "config_data",
+        {"vps": {"secrets": {"test-vps": {"traefik": {"CF_API_EMAIL": "real@email.com", "CF_API_KEY": "real_key"}}}}},
+    )
 
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "--service", "traefik", "--yes"])
     assert r.exit_code == 0
     assert "secrets from config" in r.output.lower()
-
 
     r = runner.invoke(app, ["docker", "plan", str(vps_dir), "--service", "traefik"])
     assert r.exit_code == 0
 
 
 def _stalwart_fragment() -> str:
-    return "\n".join([
-        "apiVersion: cstation/v1",
-        "kind: Container",
-        "name: stalwart",
-        "enabled: true",
-        "image: stalwartlabs/stalwart:v0.16",
-        "container_name: EU01_stalwart",
-        "network: PW_NET",
-        "ports:",
-        "  - '25:25'",
-        "  - '110:110'",
-        "  - '465:465'",
-        "  - '587:587'",
-        "  - '993:993'",
-        "  - '995:995'",
-        "  - '4190:4190'",
-        "volumes:",
-        "  - /var/lib/stalwart/etc:/etc/stalwart",
-        "  - /var/lib/stalwart/data:/var/lib/stalwart",
-        "env:",
-        "  STALWART_RECOVERY_ADMIN: 'admin:REPLACE_ME'",
-        "secrets:",
-        "  - CF_API_EMAIL",
-        "  - CF_API_KEY",
-        "restart_policy: unless-stopped",
-        "ulimits:",
-        "  nofile:",
-        "    soft: 65536",
-        "    hard: 65536",
-        "traefik:",
-        "  http:",
-        "    routers:",
-        "      stalwart-admin:",
-        "        rule: \"Host(`mail.perfectwork.app`)\"",
-        "        entryPoints:",
-        "          - websecure",
-        "        service: stalwart-http",
-        "        tls:",
-        "          certResolver: le_dns_resolver",
-        "    services:",
-        "      stalwart-http:",
-        "        loadBalancer:",
-        "          servers:",
-        "            - url: 'http://EU01_stalwart:8080'",
-    ])
+    return "\n".join(
+        [
+            "apiVersion: cstation/v1",
+            "kind: Container",
+            "name: stalwart",
+            "enabled: true",
+            "image: stalwartlabs/stalwart:v0.16",
+            "container_name: EU01_stalwart",
+            "network: PW_NET",
+            "ports:",
+            "  - '25:25'",
+            "  - '110:110'",
+            "  - '465:465'",
+            "  - '587:587'",
+            "  - '993:993'",
+            "  - '995:995'",
+            "  - '4190:4190'",
+            "volumes:",
+            "  - /var/lib/stalwart/etc:/etc/stalwart",
+            "  - /var/lib/stalwart/data:/var/lib/stalwart",
+            "env:",
+            "  STALWART_RECOVERY_ADMIN: 'admin:REPLACE_ME'",
+            "secrets:",
+            "  - CF_API_EMAIL",
+            "  - CF_API_KEY",
+            "restart_policy: unless-stopped",
+            "ulimits:",
+            "  nofile:",
+            "    soft: 65536",
+            "    hard: 65536",
+            "traefik:",
+            "  http:",
+            "    routers:",
+            "      stalwart-admin:",
+            '        rule: "Host(`mail.perfectwork.app`)"',
+            "        entryPoints:",
+            "          - websecure",
+            "        service: stalwart-http",
+            "        tls:",
+            "          certResolver: le_dns_resolver",
+            "    services:",
+            "      stalwart-http:",
+            "        loadBalancer:",
+            "          servers:",
+            "            - url: 'http://EU01_stalwart:8080'",
+        ]
+    )
 
 
 def _setup_vps_dir_with_stalwart(tmp_path: Path) -> Path:
@@ -733,6 +759,7 @@ def _setup_vps_dir_with_stalwart(tmp_path: Path) -> Path:
 def test_stalwart_compose_includes_all_ports():
     import yaml
     from cstation.commands.docker.services.stalwart import StalwartService
+
     svc = StalwartService()
     config = {
         "image": "stalwartlabs/stalwart:v0.16",
@@ -759,6 +786,7 @@ def test_stalwart_compose_includes_all_ports():
 def test_stalwart_compose_includes_env_and_secrets():
     import yaml
     from cstation.commands.docker.services.stalwart import StalwartService
+
     svc = StalwartService()
     config = {
         "image": "stalwartlabs/stalwart:v0.16",
@@ -779,6 +807,7 @@ def test_stalwart_compose_includes_env_and_secrets():
 
 def test_stalwart_create_dirs():
     from cstation.commands.docker.services.stalwart import StalwartService
+
     svc = StalwartService()
     config = {"network": "PW_NET"}
     dirs = svc._create_dirs(None, config)
@@ -792,7 +821,7 @@ def test_stalwart_static_config():
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = StalwartService()
     config_with_traefik = {
@@ -806,9 +835,7 @@ def test_stalwart_static_config():
                         "tls": {"certResolver": "le_dns_resolver"},
                     }
                 },
-                "services": {
-                    "stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}
-                },
+                "services": {"stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}},
             }
         }
     }
@@ -822,11 +849,13 @@ def test_stalwart_static_config():
 
 def test_stalwart_apply_chown():
     from cstation.commands.docker.services.stalwart import StalwartService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
+
     svc = StalwartService()
     config = {
         "image": "stalwartlabs/stalwart:v0.16",
@@ -850,11 +879,13 @@ def test_stalwart_apply_chown():
 def test_stalwart_write_traefik_dynamic_config():
     import yaml
     from cstation.commands.docker.services.stalwart import StalwartService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
+
     svc = StalwartService()
     ssh = MockSSH()
     traefik_config = {
@@ -867,9 +898,7 @@ def test_stalwart_write_traefik_dynamic_config():
                     "tls": {"certResolver": "le_dns_resolver"},
                 }
             },
-            "services": {
-                "stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}
-            },
+            "services": {"stalwart-http": {"loadBalancer": {"servers": [{"url": "http://EU01_stalwart:8080"}]}}},
         }
     }
     config = {"traefik": traefik_config}
@@ -880,17 +909,20 @@ def test_stalwart_write_traefik_dynamic_config():
     assert len(config_commands) == 1
     expected = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False)
     import base64
+
     encoded = base64.b64encode(expected.encode()).decode()
     assert encoded in config_commands[0]
 
 
 def test_stalwart_no_traefik_writes_nothing():
     from cstation.commands.docker.services.stalwart import StalwartService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
+
     svc = StalwartService()
     ssh = MockSSH()
     written = svc._write_static_configs(ssh, {})
@@ -900,6 +932,7 @@ def test_stalwart_no_traefik_writes_nothing():
 
 def test_stalwart_in_registry():
     from cstation.commands.docker.services.registry import get_service, available_services
+
     assert "stalwart" in available_services()
     svc_cls = get_service("stalwart")
     assert svc_cls.name == "stalwart"
@@ -907,10 +940,13 @@ def test_stalwart_in_registry():
 
 def test_stalwart_dynamic_config_from_yaml():
     import yaml as yaml_lib
+
     fragment_text = _stalwart_fragment()
     data = yaml_lib.safe_load(fragment_text)
     traefik = data.get("traefik", {})
-    assert traefik["http"]["services"]["stalwart-http"]["loadBalancer"]["servers"][0]["url"] == "http://EU01_stalwart:8080"
+    assert (
+        traefik["http"]["services"]["stalwart-http"]["loadBalancer"]["servers"][0]["url"] == "http://EU01_stalwart:8080"
+    )
     assert traefik["http"]["routers"]["stalwart-admin"]["rule"] == "Host(`mail.perfectwork.app`)"
     assert "le_dns_resolver" in str(traefik)
 
@@ -928,6 +964,7 @@ def test_docker_apply_stalwart(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir_with_stalwart(tmp_path)
     _mock_ssh_run(monkeypatch)
     import typer
+
     monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
 
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "--service", "stalwart", "--yes"])
@@ -938,11 +975,13 @@ def test_docker_apply_stalwart(tmp_path, monkeypatch):
 def test_image_service_traefik_key_write():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
+
     svc = ImageService()
     svc.name = "myapp"
     traefik_config = {
@@ -955,9 +994,7 @@ def test_image_service_traefik_key_write():
                     "tls": {"certResolver": "le_resolver"},
                 }
             },
-            "services": {
-                "myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}
-            },
+            "services": {"myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}},
         }
     }
     config = {"traefik": traefik_config}
@@ -968,6 +1005,7 @@ def test_image_service_traefik_key_write():
     assert len(config_commands) == 1
     expected = yaml.dump(traefik_config, sort_keys=False, default_flow_style=False)
     import base64
+
     encoded = base64.b64encode(expected.encode()).decode()
     assert encoded in config_commands[0]
 
@@ -985,15 +1023,13 @@ def test_image_service_traefik_key_plan_drift():
                     "service": "myapp",
                 }
             },
-            "services": {
-                "myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}
-            },
+            "services": {"myapp": {"loadBalancer": {"servers": [{"url": "http://EU01_myapp:3000"}]}}},
         }
     }
 
     class MockSSHEmpty:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     class MockSSHMatching:
         def __init__(self):
@@ -1001,8 +1037,8 @@ def test_image_service_traefik_key_plan_drift():
 
         def run(self, command, hide=True, sudo=False):
             if "cat /var/lib/traefik/conf/myapp.yml" in command:
-                return type('R', (), {'stdout': self.desired, 'stderr': '', 'exited': 0})()
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+                return type("R", (), {"stdout": self.desired, "stderr": "", "exited": 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = ImageService()
     svc.name = "myapp"
@@ -1018,11 +1054,13 @@ def test_image_service_traefik_key_plan_drift():
 
 def test_image_service_traefik_key_no_config():
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
+
     svc = ImageService()
     svc.name = "myapp"
     written = svc._write_static_configs(MockSSH(), {})
@@ -1031,14 +1069,14 @@ def test_image_service_traefik_key_no_config():
 
 
 def test_traefik_service_writes_both_static_and_traefik():
-    import yaml
     from cstation.commands.docker.services.traefik import TraefikService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = TraefikService()
     config = {
@@ -1080,7 +1118,7 @@ def test_traefik_service_plans_both_static_and_traefik():
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = TraefikService()
     config = {
@@ -1115,6 +1153,7 @@ def test_traefik_service_plans_both_static_and_traefik():
 def test_image_service_command_field():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "myapp"
     config = {
@@ -1130,6 +1169,7 @@ def test_image_service_command_field():
 def test_image_service_command_absent():
     import yaml
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "myapp"
     config = {
@@ -1143,12 +1183,13 @@ def test_image_service_command_absent():
 
 def test_image_service_owner_chown():
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = ImageService()
     svc.name = "myapp"
@@ -1166,6 +1207,7 @@ def test_image_service_owner_chown():
 
 def test_image_service_owner_plan():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "myapp"
     config = {
@@ -1176,7 +1218,7 @@ def test_image_service_owner_plan():
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     actions = svc.plan(MockSSH(), config)
     chown_actions = [a for a in actions if "chown" in a and "2000:2000" in a]
@@ -1185,12 +1227,13 @@ def test_image_service_owner_plan():
 
 def test_image_service_no_owner():
     from cstation.commands.docker.services.image_service import ImageService
+
     recorded_commands = []
 
     class MockSSH:
         def run(self, command, hide=True, sudo=False):
             recorded_commands.append(command)
-            return type('R', (), {'stdout': '', 'stderr': '', 'exited': 0})()
+            return type("R", (), {"stdout": "", "stderr": "", "exited": 0})()
 
     svc = ImageService()
     svc.name = "myapp"
@@ -1206,6 +1249,7 @@ def test_image_service_no_owner():
 
 def test_image_service_subdirs_from_config():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "myapp"
     svc.subdirs = ["default_dir"]
@@ -1221,6 +1265,7 @@ def test_image_service_subdirs_from_config():
 
 def test_image_service_subdirs_fallback():
     from cstation.commands.docker.services.image_service import ImageService
+
     svc = ImageService()
     svc.name = "myapp"
     svc.subdirs = ["etc", "data"]
@@ -1233,6 +1278,7 @@ def test_image_service_subdirs_fallback():
 def test_traefik_compose_uses_self_name():
     import yaml
     from cstation.commands.docker.services.traefik import TraefikService
+
     svc = TraefikService()
     config = {
         "image": "traefik:latest",
@@ -1274,10 +1320,13 @@ def test_preflight_reads_network_from_vps_config(tmp_path, monkeypatch):
     r = runner.invoke(app, ["docker", "plan", str(vps_dir)])
     assert r.exit_code == 1
     assert "custom_net" in r.output.lower()
+
+
 def test_docker_apply_with_container_flag(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
     _mock_ssh_run(monkeypatch)
     import typer
+
     monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
 
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "--container", "traefik", "--yes"])
@@ -1289,6 +1338,7 @@ def test_docker_apply_with_short_c_flag(tmp_path, monkeypatch):
     vps_dir = _setup_vps_dir(tmp_path)
     _mock_ssh_run(monkeypatch)
     import typer
+
     monkeypatch.setattr(typer, "confirm", lambda *a, **kw: True)
 
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "-c", "traefik", "--yes"])

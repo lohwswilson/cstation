@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import yaml
-from typing import Any, Union, TYPE_CHECKING
+from typing import Union
 
 from rich.console import Console
 
@@ -70,8 +70,8 @@ class TraefikService(ImageService):
         cfg = _ensure_config(config)
         # 1. Explicit file mount for /etc/traefik/traefik.yml (US02-style)
         for volume in cfg.volumes:
-            if isinstance(volume, str) and ':' in volume:
-                host, cont = volume.split(':', 1)
+            if isinstance(volume, str) and ":" in volume:
+                host, cont = volume.split(":", 1)
                 if cont == "/etc/traefik/traefik.yml":
                     return host
 
@@ -110,7 +110,10 @@ class TraefikService(ImageService):
         if cfg.static_config:
             traefik_yml_path = self._resolve_traefik_yml_path(cfg)
             content = yaml.dump(cfg.static_config, sort_keys=False, default_flow_style=False)
-            ssh.run(f"bash -c 'test -d {traefik_yml_path} && rm -rf {traefik_yml_path}; cat > {traefik_yml_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'", sudo=True)
+            ssh.run(
+                f"bash -c 'test -d {traefik_yml_path} && rm -rf {traefik_yml_path}; cat > {traefik_yml_path} << \"CSCONFIG\"\n{content}\nCSCONFIG'",
+                sudo=True,
+            )
             console.print(f"  [green]✓[/green] wrote {traefik_yml_path}")
             written.append(traefik_yml_path)
         return written

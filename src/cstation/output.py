@@ -27,13 +27,13 @@ def print_formatted(
 ) -> None:
     """
     Print data according to the selected format.
-    
+
     If format is TABLE and a table_renderer callback is provided, table_renderer is executed.
     If format is JSON, data is dumped as formatted JSON.
     If format is YAML, data is dumped as formatted YAML.
     """
     fmt = OutputFormat(format_type) if isinstance(format_type, str) else format_type
-    
+
     if fmt == OutputFormat.JSON:
         print(json.dumps(data, indent=2, default=str))
     elif fmt == OutputFormat.YAML:

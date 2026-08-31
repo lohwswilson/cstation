@@ -27,16 +27,13 @@ from .commands.completion.main import completion_app
 def version_callback(value: bool):
     if value:
         from .commands.version.main import version
+
         version()
         raise typer.Exit()
 
 
 # Initialize main Typer app
-app = typer.Typer(
-    name="cstation",
-    help="Infrastructure Management CLI for DevOps",
-    invoke_without_command=True
-)
+app = typer.Typer(name="cstation", help="Infrastructure Management CLI for DevOps", invoke_without_command=True)
 
 # Add commands to the main app
 app.command()(version)

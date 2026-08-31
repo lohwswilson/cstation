@@ -20,11 +20,13 @@ def test_static_provider_list_vps_skips_non_static(tmp_path: Path, monkeypatch):
     vps_dir.mkdir(parents=True)
     cfg = vps_dir / "vps.yaml"
     cfg.write_text(
-        yaml.dump({
-            "apiVersion": "cstation/v1",
-            "kind": "VPS",
-            "identity": {"name": "hetzner-box", "stage": "prod", "region": "hel1", "provider": "hetzner"},
-        }),
+        yaml.dump(
+            {
+                "apiVersion": "cstation/v1",
+                "kind": "VPS",
+                "identity": {"name": "hetzner-box", "stage": "prod", "region": "hel1", "provider": "hetzner"},
+            }
+        ),
         encoding="utf-8",
     )
     p = StaticProvider()
@@ -38,12 +40,14 @@ def test_static_provider_list_vps_finds_static_entries(tmp_path: Path, monkeypat
     vps_dir.mkdir(parents=True)
     cfg = vps_dir / "vps.yaml"
     cfg.write_text(
-        yaml.dump({
-            "apiVersion": "cstation/v1",
-            "kind": "VPS",
-            "identity": {"name": "my-server", "stage": "prod", "region": "manual", "provider": "static"},
-            "access": {"host": "192.168.1.100", "user": "root", "port": 22},
-        }),
+        yaml.dump(
+            {
+                "apiVersion": "cstation/v1",
+                "kind": "VPS",
+                "identity": {"name": "my-server", "stage": "prod", "region": "manual", "provider": "static"},
+                "access": {"host": "192.168.1.100", "user": "root", "port": 22},
+            }
+        ),
         encoding="utf-8",
     )
     p = StaticProvider()
@@ -64,19 +68,23 @@ def test_static_provider_list_vps_multiple_servers(tmp_path: Path, monkeypatch):
         vps_dir.mkdir(parents=True)
         cfg = vps_dir / "vps.yaml"
         cfg.write_text(
-            yaml.dump({
-                "apiVersion": "cstation/v1",
-                "kind": "VPS",
-                "identity": {"name": name, "provider": "static"},
-                "access": {"host": host, "user": "admin", "port": 2222},
-            }),
+            yaml.dump(
+                {
+                    "apiVersion": "cstation/v1",
+                    "kind": "VPS",
+                    "identity": {"name": name, "provider": "static"},
+                    "access": {"host": host, "user": "admin", "port": 2222},
+                }
+            ),
             encoding="utf-8",
         )
 
     not_static_dir = tmp_path / "cstation" / "vps" / "hetzner-box"
     not_static_dir.mkdir(parents=True)
     (not_static_dir / "vps.yaml").write_text(
-        yaml.dump({"apiVersion": "cstation/v1", "kind": "VPS", "identity": {"name": "hetzner-box", "provider": "hetzner"}}),
+        yaml.dump(
+            {"apiVersion": "cstation/v1", "kind": "VPS", "identity": {"name": "hetzner-box", "provider": "hetzner"}}
+        ),
         encoding="utf-8",
     )
 
@@ -106,6 +114,7 @@ def test_static_provider_get_vps_by_name():
 
 def test_static_provider_cannot_create():
     from cstation.providers.errors import ProviderError
+
     p = StaticProvider()
     try:
         p.create_vps(name="x", region="y", server_type="z", image="w", ssh_keys=[])
@@ -116,6 +125,7 @@ def test_static_provider_cannot_create():
 
 def test_static_provider_cannot_delete():
     from cstation.providers.errors import ProviderError
+
     p = StaticProvider()
     try:
         p.delete_vps(id="1")
@@ -133,7 +143,14 @@ def test_static_provider_list_vps_ignores_malformed_yaml(tmp_path: Path, monkeyp
     good_dir = tmp_path / "cstation" / "vps" / "good"
     good_dir.mkdir(parents=True)
     (good_dir / "vps.yaml").write_text(
-        yaml.dump({"apiVersion": "cstation/v1", "kind": "VPS", "identity": {"name": "good", "provider": "static"}, "access": {"host": "10.0.0.1"}}),
+        yaml.dump(
+            {
+                "apiVersion": "cstation/v1",
+                "kind": "VPS",
+                "identity": {"name": "good", "provider": "static"},
+                "access": {"host": "10.0.0.1"},
+            }
+        ),
         encoding="utf-8",
     )
 

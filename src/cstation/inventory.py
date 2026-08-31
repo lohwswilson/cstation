@@ -14,10 +14,11 @@ from .config import get_config
 
 console = Console()
 
+
 class InventoryManager:
     """
     Manages host inventory stored in YAML format.
-    
+
     Expected format:
     groups:
       web:
@@ -34,46 +35,46 @@ class InventoryManager:
       web02:
         ansible_host: 192.168.1.11
     """
-    
+
     def __init__(self, inventory_path: Optional[str] = None):
         self.inventory_path = self._find_inventory(inventory_path)
         self.data = self._load_inventory()
-        
+
     def _find_inventory(self, provided_path: Optional[str]) -> Path:
         if provided_path:
             path = Path(provided_path)
             if path.exists():
                 return path
-        
+
         # Check config for inventory path
         config = get_config()
-        config_path = config.get_config_value('inventory.path')
+        config_path = config.get_config_value("inventory.path")
         if config_path:
             path = Path(config_path)
             if path.exists():
                 return path
-                
+
         # Search in standard paths
         search_paths = [
             Path.cwd() / "etc" / "inventory.yml",
             Path.cwd() / "etc" / "inventory.yaml",
             Path.home() / ".config" / "cstation" / "inventory.yml",
-            Path("/etc/cstation/inventory.yml")
+            Path("/etc/cstation/inventory.yml"),
         ]
-        
+
         for path in search_paths:
             if path.exists():
                 return path
-        
+
         # Return default path even if it doesn't exist
         return Path("/etc/cstation/inventory.yml")
 
     def _load_inventory(self) -> Dict[str, Any]:
         if not self.inventory_path.exists():
             return {"groups": {}, "hosts": {}}
-        
+
         try:
-            with open(self.inventory_path, 'r') as f:
+            with open(self.inventory_path, "r") as f:
                 return yaml.safe_load(f) or {"groups": {}, "hosts": {}}
         except Exception as e:
             console.print(f"[red]Error loading inventory {self.inventory_path}: {e}[/red]")
@@ -100,6 +101,7 @@ class InventoryManager:
 
     def host_exists(self, hostname: str) -> bool:
         return hostname in self.data.get("hosts", {})
+
 
 def get_inventory(inventory_path: Optional[str] = None) -> InventoryManager:
     return InventoryManager(inventory_path)

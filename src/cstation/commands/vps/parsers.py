@@ -35,12 +35,16 @@ def _detect_package_manager(ssh: SSHManager, os_id: str, results: Optional[dict[
         return "dnf"
     if os_id in ("alpine",):
         return "apk"
-    
+
     if results:
-        if results.get("pkg_apt"): return "apt"
-        if results.get("pkg_dnf"): return "dnf"
-        if results.get("pkg_yum"): return "yum"
-        if results.get("pkg_apk"): return "apk"
+        if results.get("pkg_apt"):
+            return "apt"
+        if results.get("pkg_dnf"):
+            return "dnf"
+        if results.get("pkg_yum"):
+            return "yum"
+        if results.get("pkg_apk"):
+            return "apk"
 
     if _first_line(ssh.run("command -v apt-get")):
         return "apt"
@@ -245,4 +249,3 @@ def _parse_ip_route(raw: str) -> list[dict[str, Any]]:
             pass
         result.append(entry)
     return result
-

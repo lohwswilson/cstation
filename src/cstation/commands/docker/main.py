@@ -19,6 +19,7 @@ from .services import TraefikService, PortainerService  # noqa: F401 — auto-re
 
 console = Console()
 
+
 class _CStationYamlDumper(yaml.SafeDumper):
     pass
 
@@ -44,6 +45,7 @@ def _discover_fragments(vps_dir: Path) -> list[Path]:
 
 def _load_fragments(vps_dir: Path, container_filter: Optional[str] = None) -> list[tuple[str, ContainerConfig, str]]:
     from pydantic import ValidationError
+
     fragments = []
     for frag_path in _discover_fragments(vps_dir):
         with frag_path.open("r", encoding="utf-8") as f:
@@ -53,13 +55,13 @@ def _load_fragments(vps_dir: Path, container_filter: Optional[str] = None) -> li
         kind = data.get("kind", "")
         if kind not in ("Container", "Stack"):
             continue
-        
+
         try:
             config = ContainerConfig(**data)
             name = config.name
             if container_filter and name != container_filter:
                 continue
-            
+
             status = "enabled" if config.enabled else "disabled"
             fragments.append((name, config, status))
         except ValidationError as e:
@@ -70,7 +72,7 @@ def _load_fragments(vps_dir: Path, container_filter: Optional[str] = None) -> li
                 console.print(f"  - [bold]{loc}[/bold]: {msg}")
             # Skip invalid fragments instead of crashing
             continue
-            
+
     return fragments
 
 
@@ -93,7 +95,7 @@ def _preflight_check(ssh: SSHManager, vps_data: VPSConfig) -> bool:
     networks = set()
     if result and getattr(result, "stdout", "").strip():
         networks = {line.strip() for line in result.stdout.strip().splitlines() if line.strip()}
-    
+
     required_network = vps_data.docker.networks[0] if vps_data.docker.networks else "PW_NET"
     if required_network not in networks:
         console.print(f"[red]✗[/red] Docker network {required_network} does not exist on the VPS.")
@@ -119,6 +121,7 @@ def _check_port_collisions(ssh: SSHManager, fragments: list[tuple[str, Container
 def _get_service_instance(name: str, kind: str, config: ContainerConfig | dict | None = None):
     if isinstance(config, dict):
         from .services.image_service import _ensure_config
+
         config = _ensure_config(config)
 
     try:
@@ -142,9 +145,11 @@ def _get_service_instance(name: str, kind: str, config: ContainerConfig | dict |
 
     if config and config.odoo_conf:
         from .services.odoo import OdooService
+
         svc = OdooService()
     else:
         from .services.image_service import ImageService
+
         svc = ImageService()
 
     svc.name = name
@@ -152,7 +157,9 @@ def _get_service_instance(name: str, kind: str, config: ContainerConfig | dict |
     return svc
 
 
-def _resolve_secrets(vps_name: str, fragments: list[tuple[str, ContainerConfig, str]]) -> list[tuple[str, ContainerConfig, str]]:
+def _resolve_secrets(
+    vps_name: str, fragments: list[tuple[str, ContainerConfig, str]]
+) -> list[tuple[str, ContainerConfig, str]]:
     resolved_fragments = []
     for name, config, status in fragments:
         if status == "enabled" and config.secrets:
@@ -168,7 +175,9 @@ def _resolve_secrets(vps_name: str, fragments: list[tuple[str, ContainerConfig, 
 @docker_app.command("plan")
 def docker_plan(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Plan a single container"),
+    container: Optional[str] = typer.Option(
+        None, "--container", "-c", "--service", "-s", help="Plan a single container"
+    ),
 ) -> None:
     """Dry-run: show what would change for container services."""
     vps_dir = _resolve_vps_dir(Path(vps))
@@ -195,9 +204,9 @@ def docker_plan(
         raise typer.Exit(1)
 
     for name, data, status in fragments:
-        if status == "enabled" and 'traefik' in name.lower():
+        if status == "enabled" and "traefik" in name.lower():
             svc = _get_service_instance(name, data.kind, data)
-            if hasattr(svc, '_resolve_and_cache_traefik_conf_dir'):
+            if hasattr(svc, "_resolve_and_cache_traefik_conf_dir"):
                 svc._resolve_and_cache_traefik_conf_dir(data)
             break
 
@@ -227,7 +236,9 @@ def docker_plan(
 @docker_app.command("apply")
 def docker_apply(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Deploy a single container"),
+    container: Optional[str] = typer.Option(
+        None, "--container", "-c", "--service", "-s", help="Deploy a single container"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     prune: bool = typer.Option(False, "--prune", help="Remove undeclared running containers"),
 ) -> None:
@@ -256,9 +267,9 @@ def docker_apply(
         raise typer.Exit(1)
 
     for name, data, status in fragments:
-        if status == "enabled" and 'traefik' in name.lower():
+        if status == "enabled" and "traefik" in name.lower():
             svc = _get_service_instance(name, data.kind, data)
-            if hasattr(svc, '_resolve_and_cache_traefik_conf_dir'):
+            if hasattr(svc, "_resolve_and_cache_traefik_conf_dir"):
                 svc._resolve_and_cache_traefik_conf_dir(data)
             break
 
@@ -292,7 +303,9 @@ def docker_apply(
 @docker_app.command("status")
 def docker_status(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
-    container: Optional[str] = typer.Option(None, "--container", "-c", "--service", "-s", help="Show a single container"),
+    container: Optional[str] = typer.Option(
+        None, "--container", "-c", "--service", "-s", help="Show a single container"
+    ),
     output: OutputFormat = typer.Option(
         OutputFormat.TABLE,
         "--output",
@@ -318,14 +331,16 @@ def docker_status(
             svc = _get_service_instance(name, kind, data)
             state_res = svc.status(ssh, data)
             state_val = state_res.get("state", "unknown") if isinstance(state_res, dict) else str(state_res)
-        
-        services_data.append({
-            "service": name,
-            "kind": kind,
-            "enabled": enabled,
-            "state": state_val,
-            "image": image,
-        })
+
+        services_data.append(
+            {
+                "service": name,
+                "kind": kind,
+                "enabled": enabled,
+                "state": state_val,
+                "image": image,
+            }
+        )
 
     def render_docker_table():
         table = Table(title=f"Docker Services: {vps_data.identity.name}")
@@ -349,6 +364,7 @@ def _import_single_container(
     force: bool = False,
 ) -> bool:
     import json as jsonlib
+
     result = ssh.run(f"docker inspect {container}", hide=True, sudo=True)
     if not result or not result.stdout.strip():
         console.print(f"[red]✗[/red] Could not find container '{container}'")
@@ -455,7 +471,9 @@ def docker_import(
                     skipped.append(c)
             console.print(f"\n[green]✓[/green] Imported [bold]{len(imported)}[/bold] container(s)")
             if skipped:
-                console.print(f"[yellow]⚠[/yellow] Skipped [bold]{len(skipped)}[/bold] (use --force to overwrite): {', '.join(skipped)}")
+                console.print(
+                    f"[yellow]⚠[/yellow] Skipped [bold]{len(skipped)}[/bold] (use --force to overwrite): {', '.join(skipped)}"
+                )
             return
 
         console.print("\n[bold]Running Containers:[/bold]")
@@ -485,6 +503,8 @@ def docker_callback(ctx: typer.Context) -> None:
 
 def rprint(help_text):
     console.print(help_text)
+
+
 def _remove_container_secrets(vps_name: str, container_name: str) -> bool:
     config_path = Path.home() / ".config" / "cstation" / "config.yaml"
     if not config_path.exists():
@@ -536,10 +556,14 @@ def _find_container_yaml(vps_dir: Path, container: str) -> Optional[Path]:
 def docker_remove(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     container: str = typer.Argument(..., help="Container service name to remove"),
-    volumes: bool = typer.Option(False, "--volumes", "-v", help="Also remove named volumes associated with the container stack"),
+    volumes: bool = typer.Option(
+        False, "--volumes", "-v", help="Also remove named volumes associated with the container stack"
+    ),
     purge_local: bool = typer.Option(True, "--purge-local/--keep-local", help="Delete local YAML configuration file"),
     archive_local: bool = typer.Option(False, "--archive", help="Rename local YAML to .disabled instead of deleting"),
-    clean_secrets: bool = typer.Option(True, "--clean-secrets/--keep-secrets", help="Purge container secrets from config.yaml"),
+    clean_secrets: bool = typer.Option(
+        True, "--clean-secrets/--keep-secrets", help="Purge container secrets from config.yaml"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show actions without executing"),
 ) -> None:
@@ -578,7 +602,9 @@ def docker_remove(
         return
 
     if not yes:
-        console.print(f"[yellow]⚠[/yellow] This will stop and remove container [bold]{container}[/bold] on remote VPS [bold]{identity_name}[/bold].")
+        console.print(
+            f"[yellow]⚠[/yellow] This will stop and remove container [bold]{container}[/bold] on remote VPS [bold]{identity_name}[/bold]."
+        )
         if volumes:
             console.print("  [bold red]WARNING: Remote volumes and data will also be purged (-v)![/bold red]")
         if yaml_file and purge_local:
@@ -586,7 +612,7 @@ def docker_remove(
                 console.print(f"  Local config will be archived to: [dim]{yaml_file.stem}.yaml.disabled[/dim]")
             else:
                 console.print(f"  Local config will be deleted: [dim]{yaml_file}[/dim]")
-        
+
         confirm = typer.confirm("\nProceed with removal?", default=False)
         if not confirm:
             console.print("[dim]Aborted.[/dim]")

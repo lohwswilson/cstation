@@ -19,8 +19,8 @@ from rich.table import Table
 
 from pydantic import ValidationError
 from cstation.config import get_config, CSTATION_DNS_DIR
-from cstation.models import DNSConfig, DNSRecordConfig
-from cstation.providers.cloudflare import CloudflareProvider, DNSRecord, DNSZone
+from cstation.models import DNSConfig
+from cstation.providers.cloudflare import CloudflareProvider, DNSRecord
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
 console = Console()
@@ -41,14 +41,14 @@ def _load_domain_config(domain: str) -> DNSConfig:
         console.print(f"[dim]Expected: {dns_file}[/dim]")
         console.print("[dim]Create it with kind: DNS and domain: <domain>[/dim]")
         raise typer.Exit(6)
-    
+
     with dns_file.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    
+
     if not isinstance(data, dict):
         console.print(f"[red]✗[/red] Invalid {dns_file}: expected mapping")
         raise typer.Exit(6)
-    
+
     try:
         config = DNSConfig(**data)
         if config.domain != domain:
@@ -98,23 +98,26 @@ def _dns_records_from_domain_config(config: DNSConfig) -> list[DNSRecord]:
     records = []
     for rec in config.records:
         full_name = _resolve_record_name(rec.name, domain)
-        records.append(DNSRecord(
-            domain=domain,
-            name=full_name,
-            type=rec.type,
-            content=rec.value,
-            ttl=rec.ttl,
-            priority=rec.priority,
-            proxied=rec.proxied,
-            comment=rec.comment,
-            srv_weight=rec.srv_weight,
-            srv_port=rec.srv_port,
-        ))
+        records.append(
+            DNSRecord(
+                domain=domain,
+                name=full_name,
+                type=rec.type,
+                content=rec.value,
+                ttl=rec.ttl,
+                priority=rec.priority,
+                proxied=rec.proxied,
+                comment=rec.comment,
+                srv_weight=rec.srv_weight,
+                srv_port=rec.srv_port,
+            )
+        )
     return records
 
 
 def _get_provider() -> CloudflareProvider:
     from cstation.commands.vps.main import _HttpClient
+
     config = get_config()
     config_data = config.config_data
     api_token = config_data.get("cloudflare", {}).get("api_token", "")
@@ -136,7 +139,9 @@ def _fmt_record(rec: DNSRecord) -> str:
     return f"{rec.type:6s} {name:40s} → {rec.content}{priority}{srv_info}  [dim](ttl={ttl}{proxied})[/dim]"
 
 
-def _compute_drift(local_records: list[DNSRecord], remote_records: list[DNSRecord]) -> tuple[list[DNSRecord], list[tuple[DNSRecord, DNSRecord]], list[DNSRecord]]:
+def _compute_drift(
+    local_records: list[DNSRecord], remote_records: list[DNSRecord]
+) -> tuple[list[DNSRecord], list[tuple[DNSRecord, DNSRecord]], list[DNSRecord]]:
     to_create: list[DNSRecord] = []
     to_update: list[tuple[DNSRecord, DNSRecord]] = []
     to_delete: list[DNSRecord] = []
@@ -158,10 +163,23 @@ def _compute_drift(local_records: list[DNSRecord], remote_records: list[DNSRecor
             to_create.append(r)
         else:
             content_match = r.content.strip().strip('"') == remote.content.strip().strip('"')
-            priority_match = (r.priority if r.priority is not None else 0) == (remote.priority if remote.priority is not None else 0)
-            weight_match = (r.srv_weight if r.srv_weight is not None else 0) == (remote.srv_weight if remote.srv_weight is not None else 0)
-            port_match = (r.srv_port if r.srv_port is not None else 0) == (remote.srv_port if remote.srv_port is not None else 0)
-            if not content_match or r.ttl != remote.ttl or r.proxied != remote.proxied or not priority_match or not weight_match or not port_match:
+            priority_match = (r.priority if r.priority is not None else 0) == (
+                remote.priority if remote.priority is not None else 0
+            )
+            weight_match = (r.srv_weight if r.srv_weight is not None else 0) == (
+                remote.srv_weight if remote.srv_weight is not None else 0
+            )
+            port_match = (r.srv_port if r.srv_port is not None else 0) == (
+                remote.srv_port if remote.srv_port is not None else 0
+            )
+            if (
+                not content_match
+                or r.ttl != remote.ttl
+                or r.proxied != remote.proxied
+                or not priority_match
+                or not weight_match
+                or not port_match
+            ):
                 to_update.append((r, remote))
 
     for r in remote_records:
@@ -210,7 +228,9 @@ def list_zones() -> None:
 
 @cloudflare_app.command("plan")
 def cloudflarePlan(
-    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to plan. Defaults to all domains in ~/.config/cstation/dns/"),
+    domains: Optional[list[str]] = typer.Argument(
+        None, help="Domain(s) to plan. Defaults to all domains in ~/.config/cstation/dns/"
+    ),
 ) -> None:
     """
     Dry-run: compare DNS config against Cloudflare and show drift.
@@ -230,7 +250,7 @@ def cloudflarePlan(
         return
 
     provider = _get_provider()
-    console.print(f"\n[bold]Cloudflare DNS Plan[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
+    console.print("\n[bold]Cloudflare DNS Plan[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
 
     zone_cache: dict[str, str] = {}
 
@@ -278,13 +298,17 @@ def cloudflarePlan(
     if total_changes == 0 and not all_to_delete:
         console.print("[green]✓[/green] All DNS records are up to date.")
     else:
-        console.print(f"[bold]Summary:[/bold] {len(all_to_create)} to create, {len(all_to_update)} to update, {len(all_to_delete)} unmanaged in Cloudflare")
+        console.print(
+            f"[bold]Summary:[/bold] {len(all_to_create)} to create, {len(all_to_update)} to update, {len(all_to_delete)} unmanaged in Cloudflare"
+        )
         console.print("[dim]Run 'cstation dns apply <domain>' to create/update records.[/dim]")
 
 
 @cloudflare_app.command("apply")
 def cloudflareApply(
-    domains: Optional[list[str]] = typer.Argument(None, help="Domain(s) to apply. Defaults to all domains in ~/.config/cstation/dns/"),
+    domains: Optional[list[str]] = typer.Argument(
+        None, help="Domain(s) to apply. Defaults to all domains in ~/.config/cstation/dns/"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
     delete: bool = typer.Option(False, "--delete", help="Delete remote records not in dns.yaml"),
 ) -> None:
@@ -307,7 +331,7 @@ def cloudflareApply(
         return
 
     provider = _get_provider()
-    console.print(f"\n[bold]Cloudflare DNS Apply[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
+    console.print("\n[bold]Cloudflare DNS Apply[/bold] [dim](~/.config/cstation/dns/)[/dim]\n")
 
     zone_cache: dict[str, str] = {}
 
@@ -397,5 +421,6 @@ def cloudflareApply(
 def cloudflare_callback(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         from rich import print as rprint
+
         rprint(ctx.get_help())
         raise typer.Exit(0)

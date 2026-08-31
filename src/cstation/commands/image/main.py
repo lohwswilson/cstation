@@ -144,7 +144,9 @@ def image_build(
     tag: str = typer.Option("latest", "--tag", "-t", help="Image tag"),
     platform: Optional[str] = typer.Option(None, "--platform", "-p", help="Override platforms (e.g. linux/arm64)"),
     push: bool = typer.Option(True, "--push/--no-push", help="Push after build"),
-    runtime: Optional[str] = typer.Option(None, "--runtime", help="Container runtime: docker or podman (auto-detected)"),
+    runtime: Optional[str] = typer.Option(
+        None, "--runtime", help="Container runtime: docker or podman (auto-detected)"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show command without executing"),
 ) -> None:
     """Build a Docker image from its declarative definition.
@@ -240,7 +242,7 @@ def _build_podman(config, build_dir, platforms, build_args_list, full_tag, push)
             console.print(f"[bold]Pushing[/bold] {full_tag} to docker.io")
             result = subprocess.run(["podman", "push", full_tag, f"docker.io/{full_tag}"])
             if result.returncode != 0:
-                console.print(f"[red]✗[/red] Push failed")
+                console.print("[red]✗[/red] Push failed")
                 raise typer.Exit(1)
 
     console.print(f"[green]✓[/green] Built{(' and pushed') if push else ''} {full_tag}")
@@ -303,20 +305,17 @@ def _build_docker(config, build_dir, platforms, build_args_list, full_tag, push)
         raise typer.Exit(1)
 
     if len(platforms) > 1:
-        cmd = ["docker", "buildx", "build",
-               "--platform", ",".join(platforms)]
+        cmd = ["docker", "buildx", "build", "--platform", ",".join(platforms)]
         cmd.extend(build_args_list)
         cmd.extend(["-t", full_tag])
         cmd.append("--push" if push else "--load")
         cmd.append(str(build_dir))
     elif push:
-        cmd = ["docker", "buildx", "build",
-               "--platform", platforms[0]]
+        cmd = ["docker", "buildx", "build", "--platform", platforms[0]]
         cmd.extend(build_args_list)
         cmd.extend(["-t", full_tag, "--push", str(build_dir)])
     else:
-        cmd = ["docker", "build",
-               "--platform", platforms[0]]
+        cmd = ["docker", "build", "--platform", platforms[0]]
         cmd.extend(build_args_list)
         cmd.extend(["-t", full_tag, str(build_dir)])
 
@@ -333,5 +332,6 @@ def _build_docker(config, build_dir, platforms, build_args_list, full_tag, push)
 def image_callback(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         from rich import print as rprint
+
         rprint(ctx.get_help())
         raise typer.Exit(0)

@@ -56,7 +56,7 @@ class HetznerProvider(VPSProvider):
             public_net = s.get("public_net") or {}
             ipv4 = (public_net.get("ipv4") or {}).get("ip")
             ipv6 = (public_net.get("ipv6") or {}).get("ip")
-            region = (((s.get("datacenter") or {}).get("location") or {}).get("name"))
+            region = ((s.get("datacenter") or {}).get("location") or {}).get("name")
 
             out.append(
                 VPS(
@@ -83,7 +83,7 @@ class HetznerProvider(VPSProvider):
             public_net = s.get("public_net") or {}
             ipv4 = (public_net.get("ipv4") or {}).get("ip")
             ipv6 = (public_net.get("ipv6") or {}).get("ip")
-            region = (((s.get("datacenter") or {}).get("location") or {}).get("name"))
+            region = ((s.get("datacenter") or {}).get("location") or {}).get("name")
 
             server_type = s.get("server_type") or {}
             vcpu = server_type.get("cores") if isinstance(server_type, dict) else None

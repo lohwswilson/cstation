@@ -75,7 +75,10 @@ EXCLUDED_ODOO_KEYS = {"db_password"}
 
 
 def _render_odoo_conf(odoo_conf: dict) -> str:
-    merged = {**ODOO_CONF_DEFAULTS, **{k: v for k, v in odoo_conf.items() if k not in EXCLUDED_ODOO_KEYS and not k.startswith("_")}}
+    merged = {
+        **ODOO_CONF_DEFAULTS,
+        **{k: v for k, v in odoo_conf.items() if k not in EXCLUDED_ODOO_KEYS and not k.startswith("_")},
+    }
     if "db_name" not in odoo_conf:
         merged["db_name"] = "False"
 
@@ -103,7 +106,6 @@ def _render_odoo_conf(odoo_conf: dict) -> str:
 
 
 class OdooService(ImageService):
-
     def _render_odoo_conf(self, config: Union[ContainerConfig, dict]) -> str | None:
         cfg = _ensure_config(config)
         if not cfg.odoo_conf:
@@ -153,7 +155,7 @@ class OdooService(ImageService):
         )
         escaped_sql = sql.replace("$$", "\\$\\$")
         ssh.run(
-            f"docker exec {db_container} psql -U postgres -c \"{escaped_sql}\"",
+            f'docker exec {db_container} psql -U postgres -c "{escaped_sql}"',
             sudo=True,
         )
         console.print(f"  [green]✓[/green] created DB user {db_user}")
@@ -231,8 +233,9 @@ class OdooService(ImageService):
             db_container = self._db_container(cfg)
             if db_container and db_user:
                 result = ssh.run(
-                    f'docker exec {db_container} psql -U postgres -c "SELECT 1 FROM pg_roles WHERE rolname=\'{db_user}\'" -t 2>/dev/null',
-                    hide=True, sudo=True,
+                    f"docker exec {db_container} psql -U postgres -c \"SELECT 1 FROM pg_roles WHERE rolname='{db_user}'\" -t 2>/dev/null",
+                    hide=True,
+                    sudo=True,
                 )
                 output = getattr(result, "stdout", "").strip() if result else ""
                 if "1" not in output:
@@ -243,8 +246,9 @@ class OdooService(ImageService):
                 db_container = self._db_container(cfg)
                 if db_container and dbname:
                     result = ssh.run(
-                        f'docker exec {db_container} psql -U postgres -c "SELECT 1 FROM pg_database WHERE datname=\'{dbname}\'" -t 2>/dev/null',
-                        hide=True, sudo=True,
+                        f"docker exec {db_container} psql -U postgres -c \"SELECT 1 FROM pg_database WHERE datname='{dbname}'\" -t 2>/dev/null",
+                        hide=True,
+                        sudo=True,
                     )
                     output = getattr(result, "stdout", "").strip() if result else ""
                     if "1" not in output:
@@ -292,7 +296,9 @@ class OdooService(ImageService):
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")
             elif cfg.secrets:
-                console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)")
+                console.print(
+                    f"  [green]✓[/green] wrote {self.env_path} (secrets template — set values in config.yaml)"
+                )
             else:
                 console.print(f"  [green]✓[/green] wrote {self.env_path}")
 
