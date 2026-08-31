@@ -90,12 +90,11 @@ cstation --help
 
 ```
 cstation
-├── vps          # VPS lifecycle (init, plan, apply, status, list, rm)
+├── vps          # VPS lifecycle (init, plan, apply, status, list, ssh, rm)
 ├── docker       # Declarative container stacks (plan, apply, status, import, rm)
-├── odoo         # Odoo workflows (sync, backup, restore)
+├── odoo         # Odoo workflows (sync, update, backup, restore)
 ├── image        # Docker image build & registry push (list, build)
 ├── dns          # DNS zone & record management (zones, plan, apply)
-├── auth         # Provider authentication (netcup login, logout, status)
 ├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
 ├── check        # Offline pre-flight linter & schema validator (alias: lint)
 ├── completion   # Shell auto-completion helpers (install, show)

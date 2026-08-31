@@ -12,11 +12,10 @@
 4. [`cstation odoo` - Odoo Application Workflows](#3-cstation-odoo)
 5. [`cstation image` - Docker Image Build & Push](#4-cstation-image)
 6. [`cstation dns` - DNS Zone & Record Management](#5-cstation-dns)
-7. [`cstation auth` - Provider Authentication](#6-cstation-auth)
-8. [`cstation github` - GitHub Repositories & SSH Keys](#7-cstation-github)
-9. [`cstation check` / `cstation lint` - Pre-Flight Schema Validator](#8-cstation-check--lint)
-10. [`cstation completion` - Shell Auto-Completion](#9-cstation-completion)
-11. [`cstation server` - Ansible & Server Playbooks](#10-cstation-server)
+7. [`cstation github` - GitHub Repositories & SSH Keys](#6-cstation-github)
+8. [`cstation check` / `cstation lint` - Pre-Flight Schema Validator](#7-cstation-check--lint)
+9. [`cstation completion` - Shell Auto-Completion](#8-cstation-completion)
+10. [`cstation server` - Ansible & Server Playbooks](#9-cstation-server)
 
 ---
 
@@ -241,34 +240,7 @@ cstation dns apply <zone-name> [OPTIONS]
 
 ---
 
-## 6. `cstation auth`
-
-Authentication management for external cloud providers.
-
-### `cstation auth netcup login`
-Initiate interactive OAuth2 device-flow authentication for Netcup Server Control Panel (SCP).
-
-```bash
-cstation auth netcup login
-```
-
-### `cstation auth netcup status`
-Check active Netcup SCP authentication credentials and token validity.
-
-```bash
-cstation auth netcup status
-```
-
-### `cstation auth netcup logout`
-Revoke and remove local Netcup SCP credentials.
-
-```bash
-cstation auth netcup logout
-```
-
----
-
-## 7. `cstation github`
+## 6. `cstation github`
 
 GitHub repository management, fork synchronization, and fast selective cloning.
 

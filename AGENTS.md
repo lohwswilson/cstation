@@ -22,15 +22,13 @@ Current groups (registered in `main.py`):
 
 | Group | Module | Purpose |
 |-------|--------|---------|
-| `vps` | `commands/vps/main.py` | VPS lifecycle (init / plan / apply / status / list) |
+| `vps` | `commands/vps/main.py` | VPS lifecycle (init / plan / apply / status / list / ssh) |
 | `docker` | `commands/docker/main.py` | Declarative container deployment |
 | `image` | `commands/image/main.py` | Multi-arch Docker image build & push |
 | `github` | `commands/github/main.py` | GitHub SSH-key & repo helpers (list / sync / clone) |
 | `dns` | `commands/dns/main.py` | DNS zone and record management |
 | `cloudflare` | `commands/cloudflare/main.py` | Cloudflare DNS adapter (legacy alias for `dns`) |
-| `auth` | `commands/auth/main.py` | Provider authentication management (`netcup`) |
-| `netcup` | `commands/netcup/main.py` | Netcup provider adapter (legacy alias for `auth netcup`) |
-| `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / sync) |
+| `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / update / sync) |
 | `server` | `commands/server/main.py` | Server subcommands (`ssh-setup`, `status`, `ls`, `rm`, `playbook`, `pw`) |
 
 **Adding a new command group**
