@@ -28,9 +28,9 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 | **Phase 4** | **Declarative Docker Engine** | Fragments, `ImageService`, `OdooService`, `TraefikService` | ✅ Complete | 2026-Q2 |
 | **Phase 5** | **Cloudflare DNS & Netcup Auth** | Declarative DNS drift detection, OAuth2 SCP auth | ✅ Complete | 2026-Q3 |
 | **Phase 6** | **Enterprise Odoo Pipelines** | Fast rsync delta sync, auto-backup extraction, restores | ✅ Complete | 2026-Q3 |
-| **Phase 7** | **Reliability & DB Hardening** | PostgreSQL collation self-healing, strict restore error traps | 🔄 Next | 2026-Q3 |
+| **Phase 7** | **CI/CD & Reliability Hardening** | GitHub Actions CI/CD workflow, PostgreSQL collation healing | 🔄 Active | 2026-Q3 |
 | **Phase 8** | **Developer Ergonomics & UX** | `vps ssh` shell, interactive backup picker, lazy loading | 🔄 Next | 2026-Q4 |
-| **Phase 9** | **Parallel Fleet Telemetry** | Multi-threaded fleet refresh (`ThreadPoolExecutor`), prune flags | 📅 Planned | 2026-Q4 |
+| **Phase 9** | **Parallel Fleet Telemetry** | Multi-threaded fleet refresh (`ThreadPoolExecutor`), backup prune | 📅 Planned | 2026-Q4 |
 | **Phase 10** | **Autonomous Health & Healing** | Real-time container health probes & webhook alerts | 📅 Planned | 2027-Q1 |
 | **Phase 11** | **Multi-Cloud Provisioning API** | Hetzner Cloud, Vultr, and Netcup server spin-up | 📅 Planned | 2027-Q1 |
 | **Phase 12** | **AI Agent Memory & Topology** | Hindsight memory bank integration for fleet topology | 📅 Planned | 2027-Q2 |
@@ -81,6 +81,8 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
   - Automatic database role creation with `CREATEDB` / superuser permissions.
 - [ ] **PostgreSQL Collation Self-Healing**:
   - Automated check and execution of `ALTER DATABASE template1 REFRESH COLLATION VERSION;` during PostgreSQL 18+ container deployment to prevent collation version mismatch errors.
+- [ ] **Pre-Flight Secret Verification in `cstation check`**:
+  - Cross-check declared `secrets:` in all container fragments against `~/.config/cstation/config.yaml` and warn on missing keys before deployment.
 - [ ] **Live Container Drift Detection**:
   - Compare running container image digest/tags against declared fragments in `docker plan`.
 - [ ] **Autonomous Health & Watchdog**:
@@ -100,11 +102,13 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
   - Automated database creation, collation verification, and `dump.sql` restore.
   - Complete filestore directory transfer with 256 checklist subdirectories.
   - Automatic ownership and permission assignment (`chown 101:101`, `chmod 755`).
+- [ ] **Direct Odoo Module Update Command (`cstation odoo update`)**:
+  - Run database module upgrades (`odoo -u <module> -d <db> --stop-after-init`) directly over SSH.
 - [ ] **Strict Exit Code Error Traps in `odoo_restore`**:
   - Explicit assertion on `psql` command execution codes to prevent silent restore errors.
 - [ ] **Interactive Backup Picker**:
   - Interactive selection menu when invoking `cstation odoo restore <vps> <container>` without a backup path argument.
-- [ ] **Automated Backup Pruning (`--keep <N>`)**:
+- [ ] **Automated Backup Pruning (`--keep <N>` / `--keep-days <N>`)**:
   - Retention policy parameter for `odoo backup` to prune archives older than N days / keep top N archives in `/var/lib/odoo/backups/`.
 - [ ] **Multi-Version Migration Tooling**:
   - Built-in Odoo database upgrade scripts across versions (13.0 -> 15.0 -> 18.0).
@@ -123,8 +127,12 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 
 ---
 
-### Track E: Tooling, Packaging & Developer Quality
+### Track E: CI/CD, Tooling & Developer Quality
 
+- [x] **Automated GitHub Actions CI/CD Pipeline**:
+  - Run all unit and integration tests automatically on every push and pull request via `.github/workflows/ci.yml`.
+- [ ] **Declarative Config Version Control (`cstation config sync`)**:
+  - Automated Git synchronization for `~/.config/cstation/` with `.gitignore` excluding `config.yaml`.
 - [ ] **Ruff Linter & Code Formatter**:
   - Configure `[tool.ruff]` in `pyproject.toml` for automated linting and formatting.
 - [ ] **Release v1.0.0 Packaging**:
@@ -141,10 +149,12 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 - Odoo backup, restore, and high-speed rsync sync.
 - Fast selective GitHub cloning (`--filter=blob:none`).
 - 244 automated unit and integration tests passing.
+- Automated GitHub Actions CI workflow.
 
 ### v1.1.0 (Upcoming Milestone)
 - PostgreSQL collation self-healing in `OdooService`.
-- Strict exit code verification in database restoration.
+- Pre-flight secret validation in `cstation check`.
+- Direct Odoo module update command (`cstation odoo update`).
 - `cstation vps ssh <host>` shortcut command.
 - Interactive backup file selector.
 - Ruff formatting & linting configuration.
