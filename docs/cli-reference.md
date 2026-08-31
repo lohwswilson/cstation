@@ -171,22 +171,25 @@ cstation odoo sync <host> <version> [OPTIONS]
 - `--dry-run, -n`: Show what would be transferred without modifying remote files.
 - `--verbose, -v`: Enable verbose transfer output.
 
-### `cstation odoo backup`
-Download the latest automated backup zip from a remote Odoo container to your local machine.
+#### `cstation odoo backup`
+Download the latest automated backup zip from a remote Odoo container to your local machine, with optional server-side retention pruning.
 
 ```bash
-cstation odoo backup <vps> <container> <dbname>
+cstation odoo backup <vps> <container> <dbname> [OPTIONS]
 ```
+- `--keep, -k INT`: Number of recent backup archives to retain in the remote container (automatically deletes older archives).
 - Automatically verifies internal `manifest.json` database metadata across timestamped archives.
 
 ### `cstation odoo restore`
-Restore an Odoo backup zip (PostgreSQL SQL dump + filestore) to a target remote VPS.
+Restore an Odoo backup zip (PostgreSQL SQL dump + filestore) to a target remote VPS. If `<backup_file.zip>` is omitted, CStation automatically scans the local directory and presents an interactive backup picker.
 
 ```bash
-cstation odoo restore <vps> <container> <backup_file.zip> [OPTIONS]
+cstation odoo restore <vps> <container> [backup_file.zip] [OPTIONS]
 ```
+- `[backup_file.zip]`: Local backup zip file path (optional; auto-prompts with available `.dump.zip` archives if omitted).
 - `--dest-db, -d TEXT`: Target database name (defaults to database name from manifest).
 - `--yes, -y`: Skip confirmation prompt.
+- Includes automatic PostgreSQL `template1` collation self-healing and strict error assertions.
 
 ---
 
@@ -267,17 +270,21 @@ Fetch upstream updates (e.g. `odoo/odoo`), merge changes, pull origin, and push 
 cstation github repo sync [REPO_NAME]
 ```
 
----
-
-## 8. `cstation check` / `lint`
-
-Offline pre-flight linter and schema validator.
-
-### `cstation check` (alias: `cstation lint`)
-Validates all local VPS YAML configurations, container fragments, port allocations, and secret bindings.
+### `cstation github ssh`
+Generate and install dedicated Ed25519 SSH deploy keys to target GitHub repositories.
 
 ```bash
-# Human-readable table
+cstation github ssh <repo-name>
+```
+
+---
+
+## 7. `cstation check` / `cstation lint`
+
+Offline pre-flight configuration linter, secret validator, and schema checker.
+
+```bash
+# Table format (default)
 cstation check
 
 # JSON output
