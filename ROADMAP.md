@@ -9,10 +9,10 @@ This document outlines the strategic roadmap, architectural evolution, and miles
 CStation is engineered as a **local-first DevOps operating system** designed to eliminate cloud vendor lock-in, streamline declarative infrastructure management, and provide high-speed (<100ms) fleet orchestration.
 
 ```
-       Phase 1-3              Phase 4-5               Phase 6-7              Phase 8+
+       Phase 1-3              Phase 4-6               Phase 7-9             Phase 10-12
  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
- │ VPS Lifecycle    │──▶│ Declarative      │──▶│ Odoo Enterprise  │──▶│ Autonomous Fleet │
- │ & Fact Caching   │   │ Containers & DNS │   │ Pipelines & Sync │   │ & Auto-Healing   │
+ │ VPS Lifecycle    │──▶│ Declarative      │──▶│ Enterprise Odoo, │──▶│ Autonomous Fleet,│
+ │ & Fact Caching   │   │ Containers & DNS │   │ Reliability & UX │   │ Multi-Cloud & AI │
  └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
 ```
 
@@ -22,16 +22,18 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 
 | Phase | Milestone | Focus Area | Status | Target / Completed |
 |---|---|---|---|---|
-| **Phase 1** | **Foundation & Architecture** | Python 3.13, Typer, Pydantic V2, Config Resolution | ✅ Complete | 2026-Q1 |
+| **Phase 1** | **Foundation & Architecture** | Python 3.13, Typer, Pydantic V2, Config Precedence | ✅ Complete | 2026-Q1 |
 | **Phase 2** | **High-Speed SSH & Facts** | `SSHManager`, `run_batch()`, `.facts.json` (<100ms) | ✅ Complete | 2026-Q2 |
 | **Phase 3** | **VPS 13-Phase Pipeline** | Idempotent OS setup, UFW, BBR tuning, Docker engine | ✅ Complete | 2026-Q2 |
 | **Phase 4** | **Declarative Docker Engine** | Fragments, `ImageService`, `OdooService`, `TraefikService` | ✅ Complete | 2026-Q2 |
 | **Phase 5** | **Cloudflare DNS & Netcup Auth** | Declarative DNS drift detection, OAuth2 SCP auth | ✅ Complete | 2026-Q3 |
-| **Phase 6** | **Enterprise Odoo Pipelines** | Fast rsync delta sync, auto-backup fetching, restores | ✅ Complete | 2026-Q3 |
-| **Phase 7** | **Multi-Arch Image Builder** | Podman/Docker manifest generation, multi-arch push | 🔄 Active | 2026-Q3 |
-| **Phase 8** | **Autonomous Health & Self-Healing** | Real-time container health probes & automated restarts | 📅 Planned | 2026-Q4 |
-| **Phase 9** | **Multi-Cloud Provisioning API** | Hetzner Cloud, Vultr, and Netcup server spin-up | 📅 Planned | 2027-Q1 |
-| **Phase 10** | **AI Agent Memory & Telemetry** | Hindsight memory bank integration for fleet topology | 📅 Planned | 2027-Q2 |
+| **Phase 6** | **Enterprise Odoo Pipelines** | Fast rsync delta sync, auto-backup extraction, restores | ✅ Complete | 2026-Q3 |
+| **Phase 7** | **Reliability & DB Hardening** | PostgreSQL collation self-healing, strict restore error traps | 🔄 Next | 2026-Q3 |
+| **Phase 8** | **Developer Ergonomics & UX** | `vps ssh` shell, interactive backup picker, lazy loading | 🔄 Next | 2026-Q4 |
+| **Phase 9** | **Parallel Fleet Telemetry** | Multi-threaded fleet refresh (`ThreadPoolExecutor`), prune flags | 📅 Planned | 2026-Q4 |
+| **Phase 10** | **Autonomous Health & Healing** | Real-time container health probes & webhook alerts | 📅 Planned | 2027-Q1 |
+| **Phase 11** | **Multi-Cloud Provisioning API** | Hetzner Cloud, Vultr, and Netcup server spin-up | 📅 Planned | 2027-Q1 |
+| **Phase 12** | **AI Agent Memory & Topology** | Hindsight memory bank integration for fleet topology | 📅 Planned | 2027-Q2 |
 
 ---
 
@@ -52,12 +54,18 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 - [x] **Sub-100ms Fact Caching**:
   - Single SSH round-trip execution using `==CS_SEP==` separator.
   - Local caching in `.facts.json` with timestamp invalidation.
+- [ ] **Interactive SSH Shell Shortcut (`cstation vps ssh <host>`)**:
+  - Direct TTY shell connection using parsed host, port, user, and SSH key from `vps.yaml`.
+- [ ] **Parallel Multi-Node Fleet Refresh**:
+  - Multi-threaded fact collection via `concurrent.futures.ThreadPoolExecutor(max_workers=8)` for live fleet refresh.
+- [ ] **Lazy Subcommand Loading**:
+  - Dynamic imports for subcommands to reduce CLI base startup latency from ~45ms to `<15ms`.
 - [ ] **Automated OS Upgrade Helper**:
   - Guided LTS upgrades (e.g. Ubuntu 24.04 -> 26.04) with preflight dependency checks.
 
 ---
 
-### Track B: Declarative Container Orchestration
+### Track B: Declarative Container Orchestration & Database Hardening
 
 - [x] **Declarative YAML Fragments**:
   - Service-specific inheritance (`ImageService`, `OdooService`, `TraefikService`).
@@ -71,12 +79,16 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 - [x] **PostgreSQL & Database Stacks**:
   - Support for `postgres:16`, `postgres:18`, and `pgvector/pgvector:pg18`.
   - Automatic database role creation with `CREATEDB` / superuser permissions.
-- [ ] **Auto-Healing & Watchdog**:
+- [ ] **PostgreSQL Collation Self-Healing**:
+  - Automated check and execution of `ALTER DATABASE template1 REFRESH COLLATION VERSION;` during PostgreSQL 18+ container deployment to prevent collation version mismatch errors.
+- [ ] **Live Container Drift Detection**:
+  - Compare running container image digest/tags against declared fragments in `docker plan`.
+- [ ] **Autonomous Health & Watchdog**:
   - Automated restart of unhealthy or restart-looping containers with alert webhooks.
 
 ---
 
-### Track C: Odoo Enterprise Workflows
+### Track C: Odoo Enterprise Workflows & Database Operations
 
 - [x] **Optimized Code Synchronization**:
   - Selective rsync syncing `PW.<version>` and `PW_ADDONS.<version>` to target VPS.
@@ -88,12 +100,18 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
   - Automated database creation, collation verification, and `dump.sql` restore.
   - Complete filestore directory transfer with 256 checklist subdirectories.
   - Automatic ownership and permission assignment (`chown 101:101`, `chmod 755`).
+- [ ] **Strict Exit Code Error Traps in `odoo_restore`**:
+  - Explicit assertion on `psql` command execution codes to prevent silent restore errors.
+- [ ] **Interactive Backup Picker**:
+  - Interactive selection menu when invoking `cstation odoo restore <vps> <container>` without a backup path argument.
+- [ ] **Automated Backup Pruning (`--keep <N>`)**:
+  - Retention policy parameter for `odoo backup` to prune archives older than N days / keep top N archives in `/var/lib/odoo/backups/`.
 - [ ] **Multi-Version Migration Tooling**:
   - Built-in Odoo database upgrade scripts across versions (13.0 -> 15.0 -> 18.0).
 
 ---
 
-### Track D: DNS & Cloud Integration
+### Track D: DNS & Multi-Cloud Provider Automation
 
 - [x] **Cloudflare DNS Management**:
   - Declarative DNS zone management in `~/.config/cstation/dns/`.
@@ -102,6 +120,15 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
   - OAuth2 device-flow authentication for Netcup SCP (`cstation auth netcup login`).
 - [ ] **Dynamic Multi-Cloud Provisioning**:
   - API provisioning adapters for Hetzner Cloud, Vultr, and Netcup to spin up new servers from scratch.
+
+---
+
+### Track E: Tooling, Packaging & Developer Quality
+
+- [ ] **Ruff Linter & Code Formatter**:
+  - Configure `[tool.ruff]` in `pyproject.toml` for automated linting and formatting.
+- [ ] **Release v1.0.0 Packaging**:
+  - Bump package version to `1.0.0` in `pyproject.toml`.
 
 ---
 
@@ -115,7 +142,15 @@ CStation is engineered as a **local-first DevOps operating system** designed to 
 - Fast selective GitHub cloning (`--filter=blob:none`).
 - 244 automated unit and integration tests passing.
 
-### v1.1.0 (Upcoming)
+### v1.1.0 (Upcoming Milestone)
+- PostgreSQL collation self-healing in `OdooService`.
+- Strict exit code verification in database restoration.
+- `cstation vps ssh <host>` shortcut command.
+- Interactive backup file selector.
+- Ruff formatting & linting configuration.
+
+### v1.2.0 (Fleet Scaling & Performance)
+- Multi-threaded parallel fleet refresh (`--parallel`).
+- Lazy subcommand loading for instant (<15ms) CLI startup.
+- Automated backup pruning (`--keep <N>`).
 - Autonomous container health monitoring and webhook notifications.
-- Interactive TUI (Text User Interface) for live multi-server fleet telemetry.
-- Automated database migration pipelines.
