@@ -169,13 +169,16 @@ def run_lint_checks() -> dict[str, Any]:
                     # Secret Reference Check
                     if c_config.secrets:
                         vps_secrets = get_vps_secrets(vps_name, c_name)
+                        if vps_config and vps_config.identity and vps_config.identity.name:
+                            vps_secrets = {**get_vps_secrets(vps_config.identity.name, c_name), **vps_secrets}
                         for secret_key in c_config.secrets:
-                            if secret_key not in vps_secrets and secret_key not in os.environ:
+                            val = vps_secrets.get(secret_key)
+                            if not val and secret_key not in os.environ:
                                 add_issue(
                                     vps_name,
-                                    "secret:unresolved",
+                                    "secret:missing",
                                     "WARNING",
-                                    f"Secret '{secret_key}' declared in container '{c_name}' not resolved in config.yaml secrets",
+                                    f"Required secret '{secret_key}' for container '{c_name}' is missing or empty in config.yaml",
                                     str(container_yaml),
                                 )
 
@@ -217,6 +220,22 @@ def run_lint_checks() -> dict[str, Any]:
                         add_issue(recipe_dir.name, "schema:image", "ERROR", f"Field '{field}': {err['msg']}", str(recipe_yaml))
                 except Exception as e:
                     add_issue(recipe_dir.name, "schema:image", "ERROR", f"Failed to parse image.yaml: {e}", str(recipe_yaml))
+
+    # 3. Check DNS Zones
+    dns_dir = CSTATION_DNS_DIR
+    if dns_dir.exists() and dns_dir.is_dir():
+        for dns_yaml in sorted(dns_dir.glob("*.yaml")):
+            results["total_checks"] += 1
+            domain_name = dns_yaml.stem
+            try:
+                raw_dns = yaml.safe_load(dns_yaml.read_text(encoding="utf-8")) or {}
+                DNSConfig.model_validate(raw_dns)
+            except ValidationError as e:
+                for err in e.errors():
+                    field = ".".join(str(loc) for loc in err["loc"])
+                    add_issue(domain_name, "schema:dns", "ERROR", f"Field '{field}': {err['msg']}", str(dns_yaml))
+            except Exception as e:
+                add_issue(domain_name, "schema:dns", "ERROR", f"Failed to parse DNS YAML '{domain_name}': {e}", str(dns_yaml))
 
     return results
 

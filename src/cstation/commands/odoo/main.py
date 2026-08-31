@@ -243,13 +243,23 @@ def odoo_restore(
     console.print(f"  [dim]Extracting backup on host...[/dim]")
     ssh.run(f"rm -rf {restore_dir}", sudo=True)
     ssh.run(f"mkdir -p {restore_dir}", sudo=True)
-    ssh.run(
+    extract_res = ssh.run(
         f"python3 -c \"import zipfile; zipfile.ZipFile('{host_tmp}').extractall('{restore_dir}')\"",
         sudo=True,
     )
     ssh.run(f"rm -f {host_tmp}", sudo=True)
+    if extract_res and getattr(extract_res, "exited", 0) != 0:
+        console.print(f"[red]✗[/red] Failed to extract backup on host: {getattr(extract_res, 'stderr', '')}")
+        raise typer.Exit(1)
 
     console.print(f"  [dim]Creating database {dest_dbname}...[/dim]")
+    # Auto-refresh template1 collation to avoid collation version mismatch errors on PG15+
+    ssh.run(
+        f"docker exec {db_container} psql -U postgres -d template1 -c \"ALTER DATABASE template1 REFRESH COLLATION VERSION;\" 2>/dev/null || true",
+        sudo=True,
+        hide=True,
+    )
+
     check_sql = f"SELECT 1 FROM pg_database WHERE datname='{dest_dbname}'"
     check_result = ssh.run(
         f"docker exec {db_container} psql -U postgres -t -c \"{check_sql}\" 2>/dev/null",
@@ -276,11 +286,14 @@ def odoo_restore(
             sudo=True,
         )
 
-    ssh.run(
+    create_res = ssh.run(
         f"docker exec {db_container} psql -U postgres -c"
         f" \"CREATE DATABASE \\\"{dest_dbname}\\\" OWNER \\\"{db_user}\\\";\"",
         sudo=True,
     )
+    if create_res and getattr(create_res, "exited", 0) != 0:
+        console.print(f"[red]✗[/red] Failed to create database {dest_dbname}: {getattr(create_res, 'stderr', '')}")
+        raise typer.Exit(1)
     console.print(f"  [green]✓[/green] Created database {dest_dbname}")
 
     if db_password:
@@ -307,12 +320,15 @@ def odoo_restore(
 
     console.print(f"  [dim]Restoring dump.sql into {dest_dbname}...[/dim]")
     dump_path = f"{restore_dir}/dump.sql"
-    ssh.run(
+    dump_res = ssh.run(
         f"docker exec -i {db_container} psql -U postgres -d {dest_dbname}"
         f" < {dump_path}",
         sudo=True,
         hide=True,
     )
+    if dump_res and getattr(dump_res, "exited", 0) != 0:
+        console.print(f"[red]✗[/red] Failed to restore dump.sql into database {dest_dbname}: {getattr(dump_res, 'stderr', '')}")
+        raise typer.Exit(1)
     console.print(f"  [green]✓[/green] Restored dump.sql into {dest_dbname}")
 
     console.print(f"  [dim]Reassigning table ownership to {db_user}...[/dim]")

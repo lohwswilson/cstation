@@ -167,6 +167,12 @@ class OdooService(ImageService):
         owner = cfg.odoo_db.get("owner", self._db_user(cfg)) if isinstance(cfg.odoo_db, dict) else self._db_user(cfg)
         if not db_container or not dbname:
             return
+        # Auto-refresh template1 collation to avoid version mismatch errors on PG15+
+        ssh.run(
+            f'docker exec {db_container} psql -U postgres -d template1 -c "ALTER DATABASE template1 REFRESH COLLATION VERSION;" 2>/dev/null || true',
+            sudo=True,
+            hide=True,
+        )
         ssh.run(
             f'docker exec {db_container} psql -U postgres -c "SELECT \'CREATE DATABASE \\"{dbname}\\" OWNER \\"{owner}\\"\' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname=\'{dbname}\')\\gexec"',
             sudo=True,

@@ -405,6 +405,8 @@ def test_create_db_database_command():
     db_cmds = [c for c in recorded_commands if "CREATE DATABASE" in c or "pg_database" in c]
     assert len(db_cmds) == 1
     assert "DEV8" in db_cmds[0]
+    collation_cmds = [c for c in recorded_commands if "REFRESH COLLATION VERSION" in c]
+    assert len(collation_cmds) == 1
 
 
 def test_create_db_database_skipped_when_absent():

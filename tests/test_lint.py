@@ -19,3 +19,21 @@ def test_run_lint_checks_passes():
     assert "total_checks" in results
     assert "issues" in results
     assert results["total_checks"] > 0
+    assert results["passed"] is True
+
+
+def test_run_lint_checks_flags_missing_secrets(tmp_path, monkeypatch):
+    from cstation.commands.lint import main as lint_mod
+    vps_dir = tmp_path / "vps" / "test.vps"
+    vps_dir.mkdir(parents=True)
+    (vps_dir / "vps.yaml").write_text("apiVersion: cstation/v1\nkind: VPS\nidentity:\n  name: test.vps\naccess:\n  host: 1.2.3.4\n")
+    (vps_dir / "app.yaml").write_text("apiVersion: cstation/v1\nkind: Container\nname: app\nimage: nginx\nsecrets:\n  - MISSING_SECRET_KEY\n")
+    monkeypatch.setattr(lint_mod, "CSTATION_VPS_DIR", tmp_path / "vps")
+    monkeypatch.setattr(lint_mod, "CSTATION_IMAGES_DIR", tmp_path / "images")
+    monkeypatch.setattr(lint_mod, "CSTATION_DNS_DIR", tmp_path / "dns")
+    monkeypatch.setattr(lint_mod, "get_vps_secrets", lambda vps, c: {})
+
+    results = lint_mod.run_lint_checks()
+    secret_issues = [i for i in results["issues"] if i["rule"] == "secret:missing"]
+    assert len(secret_issues) == 1
+    assert "MISSING_SECRET_KEY" in secret_issues[0]["message"]
