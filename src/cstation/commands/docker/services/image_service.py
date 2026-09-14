@@ -125,6 +125,12 @@ class ImageService:
         if cfg.labels:
             service_def["labels"] = cfg.labels
 
+        if getattr(cfg, "extra_hosts", None):
+            service_def["extra_hosts"] = cfg.extra_hosts
+
+        if getattr(cfg, "shm_size", None):
+            service_def["shm_size"] = cfg.shm_size
+
         service_def["networks"] = [network]
         compose = {
             "services": {self.name: service_def},

@@ -83,6 +83,8 @@ class ContainerConfig(BaseModel):
     env_file: Optional[str] = None
     networks: List[str] = Field(default_factory=list)
     labels: Dict[str, str] = Field(default_factory=dict)
+    extra_hosts: List[str] = Field(default_factory=list)
+    shm_size: Optional[str] = None
     command: Optional[Union[str, List[str]]] = None
     # Extra fields for orchestration and specialized services
     secrets: List[str] = Field(default_factory=list)

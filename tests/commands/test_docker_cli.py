@@ -1344,3 +1344,19 @@ def test_docker_apply_with_short_c_flag(tmp_path, monkeypatch):
     r = runner.invoke(app, ["docker", "apply", str(vps_dir), "-c", "traefik", "--yes"])
     assert r.exit_code == 0
     assert "traefik" in r.output.lower()
+
+
+def test_render_compose_shm_size():
+    from cstation.commands.docker.services.image_service import ImageService
+    from cstation.models import ContainerConfig
+
+    service = ImageService()
+    service.name = "test-db"
+    cfg = ContainerConfig(
+        name="test-db",
+        image="postgres:18",
+        shm_size="1g",
+    )
+    rendered = service._render_compose(cfg)
+    assert "shm_size: 1g" in rendered
+
