@@ -586,17 +586,25 @@ def _clone_repository_selective(
             ]
             result = subprocess.run(clone_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
-                # Fallback if specific branch name differs on remote
-                clone_fallback = [
-                    "git",
-                    "clone",
-                    "--depth=1",
-                    "--filter=blob:none",
-                    "--sparse",
-                    repo_url,
-                    temp_repo_path,
-                ]
-                result = subprocess.run(clone_fallback, capture_output=True, text=True, check=False)
+                if "Remote branch" in result.stderr:
+                    # Fallback if specific branch name differs on remote
+                    shutil.rmtree(temp_repo_path, ignore_errors=True)
+                    clone_fallback = [
+                        "git",
+                        "clone",
+                        "--depth=1",
+                        "--filter=blob:none",
+                        "--sparse",
+                        repo_url,
+                        temp_repo_path,
+                    ]
+                    result = subprocess.run(clone_fallback, capture_output=True, text=True, check=False)
+                elif "Failed to connect" in result.stderr or "could not resolve" in result.stderr.lower():
+                    # Retry once on transient network failure
+                    shutil.rmtree(temp_repo_path, ignore_errors=True)
+                    console.print(f"[yellow]Retrying clone for {repo_name} after network timeout...[/yellow]")
+                    result = subprocess.run(clone_cmd, capture_output=True, text=True, check=False)
+
                 if result.returncode != 0:
                     console.print(f"[red]Failed to clone repository {repo_name}:[/red]")
                     console.print(result.stderr)
@@ -606,9 +614,15 @@ def _clone_repository_selective(
             sparse_cmd = ["git", "-C", temp_repo_path, "sparse-checkout", "set"] + list(includes)
             result = subprocess.run(sparse_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
-                console.print(f"[red]Failed to configure sparse-checkout for {repo_name}:[/red]")
-                console.print(result.stderr)
-                return
+                # Retry once if promisor remote had a connection hiccup
+                if "Failed to connect" in result.stderr or "could not fetch" in result.stderr:
+                    console.print(f"[yellow]Retrying sparse-checkout for {repo_name}...[/yellow]")
+                    result = subprocess.run(sparse_cmd, capture_output=True, text=True, check=False)
+
+                if result.returncode != 0:
+                    console.print(f"[red]Failed to configure sparse-checkout for {repo_name}:[/red]")
+                    console.print(result.stderr)
+                    return
 
             # Step 3: Copy sparse-checked files to target location
             copied_items = []

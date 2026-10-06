@@ -24,8 +24,14 @@ if [ -n "$PASSWORD" ]; then
     check_config "db_password" "$PASSWORD"
 fi
 
+WAIT_ARGS=()
+if [ -n "$HOST" ] && [ "$HOST" != "False" ]; then WAIT_ARGS+=("--db_host" "$HOST"); fi
+if [ -n "$PORT" ] && [ "$PORT" != "False" ]; then WAIT_ARGS+=("--db_port" "$PORT"); fi
+if [ -n "$USER" ] && [ "$USER" != "False" ]; then WAIT_ARGS+=("--db_user" "$USER"); fi
+if [ -n "$PASSWORD" ]; then WAIT_ARGS+=("--db_password" "$PASSWORD"); fi
+
 if [ -f /usr/local/bin/wait-for-psql.py ] && [ -n "$HOST" ] && [ "$HOST" != "False" ]; then
-    python3 /usr/local/bin/wait-for-psql.py "${DB_ARGS[@]}" --timeout=15 || true
+    python3 /usr/local/bin/wait-for-psql.py "${WAIT_ARGS[@]}" --timeout=15 || true
 fi
 
 case "$1" in

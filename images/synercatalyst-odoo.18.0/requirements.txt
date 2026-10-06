@@ -137,8 +137,9 @@ botocore
 dropbox
 pyncclient
 nextcloud-api-wrapper
-paramiko
+paramiko<4.0.0
 pysftp
+pdfminer.six
 qifparse
 azure-storage-blob
 google-cloud-storage

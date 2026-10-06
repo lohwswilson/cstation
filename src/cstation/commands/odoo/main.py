@@ -318,6 +318,7 @@ def odoo_restore(
 
     if db_exists:
         console.print(f"  [yellow]⚠[/yellow] Database {dest_dbname} already exists. Dropping and recreating...")
+        ssh.run(f"docker stop {container} 2>/dev/null || true", sudo=True)
         ssh.run(
             f"docker exec {db_container} psql -U postgres -c"
             f' "REVOKE CONNECT ON DATABASE \\"{dest_dbname}\\" FROM PUBLIC;" 2>/dev/null',
@@ -325,11 +326,12 @@ def odoo_restore(
         )
         ssh.run(
             f"docker exec {db_container} psql -U postgres -c"
-            f' "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \\"{dest_dbname}\\";" 2>/dev/null',
+            f" \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{dest_dbname}';\" 2>/dev/null",
             sudo=True,
         )
         ssh.run(
-            f'docker exec {db_container} psql -U postgres -c "DROP DATABASE \\"{dest_dbname}\\";" 2>/dev/null',
+            f'docker exec {db_container} psql -U postgres -c "DROP DATABASE IF EXISTS \\"{dest_dbname}\\" WITH (FORCE);" 2>/dev/null'
+            f' || docker exec {db_container} psql -U postgres -c "DROP DATABASE IF EXISTS \\"{dest_dbname}\\";" 2>/dev/null',
             sudo=True,
         )
 
@@ -434,7 +436,10 @@ def odoo_restore(
 
     compose_path = f"/var/lib/{container}/docker-compose.yml"
     console.print(f"  [dim]Restarting {container}...[/dim]")
-    ssh.run(f"docker compose -f {compose_path} restart", sudo=True)
+    ssh.run(
+        f"test -f {compose_path} && (docker compose -f {compose_path} restart || docker compose -f {compose_path} up -d) || (docker restart {container} || docker start {container})",
+        sudo=True,
+    )
     console.print(f"  [green]✓[/green] Restarted {container}")
 
     console.print("\n[bold green]✓ Restore complete![/bold green]")
