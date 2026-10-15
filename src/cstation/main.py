@@ -12,6 +12,7 @@ from rich import print as rprint
 from .config import config_manager, initialize_configuration
 
 from .commands.version.main import version
+from .commands.update.main import update
 from .commands.github.main import github_app
 from .commands.docker.main import docker_app
 from .commands.vps.main import vps_app
@@ -37,6 +38,8 @@ app = typer.Typer(name="cstation", help="Infrastructure Management CLI for DevOp
 
 # Add commands to the main app
 app.command()(version)
+app.command()(update)
+app.command(name="self-update", hidden=True)(update)
 app.add_typer(github_app)
 app.add_typer(docker_app)
 app.add_typer(vps_app, name="vps")
