@@ -19,6 +19,7 @@ from .commands.vps.main import vps_app
 from .commands.dns.main import dns_app
 from .commands.cloudflare.main import cloudflare_app
 from .commands.odoo.main import odoo_app
+from .commands.hindsight.main import hindsight_app
 from .commands.image.main import image_app
 from .commands.server.main import server_app
 from .commands.lint.main import lint_app
@@ -46,6 +47,7 @@ app.add_typer(vps_app, name="vps")
 app.add_typer(dns_app)
 app.add_typer(cloudflare_app, hidden=True)  # legacy alias for dns
 app.add_typer(odoo_app)
+app.add_typer(hindsight_app)
 app.add_typer(image_app)
 app.add_typer(server_app)
 app.add_typer(lint_app)

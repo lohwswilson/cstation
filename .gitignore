@@ -23,3 +23,4 @@ htmlcov/
 
 # macOS
 .DS_Store
+*.code-workspace

@@ -29,6 +29,7 @@ Current groups (registered in `main.py`):
 | `dns` | `commands/dns/main.py` | DNS zone and record management |
 | `cloudflare` | `commands/cloudflare/main.py` | Cloudflare DNS adapter (legacy alias for `dns`) |
 | `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / update / sync) |
+| `hindsight` | `commands/hindsight/main.py` | Hindsight memory service (backup / status) |
 | `server` | `commands/server/main.py` | Server subcommands (`ssh-setup`, `status`, `ls`, `rm`, `playbook`, `pw`) |
 
 **Adding a new command group**
