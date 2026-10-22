@@ -99,7 +99,7 @@ def hindsight_backup(
             raise typer.Exit(1)
 
     for d in DEFAULT_BACKUP_DIRS:
-        res = ssh.run(f"ls -1t {d}/hindsight_*.dump 2>/dev/null | head -1", hide=True)
+        res = ssh.run(f"ls -1t {d}/hindsight_*.dump* 2>/dev/null | head -1", hide=True)
         if res and getattr(res, "stdout", "").strip():
             backup_path = res.stdout.strip()
             break
@@ -137,7 +137,7 @@ def hindsight_backup(
     console.print(f"  [green]✓[/green] Successfully saved: [bold]{local_file}[/bold] ({actual_str})")
 
     if keep and keep > 0:
-        local_dumps = sorted(local_dest.glob("hindsight_*.dump"), key=lambda f: f.stat().st_mtime, reverse=True)
+        local_dumps = sorted(local_dest.glob("hindsight_*.dump*"), key=lambda f: f.stat().st_mtime, reverse=True)
         if len(local_dumps) > keep:
             to_prune = local_dumps[keep:]
             console.print(f"  [dim]Pruning {len(to_prune)} older local backup(s) (keeping {keep})...[/dim]")
@@ -160,10 +160,10 @@ def hindsight_status(
 
     console.print(f"\n[bold]Hindsight Status: {identity_name}[/bold]\n")
 
-    res_ps = ssh.run("docker ps --filter 'ancestor=ghcr.io/vectorize-io/hindsight' --format '{{.Names}}|{{.Status}}|{{.Ports}}'", hide=True)
+    res_ps = ssh.run("docker ps --filter 'name=HINDSIGHT' --format '{{.Names}}|{{.Status}}|{{.Ports}}'", hide=True)
     container_info = res_ps.stdout.strip() if res_ps else ""
 
-    res_bk = ssh.run("ls -lh /root/backups/hindsight_*.dump 2>/dev/null | tail -1", hide=True)
+    res_bk = ssh.run("ls -lh /root/backups/hindsight_*.dump* 2>/dev/null | tail -1", hide=True)
     backup_info = res_bk.stdout.strip() if res_bk else "None found"
 
     table = Table(show_header=True, header_style="bold cyan")
