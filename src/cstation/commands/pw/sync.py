@@ -6,6 +6,7 @@ This module handles the actual file synchronization operations using subprocess
 calls to rsync, providing much better performance than Ansible for large file operations.
 """
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -40,6 +41,7 @@ class PWSync:
         host: str,
         version: str,
         port: int = 22,
+        module: Optional[str] = None,
         dry_run: bool = False,
         verbose: bool = False,
         exclude_cache: bool = True,
@@ -52,6 +54,7 @@ class PWSync:
             host: Target hostname
             version: PW version (e.g., "3.0")
             port: SSH port
+            module: Specific module name to sync (auto-discovers location)
             dry_run: If True, show what would be done without executing
             verbose: Enable verbose output
             exclude_cache: Exclude __pycache__ directories
@@ -61,6 +64,21 @@ class PWSync:
             bool: True if successful, False otherwise
         """
         try:
+            # Targeted single-module sync
+            if module:
+                source_addons_path = get_addons_path(version)
+                rel_path = self._find_module_path(source_addons_path, module)
+                if not rel_path:
+                    rprint(
+                        f"[red]Error:[/red] Module '{module}' not found anywhere in PW_ADDONS.{version} ({source_addons_path})"
+                    )
+                    return False
+
+                if verbose or dry_run:
+                    rprint(f"[green]✓[/green] Found module [bold]{module}[/bold] at [cyan]{rel_path}[/cyan]")
+
+                return self._sync_single_module_to_server(host, version, rel_path, port, dry_run, verbose)
+
             if progress:
                 task2 = progress.add_task("Syncing PW files to server...", total=None)
 
@@ -257,6 +275,74 @@ class PWSync:
 
         except Exception as e:
             rprint(f"[red]Error during PW_ADDONS sync:[/red] {str(e)}")
+            return False
+
+    def _find_module_path(self, addons_path: Path, module_name: str) -> Optional[Path]:
+        """Locate an Odoo module directory inside PW_ADDONS.
+
+        Searches top-level directories and categories (customers/, OCA/, SYC/,
+        ENTERPRISE/, themes/, perfectwork/) for a folder named module_name
+        containing __manifest__.py or __openerp__.py.
+        Returns the relative Path from addons_path (e.g. Path('customers/perfectwork_sg_be')).
+        """
+        if not addons_path.exists():
+            return None
+
+        # Check top-level subdirectories and categories
+        for entry in sorted(addons_path.iterdir()):
+            if not entry.is_dir() or entry.name.startswith("."):
+                continue
+            # Direct match at addons root
+            if entry.name == module_name and (
+                (entry / "__manifest__.py").exists() or (entry / "__openerp__.py").exists()
+            ):
+                return entry.relative_to(addons_path)
+            # Search within category directory (e.g. customers, OCA, SYC, etc.)
+            for root, dirs, files in os.walk(entry, followlinks=False):
+                if os.path.basename(root) == module_name:
+                    if "__manifest__.py" in files or "__openerp__.py" in files:
+                        return Path(root).relative_to(addons_path)
+        return None
+
+    def _sync_single_module_to_server(
+        self, host: str, version: str, module_rel_path: Path, port: int, dry_run: bool, verbose: bool
+    ) -> bool:
+        """Sync a single module from PW_ADDONS to remote server."""
+        source_addons_path = get_addons_path(version)
+        source_module_path = source_addons_path / module_rel_path
+
+        remote_host = get_remote_host(host)
+        remote_addons_dir = get_remote_addons_path(version)
+        remote_module_dir = f"{remote_addons_dir}/{module_rel_path}"
+        remote_parent_dir = str(Path(remote_module_dir).parent)
+
+        if not source_module_path.exists():
+            rprint(f"[red]Error:[/red] Module path {source_module_path} does not exist")
+            return False
+
+        # Ensure remote parent directory exists (e.g. /var/lib/perfectwork/PW_ADDONS.5.0/customers)
+        if not self._ensure_remote_dir(remote_host, remote_parent_dir, port, dry_run, verbose):
+            return False
+
+        # Build rsync command
+        rsync_cmd = get_rsync_command_base(port, dry_run)
+        rsync_cmd.insert(1, "--copy-links")
+        rsync_cmd.extend(["--exclude", ".git", "--exclude", "__pycache__"])
+        rsync_cmd.extend([f"{source_module_path}/", f"root@{remote_host}:{remote_module_dir}/"])
+
+        if verbose or dry_run:
+            rprint(f"[dim]Running: {' '.join(rsync_cmd)}[/dim]")
+
+        try:
+            result = subprocess.run(rsync_cmd, capture_output=True, text=True)
+            if verbose and result.stdout:
+                rprint(f"[dim]{result.stdout}[/dim]")
+            if result.returncode != 0:
+                rprint(f"[red]Error syncing module {module_rel_path}:[/red] {result.stderr}")
+                return False
+            return True
+        except Exception as e:
+            rprint(f"[red]Error during module sync:[/red] {str(e)}")
             return False
 
     def _cleanup_temp_files(self, version: str):

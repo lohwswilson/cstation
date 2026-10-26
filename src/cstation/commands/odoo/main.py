@@ -518,6 +518,9 @@ def odoo_update(
 def odoo_sync(
     host: str = typer.Argument(..., help="Target hostname (e.g. sg06)"),
     version: str = typer.Argument(..., help="PW version (e.g. 3.0, 18.0)"),
+    module: Optional[str] = typer.Option(
+        None, "--module", "-m", help="Specific module to sync (auto-discovers location across PW_ADDONS)"
+    ),
     port: int = typer.Option(22, "--port", "-p", help="SSH port"),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be synced without executing"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
@@ -531,13 +534,17 @@ def odoo_sync(
             host=host,
             version=version,
             port=port,
+            module=module,
             dry_run=dry_run,
             verbose=verbose,
             exclude_cache=True,
             progress=None,
         )
         if success:
-            console.print(f"[green]✓[/green] Synced PW.{version} and PW_ADDONS.{version} to {host}")
+            if module:
+                console.print(f"[green]✓[/green] Synced module [bold]{module}[/bold] in PW_ADDONS.{version} to {host}")
+            else:
+                console.print(f"[green]✓[/green] Synced PW.{version} and PW_ADDONS.{version} to {host}")
         else:
             console.print(f"[red]✗[/red] Sync failed for {host}")
             raise typer.Exit(1)
