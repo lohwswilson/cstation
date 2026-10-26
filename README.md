@@ -144,6 +144,9 @@ cstation docker apply sg01.synercatalyst.com --yes
 # Sync local PW.18.0 and addons to VPS via optimized rsync
 cstation odoo sync sg01 18.0
 
+# Sync a specific module only (auto-discovers location across PW_ADDONS in <1s)
+cstation odoo sync sg01 15.0 -m perfectwork_sg_be
+
 # Upgrade an Odoo database module directly over SSH
 cstation odoo update sg01 SG01_DEV5_SG01DB -d be5 -m perfectwork_sg_be
 
