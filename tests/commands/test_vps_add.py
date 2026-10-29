@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 
 from typer.testing import CliRunner
 import yaml
@@ -19,9 +20,10 @@ def _reset_config() -> None:
 def test_vps_add_help():
     r = CliRunner().invoke(app, ["vps", "add", "--help"])
     assert r.exit_code == 0
-    assert "--host" in r.output
-    assert "--skip-facts" in r.output
-    assert "--output" in r.output
+    clean_output = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", r.output)
+    assert "--host" in clean_output
+    assert "--skip-facts" in clean_output
+    assert "--output" in clean_output
 
 
 def test_vps_add_offline_creates_yaml(monkeypatch, tmp_path: Path):
