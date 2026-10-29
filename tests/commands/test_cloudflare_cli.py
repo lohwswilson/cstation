@@ -80,6 +80,17 @@ def test_cloudflare_zones_with_token(tmp_path, monkeypatch):
     assert "example.com" in r.output
     assert "ansis.com.sg" in r.output
 
+    with patch("cstation.commands.cloudflare.main.CloudflareProvider", return_value=mock_provider):
+        r_json = CliRunner().invoke(app, ["dns", "zones", "--output", "json"])
+    assert r_json.exit_code == 0
+    import json
+    data = json.loads(r_json.output)
+    assert len(data) == 2
+    assert data[0]["name"] == "example.com"
+    assert data[0]["id"] == "z1"
+    assert data[1]["name"] == "ansis.com.sg"
+    assert data[1]["id"] == "z2"
+
 
 def test_cloudflare_plan_with_records(tmp_path, monkeypatch):
     dns_dir = tmp_path / "home" / ".config" / "cstation" / "dns"

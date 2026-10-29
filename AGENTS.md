@@ -31,6 +31,9 @@ Current groups (registered in `main.py`):
 | `odoo` | `commands/odoo/main.py` | Odoo workflows (backup / restore / update / sync) |
 | `hindsight` | `commands/hindsight/main.py` | Hindsight memory service (backup / status) |
 | `server` | `commands/server/main.py` | Server subcommands (`ssh-setup`, `status`, `ls`, `rm`, `playbook`, `pw`) |
+| `tui` | `commands/tui/main.py` | Interactive TUI dashboard & command palette (aliases: `dashboard`, `ui`) |
+| `config` | `commands/config/main.py` | Configuration portability (export / import / path) |
+| `state` | `commands/state/main.py` | SQLite runtime state, operational audit log & resource metrics history |
 
 **Adding a new command group**
 
@@ -64,9 +67,11 @@ Source of truth: `~/.config/cstation/vps/`.
 |---------|-----------|
 | `vps list` | Lists VPS instances from configured cloud providers (`hetzner`/`vultr`/`netcup`) plus `static` config-dir entries, in parallel (cached facts only via `.facts.json` for `status`). |
 | `vps status <host>` | Shows live Load Avg, Memory, Disk, Docker stats. `--refresh` forces live collection. |
-| `vps init <host>` | Defaults to `static` provider; discovery via live SSH scan. |
+| `vps add [name]` | Add a new VPS interactively, via flags, offline (`--skip-facts`), or from cloud providers. |
+| `vps init <host>` | Legacy alias for `vps add`. |
 | `vps plan <host>` | Dry-run of `apply` — shows what would change. |
 | `vps apply <host>` | Executes the 12-phase setup pipeline over SSH. |
+| `vps remove <host>` / `vps rm` | Deletes local config directory (`~/.config/cstation/vps/<host>/`) and secrets. |
 
 ### `vps apply` phase order
 Phases run in this order (matches `vps/main.py:_apply_*` calls in `plan`/`apply`):
@@ -128,3 +133,29 @@ Full context: `docs/specs/2026-05-03-odoo-13-docker-image.md`.
 | `inspect.formatargspec` removed | Python 3.12+ | Use Ubuntu 22.04 (Python 3.10) |
 | `python3-vatnumber` missing | pip `vatnumber` uses `use_2to3` | Dummy deb via `equivs` |
 | `reportlab.graphics.barcode` missing | Minimal system package | Install `reportlab` via pip |
+
+## AI Agent JSON Tooling Contract
+`cstation` is designed to be seamlessly invoked as a CLI tool by autonomous coding agents (Hermes, Antigravity, Claude Code, cron fleets). When writing code or invoking CLI commands from subagents:
+
+1. **Structured Output First**:
+   - Always append `--output json` to inspection/read commands (`vps list`, `vps status`, `docker status`, `dns zones`, `dns records`, `hindsight status`, `state audit`, `state history`).
+   - The CLI guarantees that `--output json` outputs valid, machine-parseable JSON on stdout with zero ASCII banners, color codes, or human-oriented prefixes.
+   - Example agent call:
+     ```bash
+     cstation vps status prod-app --output json
+     cstation state audit --limit 50 --output json
+     ```
+
+2. **Non-Interactive Execution**:
+   - Mutating commands (`vps apply`, `docker apply`, `config import`) must never block on interactive confirmations in automated environments.
+   - Use `--force` for non-interactive config overwrites (e.g., `cstation config import backup.tar.gz --force`).
+   - Use dry-run modes (`cstation vps plan <vps>`, `cstation config import <file> --dry-run`) before destructive changes to inspect expected mutations.
+
+3. **Config vs. State Separation**:
+   - **Declarative Desired State (YAML)**: Config files reside in `~/.config/cstation/` (`vps/<host>/vps.yaml`, `vps/<host>/*.yaml`, `images/<name>/image.yaml`). Agents should read and edit these YAML files directly or bundle them via `cstation config export/import`.
+   - **Runtime Operational State (SQLite)**: Dynamic metrics, audit trails, and execution records reside in `~/.config/cstation/state.db`. Never edit this SQLite file directly; query it using `cstation state audit` and `cstation state history`.
+
+4. **Error Handling & Exit Codes**:
+   - `0`: Success.
+   - `1` or non-zero: Failure. Error descriptions are printed to stderr or formatted as JSON errors when `--output json` is supported.
+

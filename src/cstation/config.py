@@ -154,6 +154,7 @@ class _DynamicPath:
         return getattr(self._path, item)
 
 
+CSTATION_CONFIG_DIR: Path = _DynamicPath(get_cstation_config_dir)  # type: ignore[assignment]
 CSTATION_VPS_DIR: Path = _DynamicPath(get_vps_dir)  # type: ignore[assignment]
 CSTATION_DNS_DIR: Path = _DynamicPath(get_dns_dir)  # type: ignore[assignment]
 CSTATION_IMAGES_DIR: Path = _DynamicPath(get_images_dir)  # type: ignore[assignment]

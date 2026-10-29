@@ -5,7 +5,7 @@ Management, status, and backup workflows for self-hosted Hindsight memory servic
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -13,6 +13,7 @@ from rich.table import Table
 
 from cstation.config import CSTATION_VPS_DIR
 from cstation.commands.vps.main import _resolve_vps_dir, _load_vps_config, _ssh_from_config
+from cstation.output import OutputFormat, print_formatted
 
 console = Console()
 
@@ -151,6 +152,12 @@ def hindsight_backup(
 @hindsight_app.command("status")
 def hindsight_status(
     vps: str = typer.Argument(..., help="VPS name or directory (e.g. sg07 or sg07.ansis.com.sg)"),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
 ) -> None:
     """Inspect the running Hindsight container, API endpoints, and backup status on a VPS."""
     vps_dir = _find_vps_dir(vps)
@@ -158,27 +165,49 @@ def hindsight_status(
     identity_name = vps_data.identity.name
     ssh = _ssh_from_config(vps_data)
 
-    console.print(f"\n[bold]Hindsight Status: {identity_name}[/bold]\n")
-
     res_ps = ssh.run("docker ps --filter 'name=HINDSIGHT' --format '{{.Names}}|{{.Status}}|{{.Ports}}'", hide=True)
     container_info = res_ps.stdout.strip() if res_ps else ""
 
     res_bk = ssh.run("ls -lh /root/backups/hindsight_*.dump* 2>/dev/null | tail -1", hide=True)
     backup_info = res_bk.stdout.strip() if res_bk else "None found"
 
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Property", style="dim")
-    table.add_column("Value")
-
-    table.add_row("VPS Host", identity_name)
+    container_name = None
+    container_status = "stopped"
+    container_ports = ""
+    is_running = False
     if container_info:
         parts = container_info.split("|", 2)
-        table.add_row("Container", parts[0])
-        table.add_row("Status", f"[green]{parts[1]}[/green]")
+        container_name = parts[0]
+        container_status = parts[1]
+        is_running = "Up" in container_status
         if len(parts) > 2:
-            table.add_row("Ports", parts[2])
-    else:
-        table.add_row("Container", "[yellow]Not detected or stopped[/yellow]")
+            container_ports = parts[2]
 
-    table.add_row("Latest Remote Backup", backup_info)
-    console.print(table)
+    hindsight_data = {
+        "vps": identity_name,
+        "container": container_name,
+        "status": container_status,
+        "running": is_running,
+        "ports": container_ports,
+        "latest_backup": backup_info if backup_info != "None found" else None,
+    }
+
+    def render_table():
+        console.print(f"\n[bold]Hindsight Status: {identity_name}[/bold]\n")
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Property", style="dim")
+        table.add_column("Value")
+
+        table.add_row("VPS Host", identity_name)
+        if container_name:
+            table.add_row("Container", container_name)
+            table.add_row("Status", f"[green]{container_status}[/green]")
+            if container_ports:
+                table.add_row("Ports", container_ports)
+        else:
+            table.add_row("Container", "[yellow]Not detected or stopped[/yellow]")
+
+        table.add_row("Latest Remote Backup", backup_info)
+        console.print(table)
+
+    print_formatted(hindsight_data, format_type=output, table_renderer=render_table)

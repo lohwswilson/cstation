@@ -22,12 +22,14 @@ import yaml
 from pydantic import ValidationError
 from rich import print as rprint
 from rich.console import Console
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from cstation.config import get_config, CSTATION_VPS_DIR
 from cstation.ssh import SSHManager
 from cstation.models import VPSConfig
 from cstation.output import OutputFormat, print_formatted
+from cstation.state import record_audit
 from cstation.providers.hetzner import HetznerProvider
 from cstation.providers.vultr import VultrProvider
 from cstation.providers.static import StaticProvider
@@ -611,10 +613,16 @@ def vps_status(
             target_name = vps_data.identity.name
             host = vps_data.access.host
 
+            facts = None
+            is_cached = False
+            cached_at = None
+
             # Check for cache
             if not refresh:
                 cached_facts = load_cached_facts(vps_dir)
                 if cached_facts:
+                    facts = cached_facts
+                    is_cached = True
                     cached_at = cached_facts.get("_cached_at")
                     age_str = ""
                     if cached_at:
@@ -624,19 +632,47 @@ def vps_status(
                         else:
                             age_str = f"({age_sec // 60}m ago)"
 
-                    console.print(f"[dim]Using cached status for {target_name} {age_str}[/dim]")
-                    _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, cached_facts)
-                    return
+                    if output == OutputFormat.TABLE:
+                        console.print(f"[dim]Using cached status for {target_name} {age_str}[/dim]")
 
-            console.print(f"Connecting to [bold]{target_name}[/bold] via SSH ({host}) to collect live status...")
-            ssh = _ssh_from_config(vps_data)
-            facts = _collect_facts(ssh)
-            if not facts or not facts.get("os", {}).get("id"):
-                console.print("[yellow]⚠[/yellow] Failed to collect comprehensive facts. Check SSH connectivity.")
-            else:
-                save_cached_facts(vps_dir, facts)
+            if facts is None:
+                if output == OutputFormat.TABLE:
+                    console.print(f"Connecting to [bold]{target_name}[/bold] via SSH ({host}) to collect live status...")
+                ssh = _ssh_from_config(vps_data)
+                facts = _collect_facts(ssh)
+                if not facts or not facts.get("os", {}).get("id"):
+                    if output == OutputFormat.TABLE:
+                        console.print("[yellow]⚠[/yellow] Failed to collect comprehensive facts. Check SSH connectivity.")
+                else:
+                    save_cached_facts(vps_dir, facts)
 
-            _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, facts)
+            facts = facts or {}
+            status_data = {
+                "name": target_name,
+                "region": vps_data.identity.region,
+                "status": "running",
+                "ipv4": host,
+                "cached": is_cached,
+                "cached_at": cached_at,
+                "os": facts.get("os", {}),
+                "cpu": facts.get("cpu", {}),
+                "memory": facts.get("memory", {}),
+                "disks": facts.get("disks", []),
+                "disk_usage": facts.get("disk_usage", {}),
+                "docker_summary": facts.get("docker_summary", {}),
+                "load_avg": facts.get("load_avg"),
+                "uptime": facts.get("uptime"),
+                "facts": facts,
+            }
+            from cstation.state import record_vps_metrics
+            if facts:
+                record_vps_metrics(target_name, facts)
+
+            print_formatted(
+                status_data,
+                format_type=output,
+                table_renderer=lambda: _print_vps_live_status(target_name, vps_data.identity.region, {"host": host}, facts),
+            )
             return
         except Exception as e:
             # Fall through to provider logic as fallback
@@ -660,7 +696,24 @@ def vps_status(
     try:
         _, p = _provider(effective_provider, effective_account)
         v = p.get_vps(id=id_, name=name)
-        _print_vps_status_table(v)
+        v_dict = {
+            "id": v.id,
+            "name": v.name,
+            "region": v.region,
+            "status": getattr(v.status, "value", str(v.status)),
+            "ipv4": v.ipv4,
+            "ipv6": v.ipv6,
+            "vcpu": v.vcpu,
+            "memory_mb": v.memory_mb,
+            "disk_gb": v.disk_gb,
+            "bandwidth_gb": v.bandwidth_gb,
+            "plan": v.plan,
+        }
+        print_formatted(
+            v_dict,
+            format_type=output,
+            table_renderer=lambda: _print_vps_status_table(v),
+        )
     except ProviderNotFoundError as e:
         console.print(f"[red]✗[/red] {e}")
         console.print(
@@ -1112,94 +1165,120 @@ def _pick_best_ip(facts: dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-@vps_app.command("init")
-def vps_init(
-    target: str = typer.Argument(..., help="Target hostname/IP (e.g. sg01.com) or <provider>/<account>:<id>"),
-    stage: str = typer.Option("prod", "--stage"),
-    out: Optional[Path] = typer.Option(None, "--out", help="Output YAML path"),
-    force: bool = typer.Option(False, "--force", help="Overwrite existing output"),
-    user: str = typer.Option("root", "--user"),
-    port: int = typer.Option(22, "--port"),
-    key: Optional[Path] = typer.Option(None, "--key", help="SSH private key"),
+def _execute_vps_add(
+    target_or_name: str,
+    host: Optional[str] = None,
+    stage: str = "prod",
+    provider: str = "static",
+    region: Optional[str] = None,
+    user: str = "root",
+    port: int = 22,
+    key: Optional[Path] = None,
+    skip_facts: bool = False,
+    force: bool = False,
+    out: Optional[Path] = None,
+    output: str = "text",
+    interactive: bool = False,
 ) -> None:
-    """
-    Initialize a per-VPS config from provider metadata + SSH facts.
+    is_json = output in ("json", "yaml")
 
-    For servers with SSH access, simply provide the hostname or IP.
-    For cloud providers, use <provider>/<account>:<id>.
-
-    Examples:
-      cstation vps init sg01.synercatalyst.com --port 8288
-      cstation vps init 1.2.3.4
-      cstation vps init hetzner/ANSIS:123456
-    """
-    if "/" not in target:
-        # If no provider/ prefix is given, assume static provider
-        provider_name = "static"
+    if "/" not in target_or_name:
+        provider_name = provider
         account_name = "manual"
-        id_, name = None, target
+        resolved_name = target_or_name
+        resolved_region = region or ("unknown" if provider != "static" else "manual")
+        target_host = host or target_or_name
+        id_ = None
     else:
-        provider_name, rest = target.split("/", 1)
+        provider_name, rest = target_or_name.split("/", 1)
         account_name, raw_target = _split_account_target(rest)
         if account_name is None:
             raise typer.BadParameter("Target must include account: <provider>/<account>:<id>")
-        id_, name = _parse_target(raw_target)
-        if not id_ and not name:
+        id_, parsed_name = _parse_target(raw_target)
+        if not id_ and not parsed_name:
             raise typer.BadParameter("Target must include VPS id or name after <account>:")
+
+        try:
+            _, prov = _provider(provider_name, account_name)
+            vps = prov.get_vps(id=id_, name=parsed_name)
+        except ProviderNotFoundError as e:
+            if not is_json:
+                console.print(f"[red]✗[/red] {e}")
+            raise typer.Exit(3)
+        except ProviderAuthError as e:
+            if not is_json:
+                console.print(f"[red]✗[/red] {e}")
+            raise typer.Exit(2)
+        except ProviderError as e:
+            if not is_json:
+                console.print(f"[red]✗[/red] {e}")
+            raise typer.Exit(1)
+
+        resolved_name = vps.name
+        resolved_region = region or vps.region or "unknown"
+        target_host = host or vps.ipv4 or vps.ipv6
 
     output_path = out
     if output_path is not None and output_path.exists() and not force:
-        console.print(f"[red]✗[/red] Output path already exists: {output_path}")
+        if not is_json:
+            console.print(f"[red]✗[/red] Output path already exists: {output_path}")
         raise typer.Exit(5)
 
-    try:
-        _, provider = _provider(provider_name, account_name)
-        vps = provider.get_vps(id=id_, name=name)
-    except ProviderNotFoundError as e:
-        console.print(f"[red]✗[/red] {e}")
-        raise typer.Exit(3)
-    except ProviderAuthError as e:
-        console.print(f"[red]✗[/red] {e}")
-        raise typer.Exit(2)
-    except ProviderError as e:
-        console.print(f"[red]✗[/red] {e}")
-        raise typer.Exit(1)
-
-    resolved_name = vps.name
-    resolved_region = vps.region or "unknown"
     output_path = output_path or CSTATION_VPS_DIR / resolved_name / "vps.yaml"
 
     if output_path.exists() and not force:
-        console.print(f"[red]✗[/red] Output file already exists: {output_path}")
+        if not is_json:
+            console.print(f"[red]✗[/red] Output file already exists: {output_path}")
         raise typer.Exit(5)
 
-    host = vps.ipv4 or vps.ipv6
-    if not host:
-        console.print("[red]✗[/red] VPS has no reachable IP address")
+    if not target_host:
+        if not is_json:
+            console.print("[red]✗[/red] VPS has no reachable IP address")
         raise typer.Exit(4)
 
-    ssh = SSHManager(host=host, user=user, key_filename=str(key) if key else None, port=port)
-    facts = _collect_facts(ssh)
+    facts: dict[str, Any] = {}
+    probed = False
+    baseline_packages = ["fail2ban", "docker.io", "containerd", "ufw", "nftables"]
 
-    # Use the discovered public IP if we used a hostname for static provider
-    if provider_name == "static":
-        real_ip = _pick_best_ip(facts, host)
-        if real_ip != host:
-            console.print(f"  [dim]Discovered real IP: {real_ip}[/dim]")
-            host = real_ip
+    if not skip_facts:
+        try:
+            ssh = SSHManager(host=target_host, user=user, key_filename=str(key) if key else None, port=port)
+            facts = _collect_facts(ssh)
+            probed = True
 
-    # Build access dict, omitting null key
+            if provider_name == "static":
+                real_ip = _pick_best_ip(facts, target_host)
+                if real_ip != target_host:
+                    if not is_json:
+                        console.print(f"  [dim]Discovered real IP: {real_ip}[/dim]")
+                    target_host = real_ip
+
+            missing_packages = facts.get("packages", {}).get("missing", [])
+            baseline_packages = [p for p in missing_packages if p in ("fail2ban", "docker.io", "containerd", "ufw", "nftables")]
+        except Exception as e:
+            if interactive:
+                console.print(f"[yellow]⚠ SSH connection failed: {e}[/yellow]")
+                proceed = Confirm.ask("Create starter configuration anyway (offline)?", default=True)
+                if not proceed:
+                    raise typer.Exit(1)
+            elif force:
+                if not is_json:
+                    console.print(f"[yellow]⚠ SSH connection failed: {e}. Generating offline config (--force).[/yellow]")
+            else:
+                if is_json:
+                    print_formatted({"status": "error", "error": f"SSH connection failed: {e}"}, OutputFormat.JSON)
+                else:
+                    console.print(f"[red]✗ SSH connection failed:[/red] {e}")
+                    console.print("[dim]Use --skip-facts / --offline to generate config without SSH.[/dim]")
+                raise typer.Exit(4)
+
     access: dict[str, Any] = {
-        "host": host,
+        "host": target_host,
         "user": user,
         "port": port,
     }
     if key:
         access["key"] = str(key)
-
-    # os.baseline: suggest missing packages for install
-    missing_packages = facts.get("packages", {}).get("missing", [])
-    baseline_packages = [p for p in missing_packages if p in ("fail2ban", "docker.io", "containerd", "ufw", "nftables")]
 
     payload = {
         "apiVersion": "cstation/v1",
@@ -1216,7 +1295,7 @@ def vps_init(
             "baseline": {
                 "packages": baseline_packages,
                 "sshd": {"disable_password_auth": True},
-                "firewall": {"mode": "ufw", "allow": ["22/tcp"]},
+                "firewall": {"mode": "ufw", "allow": [f"{port}/tcp" if port != 22 else "22/tcp"]},
             }
         },
     }
@@ -1224,11 +1303,167 @@ def vps_init(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     clean_payload = _strip_nulls(payload)
 
-    # Overwrite if force or file doesn't exist (the existence check was done earlier)
     with output_path.open("w", encoding="utf-8") as f:
         yaml.dump(clean_payload, f, sort_keys=False, Dumper=_CStationYamlDumper)
 
-    console.print(f"[green]✓[/green] Wrote {output_path}")
+    record_audit(
+        command="vps add",
+        target=resolved_name,
+        status="success",
+        message=f"Added VPS {resolved_name} ({output_path}) host={target_host} user={user} port={port} probed={probed}",
+    )
+
+    if is_json:
+        res = {
+            "status": "created",
+            "name": resolved_name,
+            "path": str(output_path),
+            "host": target_host,
+            "user": user,
+            "port": port,
+            "stage": stage,
+            "provider": provider_name,
+            "region": resolved_region,
+            "probed": probed,
+        }
+        print_formatted(res, OutputFormat(output))
+    else:
+        console.print(f"[green]✓[/green] Wrote {output_path}")
+
+
+@vps_app.command("add")
+def vps_add(
+    name: Optional[str] = typer.Argument(
+        None,
+        help="VPS name or cloud target (e.g. 'prod-web-01' or 'hetzner/ANSIS:123456')",
+    ),
+    host: Optional[str] = typer.Option(
+        None, "--host", "-H", help="Target hostname or IP address (defaults to name for static servers)"
+    ),
+    stage: str = typer.Option("prod", "--stage", "-s", help="Environment stage: prod, staging, dev"),
+    provider: str = typer.Option("static", "--provider", "-p", help="Provider: static, hetzner, vultr, netcup"),
+    region: Optional[str] = typer.Option(None, "--region", "-r", help="Region (e.g. sin, fsn1, us-east)"),
+    user: str = typer.Option("root", "--user", "-u", help="SSH user"),
+    port: int = typer.Option(22, "--port", "-P", help="SSH port"),
+    key: Optional[Path] = typer.Option(None, "--key", "-k", help="SSH private key path"),
+    skip_facts: bool = typer.Option(
+        False,
+        "--skip-facts",
+        "--no-ssh",
+        "--offline",
+        help="Generate configuration without connecting to the remote server via SSH",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing output"),
+    out: Optional[Path] = typer.Option(None, "--out", help="Output YAML path"),
+    interactive: bool = typer.Option(
+        False, "--interactive", "-i", help="Run interactive configuration wizard"
+    ),
+    output: str = typer.Option("text", "--output", "-o", help="Output format: text, json, yaml"),
+) -> None:
+    """
+    Add a new VPS / remote server to CStation configuration.
+
+    Supports interactive wizard, declarative CLI flags, offline generation,
+    and cloud provider discovery.
+
+    Examples:
+      cstation vps add
+      cstation vps add prod-web-01 --host 107.155.65.47 --user root
+      cstation vps add staging-app --host 198.51.100.5 --skip-facts
+      cstation vps add hetzner/ANSIS:123456
+      cstation vps add prod-web-01 --host 107.155.65.47 --output json
+    """
+    if interactive or (name is None and os.isatty(0)):
+        console.print("[bold cyan]CStation VPS / Remote Server Configuration Wizard[/bold cyan]\n")
+        name = Prompt.ask("Server Name (e.g. prod-web-01, eu01.synercatalyst.com)", default=name or "")
+        if not name:
+            console.print("[red]✗ Server name cannot be empty.[/red]")
+            raise typer.Exit(1)
+
+        default_host = host or name
+        host = Prompt.ask("Host / IP Address", default=default_host)
+        user = Prompt.ask("SSH User", default=user)
+        port_str = Prompt.ask("SSH Port", default=str(port))
+        try:
+            port = int(port_str)
+        except ValueError:
+            port = 22
+
+        default_key_str = ""
+        if key:
+            default_key_str = str(key)
+        else:
+            for candidate in [Path.home() / ".ssh" / "id_ed25519", Path.home() / ".ssh" / "id_rsa"]:
+                if candidate.exists():
+                    default_key_str = str(candidate)
+                    break
+        key_input = Prompt.ask("SSH Private Key Path (optional)", default=default_key_str)
+        key = Path(key_input) if key_input.strip() else None
+
+        stage = Prompt.ask("Environment Stage", default=stage, choices=["prod", "staging", "dev"])
+        provider = Prompt.ask("Provider", default=provider, choices=["static", "hetzner", "vultr", "netcup"])
+
+        probe_now = Confirm.ask("Connect and probe via SSH now?", default=not skip_facts)
+        skip_facts = not probe_now
+
+    if not name:
+        console.print("[red]✗ Target name or --host is required. Pass a name or use --interactive.[/red]")
+        raise typer.BadParameter("Target name is required")
+
+    _execute_vps_add(
+        target_or_name=name,
+        host=host,
+        stage=stage,
+        provider=provider,
+        region=region,
+        user=user,
+        port=port,
+        key=key,
+        skip_facts=skip_facts,
+        force=force,
+        out=out,
+        output=output,
+        interactive=interactive,
+    )
+
+
+@vps_app.command("init")
+def vps_init(
+    target: str = typer.Argument(..., help="Target hostname/IP (e.g. sg01.com) or <provider>/<account>:<id>"),
+    stage: str = typer.Option("prod", "--stage"),
+    out: Optional[Path] = typer.Option(None, "--out", help="Output YAML path"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing output"),
+    user: str = typer.Option("root", "--user"),
+    port: int = typer.Option(22, "--port"),
+    key: Optional[Path] = typer.Option(None, "--key", help="SSH private key"),
+) -> None:
+    """
+    Initialize a per-VPS config from provider metadata + SSH facts.
+    (Legacy alias for 'cstation vps add')
+
+    For servers with SSH access, simply provide the hostname or IP.
+    For cloud providers, use <provider>/<account>:<id>.
+
+    Examples:
+      cstation vps init sg01.synercatalyst.com --port 8288
+      cstation vps init 1.2.3.4
+      cstation vps init hetzner/ANSIS:123456
+    """
+    _execute_vps_add(
+        target_or_name=target,
+        host=None,
+        stage=stage,
+        provider="static",
+        region=None,
+        user=user,
+        port=port,
+        key=key,
+        skip_facts=False,
+        force=force,
+        out=out,
+        output="text",
+        interactive=False,
+    )
 
 
 def _check_running_containers(ssh: SSHManager) -> list[str] | None:
@@ -1272,9 +1507,11 @@ def _remove_vps_secrets(vps_name: str) -> bool:
 def vps_remove(
     vps: str = typer.Argument(..., help="VPS name or directory path"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force removal (same as --yes)"),
     skip_check: bool = typer.Option(
         False, "--skip-check", help="Skip SSH container check (use if server is unreachable)"
     ),
+    output: str = typer.Option("text", "--output", "-o", help="Output format: text, json, yaml"),
 ) -> None:
     """
     Remove a VPS from local configuration: remove its config directory and secrets.
@@ -1286,16 +1523,22 @@ def vps_remove(
       cstation vps remove eu01.synercatalyst.com
       cstation vps remove ~/.config/cstation/vps/eu01.synercatalyst.com --yes
       cstation vps remove eu01.synercatalyst.com --skip-check
+      cstation vps remove eu01.synercatalyst.com --force --output json
     """
     vps_dir = _resolve_vps_dir(Path(vps))
     data = _load_vps_config(vps_dir)
     name = data.identity.name or vps_dir.name
 
-    console.print(f"\n[bold]VPS Remove: {name}[/bold]\n")
+    is_json = output in ("json", "yaml")
+    confirmed = yes or force
+
+    if not is_json:
+        console.print(f"\n[bold]VPS Remove: {name}[/bold]\n")
 
     containers_warning = None
-    if skip_check:
-        console.print("[dim]  Skipping container check (--skip-check).[/dim]")
+    if skip_check or is_json:
+        if not is_json:
+            console.print("[dim]  Skipping container check (--skip-check).[/dim]")
     else:
         try:
             ssh = _ssh_from_config(data)
@@ -1313,35 +1556,60 @@ def vps_remove(
             console.print("[dim]  Use --skip-check if the server is already unreachable.[/dim]")
 
     files_in_dir = list(vps_dir.iterdir()) if vps_dir.is_dir() else []
-    console.print("\n[red]This will permanently delete:[/red]")
-    console.print(f"  Config directory: {vps_dir}/")
-    for f in sorted(files_in_dir):
-        console.print(f"    {f.name}")
-    console.print(f"  Secrets: vps.secrets.{name} from ~/.config/cstation/config.yaml")
+    if not is_json:
+        console.print("\n[red]This will permanently delete:[/red]")
+        console.print(f"  Config directory: {vps_dir}/")
+        for f in sorted(files_in_dir):
+            console.print(f"    {f.name}")
+        console.print(f"  Secrets: vps.secrets.{name} from ~/.config/cstation/config.yaml")
 
-    if containers_warning:
-        console.print(f"\n[yellow]⚠ {len(containers_warning)} container(s) are still running on {name}.[/yellow]")
-        console.print(
-            "[yellow]Consider stopping them before removing, or use the provider console to destroy the VPS.[/yellow]"
-        )
+        if containers_warning:
+            console.print(f"\n[yellow]⚠ {len(containers_warning)} container(s) are still running on {name}.[/yellow]")
+            console.print(
+                "[yellow]Consider stopping them before removing, or use the provider console to destroy the VPS.[/yellow]"
+            )
 
-    if not yes:
+    if not confirmed:
+        if is_json:
+            print_formatted(
+                {"status": "error", "error": "Confirmation required. Pass --yes or --force for non-interactive execution."},
+                OutputFormat.JSON,
+            )
+            raise typer.Exit(1)
         confirm = typer.confirm("\nProceed with removal?", default=False)
         if not confirm:
             console.print("[dim]Aborted.[/dim]")
             raise typer.Exit(0)
 
     shutil.rmtree(vps_dir)
-    console.print(f"  [green]✓[/green] Deleted {vps_dir}/")
+    if not is_json:
+        console.print(f"  [green]✓[/green] Deleted {vps_dir}/")
 
     secrets_removed = _remove_vps_secrets(name)
-    if secrets_removed:
-        config_path = Path.home() / ".config" / "cstation" / "config.yaml"
-        console.print(f"  [green]✓[/green] Removed secrets from {config_path}")
-    else:
-        console.print(f"  [dim]No secrets found for {name} in config.yaml[/dim]")
+    if not is_json:
+        if secrets_removed:
+            config_path = Path.home() / ".config" / "cstation" / "config.yaml"
+            console.print(f"  [green]✓[/green] Removed secrets from {config_path}")
+        else:
+            console.print(f"  [dim]No secrets found for {name} in config.yaml[/dim]")
 
-    console.print(f"\n[green]✓[/green] Removed VPS [bold]{name}[/bold]")
+        console.print(f"\n[green]✓[/green] Removed VPS [bold]{name}[/bold]")
+
+    record_audit(
+        command="vps remove",
+        target=name,
+        status="success",
+        message=f"Removed VPS {name} ({vps_dir}) secrets_removed={secrets_removed}",
+    )
+
+    if is_json:
+        res = {
+            "status": "removed",
+            "vps": name,
+            "directory": str(vps_dir),
+            "secrets_removed": secrets_removed,
+        }
+        print_formatted(res, OutputFormat(output))
 
 
 @vps_app.command("ssh")
@@ -1376,8 +1644,8 @@ def vps_ssh(
     raise typer.Exit(ret)
 
 
-# Legacy alias for backward compatibility
-vps_app.command("remove", hidden=True)(vps_remove)
+# Official alias for vps rm
+vps_app.command("remove")(vps_remove)
 
 
 @vps_app.callback()

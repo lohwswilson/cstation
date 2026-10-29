@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from cstation.config import get_config, CSTATION_DNS_DIR
 from cstation.models import DNSConfig
 from cstation.providers.cloudflare import CloudflareProvider, DNSRecord
+from cstation.output import OutputFormat, print_formatted
 from cstation.providers.errors import ProviderAuthError, ProviderError, ProviderNotFoundError
 
 console = Console()
@@ -201,7 +202,14 @@ def _collect_records(domains: list[str]) -> list[DNSRecord]:
 
 
 @cloudflare_app.command("zones")
-def list_zones() -> None:
+def list_zones(
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "--output",
+        "-o",
+        help="Output format: table, json, or yaml",
+    ),
+) -> None:
     """List all Cloudflare DNS zones."""
     provider = _get_provider()
     try:
@@ -214,16 +222,31 @@ def list_zones() -> None:
         raise typer.Exit(1)
 
     if not zones:
-        console.print("[dim]No zones found.[/dim]")
+        if output == OutputFormat.TABLE:
+            console.print("[dim]No zones found.[/dim]")
+        else:
+            print_formatted([], format_type=output)
         return
 
-    table = Table(title="Cloudflare DNS Zones")
-    table.add_column("Name", style="bold")
-    table.add_column("Zone ID", style="dim")
-    table.add_column("Status")
-    for z in zones:
-        table.add_row(z.name, z.id, z.status)
-    console.print(table)
+    zones_data = [
+        {
+            "name": z.name,
+            "id": z.id,
+            "status": getattr(z, "status", "active"),
+        }
+        for z in zones
+    ]
+
+    def render_table():
+        table = Table(title="Cloudflare DNS Zones")
+        table.add_column("Name", style="bold")
+        table.add_column("Zone ID", style="dim")
+        table.add_column("Status")
+        for z in zones_data:
+            table.add_row(z["name"], z["id"], str(z["status"]))
+        console.print(table)
+
+    print_formatted(zones_data, format_type=output, table_renderer=render_table)
 
 
 @cloudflare_app.command("plan")

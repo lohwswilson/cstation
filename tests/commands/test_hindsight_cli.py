@@ -118,3 +118,13 @@ def test_hindsight_status_success(monkeypatch, tmp_path: Path):
     assert "SG07_HINDSIGHT_SG07DB" in r.output
     assert "Up 17 days" in r.output
     assert "42M" in r.output
+
+    r_json = CliRunner().invoke(app, ["hindsight", "status", str(vps_dir), "--output", "json"])
+    assert r_json.exit_code == 0
+    import json
+    data = json.loads(r_json.output)
+    assert data["container"] == "SG07_HINDSIGHT_SG07DB"
+    assert data["status"] == "Up 17 days"
+    assert data["running"] is True
+    assert "8888, 9999" in data["ports"]
+    assert "42M" in data["latest_backup"]

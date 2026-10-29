@@ -12,6 +12,7 @@ from .status import server_status
 from .ls import server_list
 from .playbook import playbook_app
 from .remove import server_remove
+from .add import server_add
 from ..pw.main import app as pw_app
 
 
@@ -19,12 +20,14 @@ from ..pw.main import app as pw_app
 server_app = typer.Typer(name="server", help="Remote server management", invoke_without_command=True)
 
 # Add commands to the app
+server_app.command("add")(server_add)
 server_app.command("ssh-setup")(setup_ssh)
 server_app.command("ssh", hidden=True)(setup_ssh)  # legacy alias
 server_app.command("status")(server_status)
 server_app.command("ls")(server_list)
 server_app.add_typer(playbook_app, name="playbook")
 server_app.command("rm")(server_remove)
+server_app.command("remove")(server_remove)
 server_app.add_typer(pw_app, name="pw")
 
 

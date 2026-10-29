@@ -164,6 +164,8 @@ def _resolve_secrets(
     for name, config, status in fragments:
         if status == "enabled" and config.secrets:
             secrets = get_vps_secrets(vps_name, name)
+            if not secrets and getattr(config, "container_name", None):
+                secrets = get_vps_secrets(vps_name, config.container_name)
             if secrets:
                 # Store resolved secrets for the apply/plan phase
                 # We use a custom attribute that won't interfere with Pydantic validation

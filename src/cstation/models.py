@@ -138,7 +138,7 @@ class DNSConfig(BaseModel):
 
 
 class GitHubRepoConfig(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", coerce_numbers_to_str=True)
     name: str
     description: str = ""
     branch: str = "main"

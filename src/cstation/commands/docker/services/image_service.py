@@ -177,8 +177,9 @@ class ImageService:
             traefik_conf_path = self._traefik_conf_path(cfg)
             content = yaml.dump(cfg.traefik, sort_keys=False, default_flow_style=False)
             encoded = base64.b64encode(content.encode()).decode()
+            sudo_prefix = "" if getattr(ssh, "host", "") in ("127.0.0.1", "localhost") else "sudo "
             ssh.run(
-                f"echo {encoded} | base64 -d | sudo tee {traefik_conf_path} > /dev/null",
+                f"echo {encoded} | base64 -d | {sudo_prefix}tee {traefik_conf_path} > /dev/null",
             )
             console.print(f"  [green]✓[/green] wrote {traefik_conf_path}")
             written.append(traefik_conf_path)
@@ -279,9 +280,10 @@ class ImageService:
             ssh.run(f"mkdir -p {d}", sudo=True)
             console.print(f"  [green]✓[/green] created directory {d}")
 
+        sudo_prefix = "" if getattr(ssh, "host", "") in ("127.0.0.1", "localhost") else "sudo "
         desired_compose = self._render_compose(cfg)
         encoded_compose = base64.b64encode(desired_compose.encode()).decode()
-        ssh.run(f"echo {encoded_compose} | base64 -d | sudo tee {self.compose_path} > /dev/null", sudo=True)
+        ssh.run(f"echo {encoded_compose} | base64 -d | {sudo_prefix}tee {self.compose_path} > /dev/null", sudo=True)
         console.print(f"  [green]✓[/green] wrote {self.compose_path}")
 
         desired_env = self._render_env(cfg)
@@ -289,7 +291,7 @@ class ImageService:
         desired_env = secrets_env if secrets_env is not None else desired_env
         if desired_env is not None:
             encoded_env = base64.b64encode(desired_env.encode()).decode()
-            ssh.run(f"echo {encoded_env} | base64 -d | sudo tee {self.env_path} > /dev/null", sudo=True)
+            ssh.run(f"echo {encoded_env} | base64 -d | {sudo_prefix}tee {self.env_path} > /dev/null", sudo=True)
             resolved = getattr(cfg, "_resolved_secrets", {})
             if resolved:
                 console.print(f"  [green]✓[/green] wrote {self.env_path} (secrets from config)")

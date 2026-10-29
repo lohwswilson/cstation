@@ -24,6 +24,9 @@ from .commands.image.main import image_app
 from .commands.server.main import server_app
 from .commands.lint.main import lint_app
 from .commands.completion.main import completion_app
+from .commands.tui.main import tui_app, run_tui
+from .commands.config.main import config_app
+from .commands.state.main import state_app
 
 
 def version_callback(value: bool):
@@ -52,6 +55,11 @@ app.add_typer(image_app)
 app.add_typer(server_app)
 app.add_typer(lint_app)
 app.add_typer(lint_app, name="check", hidden=True)
+app.add_typer(tui_app, name="tui")
+app.add_typer(tui_app, name="ui", hidden=True)
+app.command(name="dashboard", help="Interactive TUI dashboard with live VPS & container monitoring")(run_tui)
+app.add_typer(config_app, name="config")
+app.add_typer(state_app, name="state")
 app.add_typer(completion_app)
 
 

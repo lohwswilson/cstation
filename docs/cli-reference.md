@@ -16,6 +16,10 @@
 8. [`cstation check` / `cstation lint` - Pre-Flight Schema Validator](#7-cstation-check--lint)
 9. [`cstation completion` - Shell Auto-Completion](#8-cstation-completion)
 10. [`cstation server` - Ansible & Server Playbooks](#9-cstation-server)
+11. [`cstation tui` / `dashboard` - Interactive TUI & Command Palette](#11-cstation-tui--dashboard)
+12. [`cstation config` - Configuration Portability & Migration](#12-cstation-config)
+13. [`cstation state` - SQLite Runtime State, Audit & Metrics](#13-cstation-state)
+14. [`cstation hindsight` - Hindsight AI Memory Service](#14-cstation-hindsight)
 
 ---
 
@@ -43,26 +47,60 @@ List all managed VPS instances with live or cached health metrics (load average,
 cstation vps list [OPTIONS]
 ```
 - `--refresh, -r`: Force live SSH connection and bypass `.facts.json` cache.
-- `--filter, -f TEXT`: Filter VPS instances by name, provider, or stage.
+- `--output, -o [table|json|yaml]`: Output format (default: `table`). Use `json` for AI agents.
 
 ### `cstation vps status`
-Show an interactive rich status dashboard for a specific VPS instance.
+Show detailed live or cached status for a specific VPS instance.
 
 ```bash
 cstation vps status <vps-name-or-path> [OPTIONS]
 ```
 - `--refresh, -r`: Fetch live metrics instead of using cached facts.
+- `--output, -o [table|json|yaml]`: Output format (default: `table`). Use `json` for AI agents.
+
+### `cstation vps add`
+Add a new VPS / remote server to CStation configuration. Supports interactive configuration wizards, declarative CLI flags, offline generation, and cloud provider discovery.
+
+```bash
+# Interactive configuration wizard
+cstation vps add
+
+# Declarative non-interactive declaration
+cstation vps add prod-web-01 --host 107.155.65.47 --user root --port 22 --key ~/.ssh/id_ed25519 --stage prod
+
+# Offline generation (no live SSH connection required)
+cstation vps add staging-app --host 198.51.100.5 --skip-facts
+
+# Cloud provider discovery (Hetzner, Vultr, Netcup)
+cstation vps add hetzner/ANSIS:123456
+
+# Machine-readable JSON output
+cstation vps add prod-web-01 --host 107.155.65.47 --skip-facts --output json
+```
+- `[name]`: VPS identifier or cloud target (`<provider>/<account>:<id>`).
+- `--host, -H TEXT`: Target hostname or IP address (defaults to name for static hosts).
+- `--stage, -s [prod|staging|dev]`: Environment stage (default: `prod`).
+- `--provider, -p [static|hetzner|vultr|netcup]`: Provider type (default: `static`).
+- `--region, -r TEXT`: Server region code (e.g. `sin`, `fsn1`, `us-east`).
+- `--user, -u TEXT`: SSH user (default: `root`).
+- `--port, -P INT`: SSH port (default: `22`).
+- `--key, -k PATH`: Path to private SSH key.
+- `--skip-facts, --no-ssh, --offline`: Generate configuration without connecting to the remote host via SSH.
+- `--force, -f`: Overwrite existing configuration if it already exists.
+- `--out PATH`: Custom output YAML file path.
+- `--interactive, -i`: Force interactive wizard.
+- `--output, -o [text|json|yaml]`: Output format (default: `text`). Use `json` for AI agents.
 
 ### `cstation vps init`
-Initialize a new local VPS configuration by scanning a remote server via SSH (or cloud API).
+Initialize a new local VPS configuration by scanning a remote server via SSH (or cloud API). Legacy alias for `cstation vps add`.
 
 ```bash
 cstation vps init <target> [OPTIONS]
 ```
 - `<target>`: Server identifier (e.g. `sg01.synercatalyst.com` for static SSH, or `hetzner/ANSIS:123456`).
-- `--port, -p INT`: SSH port (default: 22).
-- `--user, -u TEXT`: SSH user (default: root).
-- `--key, -k PATH`: Path to private SSH key.
+- `--port INT`: SSH port (default: 22).
+- `--user TEXT`: SSH user (default: root).
+- `--key PATH`: Path to private SSH key.
 - `--force`: Overwrite existing local configuration directory.
 
 ### `cstation vps plan`
@@ -91,13 +129,25 @@ cstation vps ssh <vps-name-or-path>
 cstation vps ssh <vps-name-or-path> htop
 ```
 
-### `cstation vps rm`
-Delete a local VPS configuration directory.
+### `cstation vps remove` / `cstation vps rm`
+Delete a local VPS configuration directory (`~/.config/cstation/vps/<name>/`) and purge associated credentials from `config.yaml`.
 
 ```bash
-cstation vps rm <vps-name-or-path> [OPTIONS]
+# Interactive prompt (checks for running Docker containers first)
+cstation vps remove <vps-name-or-path>
+
+# Non-interactive / Scripted deletion
+cstation vps remove <vps-name-or-path> --yes
+
+# Offline deletion (bypass SSH container verification)
+cstation vps remove <vps-name-or-path> --yes --skip-check
+
+# Machine-readable JSON output
+cstation vps remove <vps-name-or-path> --force --output json
 ```
-- `--force, -f`: Remove without confirmation.
+- `--yes, -y` / `--force, -f`: Remove without interactive confirmation.
+- `--skip-check`: Skip checking remote Docker containers before removal.
+- `--output, -o [text|json|yaml]`: Output format (default: `text`). Use `json` for AI agents.
 
 ---
 
@@ -119,8 +169,9 @@ cstation docker import <vps> [CONTAINER] [OPTIONS]
 Display running state vs declared state of all managed containers on the VPS.
 
 ```bash
-cstation docker status <vps>
+cstation docker status <vps> [OPTIONS]
 ```
+- `--output, -o [table|json|yaml]`: Output format (default: `table`). Use `json` for AI agents.
 
 ### `cstation docker plan`
 Dry-run container configurations and preview compose changes.
@@ -223,8 +274,9 @@ Declarative DNS zone and record management via Cloudflare API.
 List all active DNS zones accessible via configured Cloudflare credentials.
 
 ```bash
-cstation dns zones
+cstation dns zones [OPTIONS]
 ```
+- `--output, -o [table|json|yaml]`: Output format (default: `table`). Use `json` for AI agents.
 
 ### `cstation dns plan`
 Dry-run DNS record differences between local YAML definitions and Cloudflare live records.
@@ -318,10 +370,149 @@ cstation completion show zsh
 
 ## 10. `cstation server`
 
-Ansible playbook execution and server management tools.
+Ansible playbook execution and server inventory management.
 
 ```bash
+# Add a server to Ansible inventory
+cstation server add prod-db --host 10.0.0.5 --group databases
+
+# Remove a server from Ansible inventory
+cstation server remove prod-db --force
+
+# SSH key authentication setup
 cstation server ssh-setup <host>
+
+# Check server status via Ansible
 cstation server status <host>
+
+# Run Ansible playbooks
 cstation server playbook <playbook.yml> <host>
+```
+
+---
+
+## 11. `cstation tui` / `dashboard`
+
+Interactive Terminal User Interface (TUI) dashboard with live VPS fleet health metrics, container stacks table, real-time execution logs, and a fuzzy Command Palette.
+
+### Command Aliases
+```bash
+cstation tui
+cstation dashboard
+cstation ui
+```
+
+### Controls & Keybindings
+* **`Ctrl + P`**: Open fuzzy Command Palette. Search across all VPS, Docker, Odoo, Hindsight, DNS, Config, State, and Image actions.
+* **`:` (Colon)**: Open the interactive command runner bar at the bottom. Run server-aware commands (`uptime`, `free`, `df -h`, `docker ps`) or full CStation CLI commands (`vps apply`, `docker apply`, `state audit`).
+* **`u`**: Instantly query live `uptime`, memory, and root disk usage on the selected VPS over SSH.
+* **`s`**: Open a direct full interactive TTY SSH session on the selected VPS (temporarily suspends TUI and resumes automatically upon exit).
+* **`Up` / `Down` / `j` / `k`**: Navigate between VPS nodes in the left panel.
+* **`p`**: Run dry-run `docker plan` for the selected server.
+* **`r`**: Refresh server fleet list and hardware telemetry.
+* **`l`**: Run pre-flight configuration linter.
+* **`c`**: Clear the execution logs pane.
+* **`q`**: Quit the dashboard.
+* **Container Row Selection**: Select or press `Enter` on any container service in the table to stream its live Docker logs (`docker logs --tail 40`).
+
+---
+
+## 12. `cstation config`
+
+Export, import, inspect, and migrate CStation configuration bundles across machines.
+
+### `cstation config path`
+Display the active configuration directory and its status.
+
+```bash
+cstation config path
+```
+
+### `cstation config export`
+Package `~/.config/cstation/` (VPS configs, container fragments, DNS zones, GitHub specs) into a portable `.tar.gz` archive.
+
+```bash
+# Default timestamped archive in current directory
+cstation config export
+
+# Custom output destination
+cstation config export --out ~/Downloads/cstation-fleet.tar.gz
+
+# Exclude sensitive secrets (.env, tokens) for sharing templates
+cstation config export --no-secrets --out ~/Downloads/cstation-template.tar.gz
+```
+
+### `cstation config import`
+Restore and validate CStation configuration from a `.tar.gz` bundle.
+
+```bash
+# Dry-run preview of files in archive
+cstation config import archive.tar.gz --dry-run
+
+# Import with confirmation
+cstation config import archive.tar.gz
+
+# Overwrite existing configuration without prompt
+cstation config import archive.tar.gz --force
+```
+* **Rollback Safety**: Automatically creates a timestamped safety backup of existing `~/.config/cstation/` prior to extraction.
+* **Validation**: Automatically runs `cstation lint` after import to verify configuration health.
+
+---
+
+## 13. `cstation state`
+
+Inspect operational audit logs and historical VPS resource metrics stored in SQLite (`~/.config/cstation/state.db` in WAL mode).
+
+### `cstation state audit`
+View the operational audit trail of commands executed by users or AI agents.
+
+```bash
+# Human-readable table
+cstation state audit
+
+# Filter by command name
+cstation state audit --command "docker"
+
+# Retrieve specific limit
+cstation state audit -n 50
+
+# Machine-readable JSON output for AI agents
+cstation state audit --output json
+```
+
+### `cstation state history`
+View historical hardware resource snapshots (load avg, RAM, disk, container count) recorded during inspections.
+
+```bash
+# Table format
+cstation state history sg05.ansis.com.sg
+
+# Agent JSON format
+cstation state history sg05.ansis.com.sg --output json
+```
+
+---
+
+## 14. `cstation hindsight`
+
+Operational workflows for self-hosted Hindsight vector memory services running on VPS targets.
+
+### `cstation hindsight status`
+Inspect running Hindsight container status, ports, and latest remote backup archive metadata.
+
+```bash
+# Table format
+cstation hindsight status sg07.ansis.com.sg
+
+# Agent JSON format
+cstation hindsight status sg07.ansis.com.sg --output json
+```
+
+### `cstation hindsight backup`
+Download remote PostgreSQL backup dump from VPS to local storage and prune older local archives.
+
+```bash
+# Download latest dump and keep 5 most recent local copies
+cstation hindsight backup sg07.ansis.com.sg --dest ~/.hermes/backups/hindsight --keep 5
 ```

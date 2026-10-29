@@ -9,7 +9,7 @@ wheels/
 # Virtual environments
 .venv
 bin/
-config/
+/config/
 # Environment variables
 .env
 

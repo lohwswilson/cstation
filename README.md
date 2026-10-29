@@ -18,12 +18,16 @@
 - [Installation & Setup](#-installation--setup)
 - [Command Hierarchy](#-command-hierarchy)
 - [Quickstart Workflows](#-quickstart-workflows)
-  - [1. VPS Lifecycle & Remote Shell](#1-vps-lifecycle--remote-shell)
-  - [2. Declarative Docker Containers](#2-declarative-docker-containers)
-  - [3. Enterprise Odoo Deployments & Updates](#3-enterprise-odoo-deployments--updates)
-  - [4. Declarative DNS (Cloudflare)](#4-declarative-dns-cloudflare)
-  - [5. Multi-Arch Docker Image Builds](#5-multi-arch-docker-image-builds)
-  - [6. GitHub Repository Management](#6-github-repository-management)
+  - [1. Interactive TUI Dashboard & Command Palette](#1-interactive-tui-dashboard--command-palette)
+  - [2. VPS Lifecycle & Remote Shell](#2-vps-lifecycle--remote-shell)
+  - [3. Declarative Docker Containers](#3-declarative-docker-containers)
+  - [4. Enterprise Odoo Deployments & Updates](#4-enterprise-odoo-deployments--updates)
+  - [5. AI Memory Service (Hindsight)](#5-ai-memory-service-hindsight)
+  - [6. Configuration Portability (Export & Import)](#6-configuration-portability-export--import)
+  - [7. SQLite Runtime State & Operational Audit](#7-sqlite-runtime-state--operational-audit)
+  - [8. Declarative DNS (Cloudflare)](#8-declarative-dns-cloudflare)
+  - [9. Multi-Arch Docker Image Builds](#9-multi-arch-docker-image-builds)
+  - [10. GitHub Repository Management](#10-github-repository-management)
 - [Configuration Structure](#-configuration-structure)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Documentation Suite](#-documentation-suite)
@@ -91,9 +95,13 @@ cstation --help
 
 ```
 cstation
+├── tui          # Interactive terminal dashboard & fuzzy command palette (Ctrl+P) (aliases: dashboard, ui)
+├── config       # Configuration portability: export/import bundles & safety rollback
+├── state        # SQLite operational audit logs & time-series resource telemetry
 ├── vps          # VPS lifecycle (init, plan, apply, status, list, ssh, rm)
 ├── docker       # Declarative container stacks (plan, apply, status, import, rm)
 ├── odoo         # Odoo workflows (sync, update, backup, restore)
+├── hindsight    # Hindsight AI memory service (status, backup)
 ├── image        # Docker image build & registry push (list, build)
 ├── dns          # DNS zone & record management (zones, plan, apply)
 ├── github       # GitHub repo & SSH management (repo list, sync, clone, ssh)
@@ -106,9 +114,29 @@ cstation
 
 ## 🚀 Quickstart Workflows
 
-### 1. VPS Lifecycle & Remote Shell
+### 1. Interactive TUI Dashboard & Command Palette
 
 ```bash
+# Launch interactive terminal UI
+cstation tui  # (or: cstation dashboard)
+
+# Inside the TUI:
+# - Press Ctrl+P: Open fuzzy command palette to search & run any command
+# - Up/Down / j/k: Select VPS node to inspect container stacks
+# - [p]: Dry-run docker plan on selected VPS
+# - [r]: Refresh server fleet telemetry
+# - [l]: Run pre-flight linting
+# - [q]: Quit
+```
+
+### 2. VPS Fleet Lifecycle & Remote Shell
+
+```bash
+# Add a new remote server (interactive wizard or non-interactive flags)
+cstation vps add
+cstation vps add prod-web-01 --host 107.155.65.47 --user root --stage prod
+cstation vps add staging-app --host 198.51.100.5 --skip-facts
+
 # List all VPS nodes with parallel live telemetry refresh
 cstation vps list --refresh
 
@@ -123,9 +151,12 @@ cstation vps plan sg01.synercatalyst.com
 
 # Apply complete hardened OS baseline (firewall, swap, BBR tuning, fail2ban, docker)
 cstation vps apply sg01.synercatalyst.com --yes
+
+# Remove a VPS from local configuration and purge its secrets
+cstation vps remove prod-web-01 --yes
 ```
 
-### 2. Declarative Docker Containers
+### 3. Declarative Docker Containers
 
 ```bash
 # Import all running containers on a VPS into local YAML fragments
@@ -138,7 +169,7 @@ cstation docker plan sg01.synercatalyst.com
 cstation docker apply sg01.synercatalyst.com --yes
 ```
 
-### 3. Enterprise Odoo Deployments & Updates
+### 4. Enterprise Odoo Deployments & Updates
 
 ```bash
 # Sync local PW.18.0 and addons to VPS via optimized rsync
@@ -157,7 +188,46 @@ cstation odoo backup us01.synercatalyst.com US01_BESOLUTION_US01DB PW5-BESOLUTIO
 cstation odoo restore sg01.synercatalyst.com SG01_DEV5_SG01DB --dest-db be5 --yes
 ```
 
-### 4. Declarative DNS (Cloudflare)
+### 5. AI Memory Service (Hindsight)
+
+```bash
+# Inspect Hindsight container status, ports, and latest remote backup
+cstation hindsight status sg07.ansis.com.sg
+
+# Download remote database backup dump and retain only the 5 newest local copies
+cstation hindsight backup sg07.ansis.com.sg --dest ~/.hermes/backups/hindsight --keep 5
+```
+
+### 6. Configuration Portability (Export & Import)
+
+```bash
+# Export full fleet configuration to a portable timestamped .tar.gz bundle
+cstation config export
+
+# Export sanitized template without secrets (.env, tokens)
+cstation config export --no-secrets --out ~/Downloads/cstation-template.tar.gz
+
+# Preview archive import without modifying disk
+cstation config import ~/Downloads/cstation-fleet.tar.gz --dry-run
+
+# Import and restore (creates automatic rollback safety backup prior to extracting)
+cstation config import ~/Downloads/cstation-fleet.tar.gz
+```
+
+### 7. SQLite Runtime State & Operational Audit
+
+```bash
+# View operational audit log of user & agent commands
+cstation state audit
+
+# View historical hardware resource snapshots for a VPS
+cstation state history sg05.ansis.com.sg
+
+# Retrieve audit trail as machine-readable JSON for AI agents
+cstation state audit --output json
+```
+
+### 8. Declarative DNS (Cloudflare)
 
 ```bash
 # List all configured Cloudflare DNS zones
@@ -170,7 +240,7 @@ cstation dns plan synercatalyst.com
 cstation dns apply synercatalyst.com --yes
 ```
 
-### 5. Multi-Arch Docker Image Builds
+### 9. Multi-Arch Docker Image Builds
 
 ```bash
 # List available image recipes in ~/.config/cstation/images/
@@ -180,7 +250,7 @@ cstation image list
 cstation image build synercatalyst-odoo.13.0
 ```
 
-### 6. GitHub Repository Management
+### 10. GitHub Repository Management
 
 ```bash
 # View configured repository mappings
@@ -237,9 +307,10 @@ uv run pytest tests/commands/test_odoo_cli.py
 
 ## 📚 Documentation Suite
 
-- 🗺️ **[Strategic Roadmap (ROADMAP.md)](ROADMAP.md)**: Phased milestones, tracks, and future capabilities.
-- 🏛️ **[System Architecture (ARCHITECTURE.md)](ARCHITECTURE.md)**: Deep dive into CStation internals, SSH batching, and service adapters.
-- 📖 **[CLI Command Reference (docs/cli-reference.md)](docs/cli-reference.md)**: Complete manual for all 11 command groups.
+- 📘 **[CStation User Guide (docs/user-guide.md)](docs/user-guide.md)**: End-to-end practical walkthrough and workflows.
+- 📖 **[CLI Command Reference (docs/cli-reference.md)](docs/cli-reference.md)**: Complete manual for all 15 command groups.
 - ⚙️ **[Configuration Guide (docs/configuration-guide.md)](docs/configuration-guide.md)**: Comprehensive YAML schema reference.
+- 🏛️ **[System Architecture (ARCHITECTURE.md)](ARCHITECTURE.md)**: Deep dive into CStation internals, SSH batching, and service adapters.
+- 🗺️ **[Strategic Roadmap (ROADMAP.md)](ROADMAP.md)**: Phased milestones, tracks, and future capabilities.
 - 🤝 **[Developer & Contributing Guide (CONTRIBUTING.md)](CONTRIBUTING.md)**: Contribution standards, code style, and PR workflow.
 - 🤖 **[AI Agent Guidance (AGENTS.md)](AGENTS.md)**: Canonical rules for AI coding agents.

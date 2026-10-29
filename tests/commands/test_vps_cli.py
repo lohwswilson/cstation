@@ -301,6 +301,109 @@ def test_vps_status_outputs_table(monkeypatch, tmp_path: Path):
     assert "┏" in r.output
 
 
+def test_vps_status_outputs_json(monkeypatch, tmp_path: Path):
+    import json
+    from cstation.providers.base import VPS, VPSStatus
+
+    home = tmp_path / "home"
+    _write(
+        home / ".config" / "cstation" / "config.yml",
+        "\n".join(
+            [
+                "vps:",
+                "  providers:",
+                "    vultr:",
+                "      accounts:",
+                "        main:",
+                "          token: v1",
+                "",
+            ]
+        ),
+    )
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    instance_id = "3431427c-9755-4064-903e-7a3e8bc82791"
+
+    def fake_get_vps(self, *, id=None, name=None):
+        return VPS(
+            provider="vultr",
+            id=instance_id,
+            name="sg05",
+            region="sgp",
+            status=VPSStatus.RUNNING,
+            ipv4="207.148.126.238",
+            ipv6=None,
+            vcpu=2,
+            memory_mb=4096,
+            disk_gb=80,
+            bandwidth_gb=2000,
+            plan="vc2-1c-2gb",
+        )
+
+    monkeypatch.setattr("cstation.providers.vultr.VultrProvider.get_vps", fake_get_vps)
+
+    r = CliRunner().invoke(app, ["vps", "status", f"vultr/main:{instance_id}", "--output", "json"])
+    assert r.exit_code == 0
+    data = json.loads(r.output)
+    assert data["id"] == instance_id
+    assert data["name"] == "sg05"
+    assert data["status"] == "running"
+    assert data["vcpu"] == 2
+
+
+def test_vps_status_managed_vps_outputs_json(monkeypatch, tmp_path: Path):
+    import json
+
+    home = tmp_path / "home"
+    vps_dir = home / ".config" / "cstation" / "vps" / "sg05.ansis.com.sg"
+    vps_dir.mkdir(parents=True)
+    _write(
+        vps_dir / "vps.yaml",
+        "\n".join(
+            [
+                "apiVersion: cstation/v1",
+                "kind: VPS",
+                "identity:",
+                "  name: sg05.ansis.com.sg",
+                "  region: manual",
+                "access:",
+                "  host: 207.148.126.238",
+                "  user: root",
+            ]
+        ),
+    )
+    _write(
+        vps_dir / ".facts.json",
+        json.dumps(
+            {
+                "os": {"pretty": "Ubuntu 23.10", "kernel": "6.5.0"},
+                "memory": {"total_mb": 7926, "used_mb": 4318},
+                "load_avg": "0.00, 0.00, 0.00",
+                "docker_summary": {"running": 6, "total": 6},
+                "_cached_at": 1784385478,
+            }
+        ),
+    )
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(tmp_path)
+    _reset_config()
+    initialize_configuration()
+
+    r = CliRunner().invoke(app, ["vps", "status", "sg05.ansis.com.sg", "--output", "json"])
+    assert r.exit_code == 0
+    data = json.loads(r.output)
+    assert data["name"] == "sg05.ansis.com.sg"
+    assert data["status"] == "running"
+    assert data["cached"] is True
+    assert data["memory"]["used_mb"] == 4318
+    assert data["docker_summary"]["running"] == 6
+
+
 def test_vps_init_help_examples():
     r = CliRunner().invoke(app, ["vps", "init", "--help"])
     assert r.exit_code == 0
